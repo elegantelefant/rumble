@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Primary - Professional Blue-Gray */
+  --primary-900: #1e293b;
+  --primary-800: #334155;
+  --primary-700: #475569;
+  --primary-600: #64748b;
+  --primary-500: #94a3b8;
+  --primary-400: #cbd5e1;
+  --primary-300: #e2e8f0;
+  --primary-200: #f1f5f9;
+  --primary-100: #f8fafc;
+
+  /* Accent - Muted Teal */
+  --accent-600: #0891b2;
+  --accent-500: #06b6d4;
+  --accent-100: #ecfeff;
+
+  /* Semantic */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+
+  --gray-950: #030712;
+  --gray-50: #fafafa;
+  --white: #ffffff;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+}
+
+body {
+  @apply bg-[var(--primary-100)] text-[var(--gray-950)] font-sans antialiased;
+}
+
+a {
+  @apply text-[var(--accent-600)] transition;
+}
+
+a:hover,
+a:focus-visible {
+  @apply text-[var(--accent-500)];
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-500) 60%, white);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+.input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-500) 60%, white);
+  outline-offset: 3px;
+}
+
+h1,
+.h1 {
+  @apply text-[2rem] font-semibold text-[var(--primary-900)];
+}
+
+h2,
+.h2 {
+  @apply text-xl font-semibold text-[var(--primary-800)];
+}
+
+h3,
+.h3 {
+  @apply text-lg font-medium text-[var(--primary-700)];
+}
+
+.body-muted {
+  @apply text-sm text-[var(--primary-600)];
+}
+
+.caption-uppercase {
+  @apply text-xs uppercase tracking-[0.32em] text-[var(--primary-500)];
+}
+
+.badge-trust {
+  @apply inline-flex items-center gap-1 rounded-full border border-[var(--accent-600)] bg-[var(--accent-100)] px-3 py-1 text-xs font-medium text-[var(--accent-600)];
+}
+
+.chip {
+  @apply inline-flex items-center gap-2 rounded-full bg-[var(--primary-200)] px-3 py-1 text-xs font-medium text-[var(--primary-600)];
+}
+
+.spinner {
+  @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent-500)] border-t-transparent;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-md bg-[var(--accent-600)] px-4 py-2 font-medium text-white shadow-sm transition;
+}
+
+.btn-primary:hover {
+  @apply bg-[var(--accent-500)] -translate-y-0.5 shadow-lg;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-500) 25%, transparent);
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-md border border-[var(--primary-400)] bg-white px-4 py-2 font-medium text-[var(--primary-700)] transition;
+}
+
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.input {
+  @apply w-full rounded-md border border-[var(--primary-400)] bg-white px-3 py-2 text-base text-[var(--primary-700)] transition focus:border-[var(--accent-500)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent-500)_25%,transparent)];
+}
+
+.card {
+  @apply rounded-lg bg-white p-6 shadow-md;
+}
+
+.message-user {
+  @apply ml-8 rounded-lg bg-[var(--primary-100)] p-4;
+}
+
+.message-assistant {
+  @apply mr-8 rounded-lg border-l-4 border-[var(--accent-500)] bg-white p-4;
+}
+
+.loading {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
