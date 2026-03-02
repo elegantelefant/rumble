@@ -19,6 +19,12 @@ target/
 .env
 .env.local
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+ivory.db*
+
 # UV cache
 .uv-cache/
 
