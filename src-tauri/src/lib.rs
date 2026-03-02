@@ -1,5 +1,5 @@
 //! ABOUTME: hosts ivory tauri commands and runtime wiring.
-//! ABOUTME: coordinates tray icon, API proxy, keychain, filesystem commands, and plugins.
+//! ABOUTME: coordinates tray icon, API proxy, keychain, sidecar lifecycle, and plugins.
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -8,12 +8,16 @@ use tauri::image::Image;
 use tauri::path::BaseDirectory;
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 use trash::delete;
 use walkdir::WalkDir;
 
 const SERVICE_NAME: &str = "elefant-ivory";
 const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
-const DEFAULT_SIDECAR_URL: &str = "http://127.0.0.1:11435";
+const HEALTH_POLL_ATTEMPTS: u32 = 10;
+const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
 // --- App state ---
 
@@ -28,14 +32,22 @@ enum BackendMode {
 struct AppState {
     mode: Mutex<BackendMode>,
     http: Client,
+    sidecar_port: Mutex<Option<u16>>,
+    sidecar_child: Mutex<Option<CommandChild>>,
 }
 
 impl AppState {
-    fn base_url(&self) -> String {
+    fn base_url(&self) -> Result<String, String> {
         let mode = self.mode.lock().unwrap();
         match *mode {
-            BackendMode::Premium => DEFAULT_CLOUD_URL.to_string(),
-            _ => DEFAULT_SIDECAR_URL.to_string(),
+            BackendMode::Premium => Ok(DEFAULT_CLOUD_URL.to_string()),
+            _ => {
+                let port = self.sidecar_port.lock().unwrap();
+                match *port {
+                    Some(p) => Ok(format!("http://127.0.0.1:{}", p)),
+                    None => Err("sidecar not running".to_string()),
+                }
+            }
         }
     }
 }
@@ -90,7 +102,7 @@ async fn api_call(
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let base = state.base_url();
+    let base = state.base_url()?;
     let url = format!("{}{}", base, path);
 
     let mut builder = match method.to_uppercase().as_str() {
@@ -212,6 +224,156 @@ fn set_backend_mode(state: State<'_, AppState>, mode: String) -> Result<(), Stri
     Ok(())
 }
 
+// --- Sidecar lifecycle ---
+
+async fn find_available_port() -> Result<u16, String> {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("failed to bind for port discovery: {}", e))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("failed to get local addr: {}", e))?
+        .port();
+    drop(listener);
+    Ok(port)
+}
+
+async fn poll_health(http: &Client, port: u16) -> Result<(), String> {
+    let url = format!("http://127.0.0.1:{}/health", port);
+    for attempt in 1..=HEALTH_POLL_ATTEMPTS {
+        tokio::time::sleep(std::time::Duration::from_millis(HEALTH_POLL_INTERVAL_MS)).await;
+        match http.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                println!("[sidecar] healthy on port {} (attempt {})", port, attempt);
+                return Ok(());
+            }
+            _ => {
+                if attempt == HEALTH_POLL_ATTEMPTS {
+                    return Err(format!(
+                        "sidecar health check failed after {} attempts on port {}",
+                        HEALTH_POLL_ATTEMPTS, port
+                    ));
+                }
+            }
+        }
+    }
+    unreachable!()
+}
+
+fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<AppState>();
+
+    // Find a free port synchronously via tauri's async runtime
+    let port = tauri::async_runtime::block_on(find_available_port())?;
+
+    let sidecar_cmd = app
+        .shell()
+        .sidecar("ivory-sidecar")
+        .map_err(|e| format!("failed to create sidecar command: {}", e))?
+        .args(["--port", &port.to_string()]);
+
+    let (mut rx, child) = sidecar_cmd
+        .spawn()
+        .map_err(|e| format!("failed to spawn sidecar: {}", e))?;
+
+    // Store the child process handle for cleanup
+    {
+        let mut sidecar_child = state.sidecar_child.lock().unwrap();
+        *sidecar_child = Some(child);
+    }
+
+    // Read stdout in a background task, looking for PORT: confirmation
+    let port_clone = port;
+    let http_clone = state.http.clone();
+    let state_handle = app.app_handle().clone();
+    tauri::async_runtime::spawn(async move {
+        let mut port_confirmed = false;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    let trimmed = line.trim();
+                    if !port_confirmed {
+                        if let Some(port_str) = trimmed.strip_prefix("PORT:") {
+                            if let Ok(p) = port_str.parse::<u16>() {
+                                println!("[sidecar] reported port {}", p);
+                                // Poll health before confirming
+                                match poll_health(&http_clone, p).await {
+                                    Ok(()) => {
+                                        let st = state_handle.state::<AppState>();
+                                        let mut sp = st.sidecar_port.lock().unwrap();
+                                        *sp = Some(p);
+                                        port_confirmed = true;
+                                        println!("[sidecar] ready on port {}", p);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[sidecar] health check failed: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                CommandEvent::Stderr(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    eprintln!("[sidecar:err] {}", line.trim());
+                }
+                CommandEvent::Terminated(payload) => {
+                    println!(
+                        "[sidecar] terminated with code {:?}",
+                        payload.code
+                    );
+                    let st = state_handle.state::<AppState>();
+                    let mut sp = st.sidecar_port.lock().unwrap();
+                    *sp = None;
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    println!("[sidecar] spawned, waiting for port {} to become healthy", port_clone);
+    Ok(())
+}
+
+fn kill_sidecar(state: &AppState) {
+    let mut child = state.sidecar_child.lock().unwrap();
+    if let Some(c) = child.take() {
+        println!("[sidecar] shutting down");
+        let _ = c.kill();
+    }
+    let mut port = state.sidecar_port.lock().unwrap();
+    *port = None;
+}
+
+#[tauri::command]
+async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let port = state.sidecar_port.lock().unwrap().clone();
+    let running = port.is_some();
+
+    let mut result = serde_json::json!({
+        "running": running,
+        "port": port,
+    });
+
+    if let Some(p) = port {
+        let url = format!("http://127.0.0.1:{}/health", p);
+        match state.http.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    result["health"] = body;
+                }
+            }
+            _ => {
+                result["health"] = serde_json::json!({"status": "unreachable"});
+            }
+        }
+    }
+
+    Ok(result)
+}
+
 // --- Tray icon ---
 
 fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
@@ -236,12 +398,17 @@ fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             mode: Mutex::new(BackendMode::Premium),
             http: Client::new(),
+            sidecar_port: Mutex::new(None),
+            sidecar_child: Mutex::new(None),
         })
         .setup(|app| {
             let handle = app.handle();
+
+            // Tray icon
             if let Some(icon) = resolve_tray_icon(&handle) {
                 let tray = TrayIconBuilder::new()
                     .icon(icon)
@@ -250,6 +417,12 @@ pub fn run() {
                     .build(app)?;
                 app.manage(tray);
             }
+
+            // Spawn sidecar (non-fatal — app works in Premium mode without it)
+            if let Err(e) = spawn_sidecar(&handle) {
+                eprintln!("[sidecar] failed to spawn: {}", e);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -267,7 +440,15 @@ pub fn run() {
             // Backend mode
             get_backend_mode,
             set_backend_mode,
+            // Sidecar
+            sidecar_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                let state = app.state::<AppState>();
+                kill_sidecar(&state);
+            }
+        });
 }
