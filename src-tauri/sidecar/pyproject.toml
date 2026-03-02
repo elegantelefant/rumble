@@ -1,0 +1,31 @@
+# ABOUTME: Python sidecar project manifest for ivory local AI backend.
+# ABOUTME: Manages deps for FastAPI server, PydanticAI agents, and SQLite storage.
+
+[project]
+name = "ivory-sidecar"
+version = "0.1.0"
+description = "Local AI sidecar for Elefant Ivory (Ollama + BYOK)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic-ai>=0.1",
+    "aiosqlite>=0.21",
+    "httpx>=0.28",
+    "sse-starlette>=2.2",
+]
+
+[project.scripts]
+ivory-sidecar = "main:cli"
+
+[dependency-groups]
+dev = [
+    "datamodel-code-generator>=0.26",
+    "pyinstaller>=6.11",
+]
+
+[tool.datamodel-codegen]
+input = "../../openapi.json"
+output = "models/generated.py"
+output-model-type = "pydantic_v2.BaseModel"
+target-python-version = "3.12"

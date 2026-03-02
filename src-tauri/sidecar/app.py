@@ -1,0 +1,27 @@
+# ABOUTME: FastAPI application factory for the ivory sidecar.
+# ABOUTME: Wires up lifespan (DB init/close) and route modules.
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from services.db import close_db, init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db(app.state.data_dir)
+    yield
+    await close_db()
+
+
+def create_app(data_dir: str | None = None) -> FastAPI:
+    app = FastAPI(title="ivory-sidecar", version="0.1.0", lifespan=lifespan)
+    app.state.data_dir = data_dir
+
+    from routes.chat import router as chat_router
+    from routes.health import router as health_router
+
+    app.include_router(health_router)
+    app.include_router(chat_router)
+    return app
