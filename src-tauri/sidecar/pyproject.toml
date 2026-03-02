@@ -22,7 +22,13 @@ ivory-sidecar = "main:cli"
 dev = [
     "datamodel-code-generator>=0.26",
     "pyinstaller>=6.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [tool.datamodel-codegen]
 input = "../../openapi.json"
