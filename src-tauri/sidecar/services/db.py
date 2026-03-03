@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    request TEXT NOT NULL,
+    result TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    completed_at TEXT
+);
 """
 
 
@@ -142,3 +154,50 @@ async def get_messages(chat_id: str) -> list[dict[str, Any]]:
     )
     rows = await cursor.fetchall()
     return [dict(row) for row in rows]
+
+
+# --- Job operations ---
+
+async def create_job(job_type: str, request_data: str) -> dict[str, Any]:
+    db = _get_db()
+    job_id = _uuid()
+    now = _now()
+    await db.execute(
+        "INSERT INTO jobs (id, type, status, request, created_at) VALUES (?, ?, 'queued', ?, ?)",
+        (job_id, job_type, request_data, now),
+    )
+    await db.commit()
+    return {"id": job_id, "type": job_type, "status": "queued", "created_at": now}
+
+
+async def get_job(job_id: str) -> dict[str, Any] | None:
+    db = _get_db()
+    cursor = await db.execute(
+        "SELECT id, type, status, request, result, error, created_at, started_at, completed_at FROM jobs WHERE id = ?",
+        (job_id,),
+    )
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def update_job_status(job_id: str, status: str) -> None:
+    db = _get_db()
+    now = _now()
+    if status == "running":
+        await db.execute("UPDATE jobs SET status = ?, started_at = ? WHERE id = ?", (status, now, job_id))
+    elif status in ("completed", "failed"):
+        await db.execute("UPDATE jobs SET status = ?, completed_at = ? WHERE id = ?", (status, now, job_id))
+    else:
+        await db.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job_id))
+    await db.commit()
+
+
+async def set_job_result(job_id: str, result: str | None = None, error: str | None = None) -> None:
+    db = _get_db()
+    now = _now()
+    status = "completed" if result is not None else "failed"
+    await db.execute(
+        "UPDATE jobs SET status = ?, result = ?, error = ?, completed_at = ? WHERE id = ?",
+        (status, result, error, now, job_id),
+    )
+    await db.commit()
