@@ -1,6 +1,24 @@
 # Vitest Testing Standards — Ivory Frontend
 
-Rules for writing Vitest tests in this codebase. Not guidelines — requirements.
+Rules for writing tests in this codebase. Not guidelines — requirements.
+
+Sources: [Vue.js official testing guide](https://vuejs.org/guide/scaling-up/testing), [LogRocket advanced Vitest guide](https://blog.logrocket.com/advanced-guide-vitest-testing-mocking/).
+
+---
+
+## 0. Testing Strategy
+
+Three tiers. Each has a job; none replaces the others.
+
+| Tier | Scope | Speed | What it catches |
+|------|-------|-------|-----------------|
+| **Unit** | Functions, composables, utilities | Fast | Logical correctness |
+| **Component** | Mounting, rendering, user interaction | Medium | Visual + behavioural regressions |
+| **E2E** | Multi-page flows against real backend | Slow | Integration failures across layers |
+
+**Stack:** Vitest + happy-dom (unit/component), @vue/test-utils (mounting), Playwright (E2E when needed).
+
+Start testing early. The longer you wait, the more dependencies accumulate, the harder it gets.
 
 ---
 
@@ -178,18 +196,45 @@ await nextTick()
 
 ## 8. Component Testing Rules
 
-### Use `shallowMount` by default
+### Blackbox by default
+
+Test what a component **does**, not how it does it. This is the Vue team's official recommendation.
+
+**DO test:**
+- Rendered output based on props and slots (visual logic)
+- Rendered updates and emitted events in response to user input (behavioural logic)
+- Element presence via `data-testid` attributes or roles
+
+**DO NOT test:**
+- Private component state (`wrapper.vm.someRef`)
+- Private methods
+- Implementation details — these break on refactoring and prove nothing about correctness
+
+```ts
+// WRONG — testing implementation details
+expect(wrapper.vm.isOpen).toBe(true)
+expect(wrapper.vm.handleClick).toHaveBeenCalled()
+
+// RIGHT — testing what the user sees and does
+await wrapper.find('[data-testid="toggle"]').trigger("click")
+expect(wrapper.find('[data-testid="panel"]').isVisible()).toBe(true)
+```
+
+### Use `shallowMount` for isolation, `mount` for integration
+
 ```ts
 import { shallowMount } from "@vue/test-utils"
 
+// Isolation — child components render as stubs
 const wrapper = shallowMount(MyComponent, {
   props: { name: "test" },
 })
 ```
 
-Child components render as `<child-stub></child-stub>`. This isolates the component under test. Only use `mount` when you specifically need to test child integration.
+Use `mount` (full render) only when you specifically need to test that parent + child work together. Most component tests should use `shallowMount`.
 
 ### Mock Pinia stores for component tests
+
 ```ts
 import { createPinia, defineStore } from "pinia"
 
@@ -204,6 +249,7 @@ const wrapper = shallowMount(MyComponent, { global: { plugins: [pinia] } })
 ```
 
 ### Test lifecycle hooks with flushPromises
+
 ```ts
 it("loads data on mount", async () => {
   const wrapper = shallowMount(MyComponent)
@@ -216,10 +262,16 @@ it("loads data on mount", async () => {
 
 ## 9. Composable Testing
 
-Test composables directly — they're just functions returning reactive state.
+Two categories with different approaches.
+
+### A. Pure composables (no lifecycle hooks, no provide/inject)
+
+Test directly — they're just functions returning reactive state.
 
 ```ts
-it("increments counter", async () => {
+import { useCounter } from "./useCounter"
+
+it("increments counter", () => {
   const { count, increment } = useCounter()
   expect(count.value).toBe(0)
 
@@ -228,15 +280,41 @@ it("increments counter", async () => {
 })
 ```
 
-If the composable uses lifecycle hooks (`onMounted`), test it via a host component:
+### B. Composables with lifecycle hooks or provide/inject
+
+Wrap in a host component. Use this helper:
 
 ```ts
-const wrapper = mount(defineComponent({
-  setup() { return useMyComposable() },
-  template: "<div />",
-}))
-await flushPromises()
+// test-utils.ts
+import { createApp } from "vue"
+
+export function withSetup<T>(composable: () => T): [T, ReturnType<typeof createApp>] {
+  let result!: T
+  const app = createApp({
+    setup() {
+      result = composable()
+      return () => {}
+    },
+  })
+  app.mount(document.createElement("div"))
+  return [result, app]
+}
 ```
+
+Usage:
+
+```ts
+import { withSetup } from "./test-utils"
+import { useFoo } from "./useFoo"
+
+it("initialises on mount", () => {
+  const [result, app] = withSetup(() => useFoo(123))
+  expect(result.foo.value).toBe(1)
+  app.unmount() // triggers onUnmounted if needed
+})
+```
+
+For complex composables that need provide/inject, pass it via `app.provide(...)` before asserting.
 
 ---
 
@@ -286,17 +364,17 @@ expect(vi.isMockFunction(myFn)).toBe(true)
 
 ## 12. Snapshot Testing — Use Sparingly
 
-Snapshots are for catching unintended UI regressions, not for asserting behaviour.
+Snapshots catch unintended changes. They do not describe correctness. Never use them as your only assertion.
 
 ```ts
-// OK — catch unexpected HTML changes
+// OK — supplementary check for HTML regressions
 expect(wrapper.html()).toMatchSnapshot()
 
-// NOT OK — snapshot of data objects (use explicit assertions instead)
-expect(response).toMatchSnapshot() // lazy, hides intent
+// NOT OK — snapshot as the only test (lazy, hides intent)
+expect(response).toMatchSnapshot()
 ```
 
-Update snapshots with `U` key in watch mode. Review every snapshot diff before accepting.
+Update snapshots with `U` key in watch mode. Review every diff before accepting.
 
 ---
 
@@ -314,7 +392,7 @@ import { invoke } from "@tauri-apps/api/core"
 vi.mocked(invoke).mockResolvedValue({ status: "ok" })
 ```
 
-This is the single most important mock in the Ivory test suite. Get it right once in a test utility, reuse everywhere.
+This is the single most important mock in the Ivory test suite. Define it once in a shared test utility, reuse everywhere.
 
 ---
 
@@ -323,11 +401,13 @@ This is the single most important mock in the Ivory test suite. Get it right onc
 | Don't | Why |
 |-------|-----|
 | Mock the function you're testing | Tautological — proves nothing |
+| Test private component state (`wrapper.vm.*`) | Implementation detail — breaks on refactoring |
+| Test private methods | Same — test the public interface |
 | Use real network calls in tests | Non-deterministic, slow, fragile |
 | Skip `clearAllMocks` in `beforeEach` | Leaks state between tests |
-| Use `mount` when `shallowMount` suffices | Tests child component internals you don't own |
+| Use `mount` when `shallowMount` suffices | Tests child internals you don't own |
 | Sleep instead of `advanceTimersByTimeAsync` | Slow, flaky, non-deterministic |
-| Assert with snapshots alone | Hides intent, breaks on any change |
+| Rely on snapshots alone | Doesn't describe correctness, breaks on any change |
 | Use `--no-verify` to skip failing tests | Fix the test |
 | Write tests that test mocked behaviour | Tests must exercise real code paths |
 
