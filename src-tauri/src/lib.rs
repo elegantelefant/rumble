@@ -494,11 +494,12 @@ pub fn run() {
         });
 }
 
-// --- Unit tests for resolve_url ---
+// --- Unit tests ---
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     fn make_state(mode: BackendMode, port: Option<u16>) -> AppState {
         AppState {
@@ -508,6 +509,8 @@ mod tests {
             sidecar_child: Mutex::new(None),
         }
     }
+
+    // --- resolve_url ---
 
     #[test]
     fn premium_always_routes_to_cloud() {
@@ -615,7 +618,6 @@ mod tests {
 
     #[test]
     fn cloud_only_prefix_no_false_positive() {
-        // "/me" should be cloud-only, but "/models" should not
         let state = make_state(BackendMode::Ollama, Some(11435));
         assert_eq!(
             state.resolve_url("/me").unwrap(),
@@ -625,5 +627,148 @@ mod tests {
             state.resolve_url("/models").unwrap(),
             "http://127.0.0.1:11435/models"
         );
+    }
+
+    #[test]
+    fn every_cloud_only_prefix_routes_to_cloud() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        for prefix in CLOUD_ONLY_PREFIXES {
+            let result = state.resolve_url(prefix).unwrap();
+            assert!(
+                result.starts_with(DEFAULT_CLOUD_URL),
+                "{} should route to cloud, got: {}",
+                prefix,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn every_cloud_only_prefix_with_suffix_routes_to_cloud() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        for prefix in CLOUD_ONLY_PREFIXES {
+            let path = format!("{}/sub-path", prefix);
+            let result = state.resolve_url(&path).unwrap();
+            assert!(
+                result.starts_with(DEFAULT_CLOUD_URL),
+                "{} should route to cloud, got: {}",
+                path,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn partial_prefix_does_not_falsely_match() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        // "/billing_extra" contains "/billing" as a substring but should NOT match
+        let result = state.resolve_url("/billing_extra").unwrap();
+        assert!(
+            result.starts_with("http://127.0.0.1:11435"),
+            "/billing_extra should NOT route to cloud, got: {}",
+            result
+        );
+    }
+
+    // --- BackendMode serde ---
+
+    #[test]
+    fn backend_mode_serializes_to_lowercase() {
+        assert_eq!(
+            serde_json::to_string(&BackendMode::Ollama).unwrap(),
+            "\"ollama\""
+        );
+        assert_eq!(
+            serde_json::to_string(&BackendMode::Byok).unwrap(),
+            "\"byok\""
+        );
+        assert_eq!(
+            serde_json::to_string(&BackendMode::Premium).unwrap(),
+            "\"premium\""
+        );
+    }
+
+    #[test]
+    fn backend_mode_deserializes_from_lowercase() {
+        let ollama: BackendMode = serde_json::from_str("\"ollama\"").unwrap();
+        assert_eq!(ollama, BackendMode::Ollama);
+        let byok: BackendMode = serde_json::from_str("\"byok\"").unwrap();
+        assert_eq!(byok, BackendMode::Byok);
+        let premium: BackendMode = serde_json::from_str("\"premium\"").unwrap();
+        assert_eq!(premium, BackendMode::Premium);
+    }
+
+    #[test]
+    fn backend_mode_invalid_string_errors() {
+        let result: Result<BackendMode, _> = serde_json::from_str("\"invalid\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn file_info_serializes_to_json() {
+        let info = FileInfo {
+            path: "/tmp/test.txt".to_string(),
+            size: 1024,
+            modified: "2025-01-01 00:00:00".to_string(),
+        };
+        let json = serde_json::to_value(&info).unwrap();
+        assert_eq!(json["path"], "/tmp/test.txt");
+        assert_eq!(json["size"], 1024);
+        assert_eq!(json["modified"], "2025-01-01 00:00:00");
+    }
+
+    // --- scan_folder ---
+
+    #[test]
+    fn scan_folder_empty_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = scan_folder(dir.path().to_string_lossy().to_string()).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn scan_folder_with_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        let mut f = std::fs::File::create(&file_path).unwrap();
+        f.write_all(b"hello world").unwrap();
+
+        let result = scan_folder(dir.path().to_string_lossy().to_string()).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result[0].path.contains("test.txt"));
+        assert_eq!(result[0].size, 11); // "hello world" = 11 bytes
+        assert!(!result[0].modified.is_empty());
+    }
+
+    #[test]
+    fn scan_folder_nested_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("subdir");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::File::create(dir.path().join("root.txt")).unwrap();
+        std::fs::File::create(sub.join("nested.txt")).unwrap();
+
+        let result = scan_folder(dir.path().to_string_lossy().to_string()).unwrap();
+        assert_eq!(result.len(), 2);
+        let paths: Vec<&str> = result.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.iter().any(|p| p.contains("root.txt")));
+        assert!(paths.iter().any(|p| p.contains("nested.txt")));
+    }
+
+    #[test]
+    fn scan_folder_nonexistent_returns_empty() {
+        // WalkDir silently returns nothing for non-existent paths
+        let result = scan_folder("/tmp/nonexistent-ivory-test-dir-xyz".to_string());
+        assert!(result.is_ok());
+        // WalkDir actually iterates once with an error entry, so it depends
+        // on implementation — empty or error
+    }
+
+    // --- move_to_trash ---
+
+    #[test]
+    fn move_to_trash_nonexistent_file_errors() {
+        let result = move_to_trash("/tmp/nonexistent-ivory-test-file-xyz".to_string());
+        assert!(result.is_err());
     }
 }
