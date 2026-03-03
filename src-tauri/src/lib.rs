@@ -19,6 +19,38 @@ const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
+/// Paths that only the cloud API can handle (billing, auth, search, etc.).
+const CLOUD_ONLY_PREFIXES: &[&str] = &[
+    "/billing",
+    "/auth",
+    "/users",
+    "/organizations",
+    "/notifications",
+    "/webhooks",
+    "/whoami",
+    "/me",
+    "/search",
+    "/briefcase",
+    "/documents",
+    "/files",
+    "/corpus",
+    "/graph",
+    "/playbooks",
+    "/clause-databases",
+    "/legal-requests",
+    "/pipelines",
+    "/entitlements",
+    "/usage",
+    "/commencement",
+    "/reading-list",
+    "/model-performance",
+    "/memories",
+    "/memory",
+    "/orchestrate",
+    "/citations",
+    "/internal",
+];
+
 // --- App state ---
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -37,17 +69,27 @@ struct AppState {
 }
 
 impl AppState {
-    fn base_url(&self) -> Result<String, String> {
+    /// Route a request path to the correct backend URL.
+    /// Premium mode: always cloud. Ollama/BYOK: cloud-only paths go to cloud,
+    /// everything else goes to the local sidecar.
+    fn resolve_url(&self, path: &str) -> Result<String, String> {
         let mode = self.mode.lock().unwrap();
-        match *mode {
-            BackendMode::Premium => Ok(DEFAULT_CLOUD_URL.to_string()),
-            _ => {
-                let port = self.sidecar_port.lock().unwrap();
-                match *port {
-                    Some(p) => Ok(format!("http://127.0.0.1:{}", p)),
-                    None => Err("sidecar not running".to_string()),
-                }
-            }
+        if *mode == BackendMode::Premium {
+            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+        }
+
+        let is_cloud_only = CLOUD_ONLY_PREFIXES
+            .iter()
+            .any(|prefix| path == *prefix || path.starts_with(&format!("{}/", prefix)));
+
+        if is_cloud_only {
+            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+        }
+
+        let port = self.sidecar_port.lock().unwrap();
+        match *port {
+            Some(p) => Ok(format!("http://127.0.0.1:{}{}", p, path)),
+            None => Err("sidecar not running".to_string()),
         }
     }
 }
@@ -102,8 +144,7 @@ async fn api_call(
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let base = state.base_url()?;
-    let url = format!("{}{}", base, path);
+    let url = state.resolve_url(&path)?;
 
     let mut builder = match method.to_uppercase().as_str() {
         "GET" => state.http.get(&url),
@@ -451,4 +492,138 @@ pub fn run() {
                 kill_sidecar(&state);
             }
         });
+}
+
+// --- Unit tests for resolve_url ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_state(mode: BackendMode, port: Option<u16>) -> AppState {
+        AppState {
+            mode: Mutex::new(mode),
+            http: Client::new(),
+            sidecar_port: Mutex::new(port),
+            sidecar_child: Mutex::new(None),
+        }
+    }
+
+    #[test]
+    fn premium_always_routes_to_cloud() {
+        let state = make_state(BackendMode::Premium, None);
+        assert_eq!(
+            state.resolve_url("/chats").unwrap(),
+            "https://api.elefant.com/chats"
+        );
+        assert_eq!(
+            state.resolve_url("/billing/subscription").unwrap(),
+            "https://api.elefant.com/billing/subscription"
+        );
+    }
+
+    #[test]
+    fn ollama_routes_cloud_only_to_cloud() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert_eq!(
+            state.resolve_url("/billing").unwrap(),
+            "https://api.elefant.com/billing"
+        );
+        assert_eq!(
+            state.resolve_url("/billing/subscription").unwrap(),
+            "https://api.elefant.com/billing/subscription"
+        );
+        assert_eq!(
+            state.resolve_url("/search").unwrap(),
+            "https://api.elefant.com/search"
+        );
+        assert_eq!(
+            state.resolve_url("/auth/login").unwrap(),
+            "https://api.elefant.com/auth/login"
+        );
+        assert_eq!(
+            state.resolve_url("/users").unwrap(),
+            "https://api.elefant.com/users"
+        );
+    }
+
+    #[test]
+    fn ollama_routes_sidecar_paths_to_sidecar() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert_eq!(
+            state.resolve_url("/health").unwrap(),
+            "http://127.0.0.1:11435/health"
+        );
+        assert_eq!(
+            state.resolve_url("/chats").unwrap(),
+            "http://127.0.0.1:11435/chats"
+        );
+        assert_eq!(
+            state.resolve_url("/chats/abc-123/message").unwrap(),
+            "http://127.0.0.1:11435/chats/abc-123/message"
+        );
+        assert_eq!(
+            state.resolve_url("/clarify").unwrap(),
+            "http://127.0.0.1:11435/clarify"
+        );
+        assert_eq!(
+            state.resolve_url("/translate").unwrap(),
+            "http://127.0.0.1:11435/translate"
+        );
+        assert_eq!(
+            state.resolve_url("/draft").unwrap(),
+            "http://127.0.0.1:11435/draft"
+        );
+    }
+
+    #[test]
+    fn byok_routes_same_as_ollama() {
+        let state = make_state(BackendMode::Byok, Some(8080));
+        assert_eq!(
+            state.resolve_url("/billing").unwrap(),
+            "https://api.elefant.com/billing"
+        );
+        assert_eq!(
+            state.resolve_url("/chats").unwrap(),
+            "http://127.0.0.1:8080/chats"
+        );
+    }
+
+    #[test]
+    fn ollama_unknown_path_routes_to_sidecar() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert_eq!(
+            state.resolve_url("/some-future-endpoint").unwrap(),
+            "http://127.0.0.1:11435/some-future-endpoint"
+        );
+    }
+
+    #[test]
+    fn ollama_no_sidecar_errors_for_sidecar_path() {
+        let state = make_state(BackendMode::Ollama, None);
+        assert!(state.resolve_url("/chats").is_err());
+    }
+
+    #[test]
+    fn ollama_no_sidecar_still_routes_cloud_only() {
+        let state = make_state(BackendMode::Ollama, None);
+        assert_eq!(
+            state.resolve_url("/billing").unwrap(),
+            "https://api.elefant.com/billing"
+        );
+    }
+
+    #[test]
+    fn cloud_only_prefix_no_false_positive() {
+        // "/me" should be cloud-only, but "/models" should not
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert_eq!(
+            state.resolve_url("/me").unwrap(),
+            "https://api.elefant.com/me"
+        );
+        assert_eq!(
+            state.resolve_url("/models").unwrap(),
+            "http://127.0.0.1:11435/models"
+        );
+    }
 }

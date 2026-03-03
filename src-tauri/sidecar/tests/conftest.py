@@ -48,17 +48,43 @@ async def chat_id(client):
     return resp.json()["id"]
 
 
-def _fake_send_message(messages, model_name=None, api_key=None):
+def _fake_send_message(messages, system_prompt=None, model_name=None, api_key=None):
     """Return a canned assistant reply based on the last user message."""
     user_text = messages[-1]["content"] if messages else ""
     return f"Echo: {user_text}"
 
 
-async def _fake_stream_message(messages, model_name=None, api_key=None):
+async def _fake_stream_message(messages, system_prompt=None, model_name=None, api_key=None):
     """Yield canned chunks for streaming tests."""
     user_text = messages[-1]["content"] if messages else ""
     for word in f"Echo: {user_text}".split():
         yield word + " "
+
+
+import json
+
+
+def _fake_run_single_turn(user_text, system_prompt, model_name=None, api_key=None):
+    """Return canned JSON for stateless AI endpoints, keyed on system_prompt keywords."""
+    if "clarif" in system_prompt.lower():
+        return json.dumps({"clarified_ask": f"Clarified: {user_text}", "questions": ["What jurisdiction?"]})
+    if "title" in system_prompt.lower():
+        return json.dumps({"title": "Generated Title"})
+    if "translat" in system_prompt.lower():
+        return json.dumps({"translated_text": f"Translated: {user_text}"})
+    if "search" in system_prompt.lower() and "summar" in system_prompt.lower():
+        return json.dumps({"summary": f"Search summary: {user_text}", "key_points": ["point1"], "citations": ["cite1"]})
+    if "chat" in system_prompt.lower() and "summar" in system_prompt.lower():
+        return json.dumps({"summary": f"Chat summary: {user_text}", "key_points": ["point1"]})
+    if "summar" in system_prompt.lower():
+        return json.dumps({"summary": f"Summary: {user_text}", "key_points": ["point1"]})
+    if "draft" in system_prompt.lower():
+        return json.dumps({"draft": f"Draft: {user_text}", "warnings": []})
+    if "review" in system_prompt.lower():
+        return json.dumps({"summary": f"Review: {user_text}", "issues": []})
+    if "research" in system_prompt.lower():
+        return json.dumps({"result": f"Research: {user_text}", "sources": []})
+    return json.dumps({"text": user_text})
 
 
 @pytest.fixture(autouse=True)
@@ -67,5 +93,6 @@ def mock_llm():
     with (
         patch("services.llm.send_message", new=AsyncMock(side_effect=_fake_send_message)),
         patch("services.llm.stream_message", new=_fake_stream_message),
+        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=_fake_run_single_turn)),
     ):
         yield
