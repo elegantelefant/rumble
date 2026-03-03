@@ -19,9 +19,11 @@ def create_app(data_dir: str | None = None) -> FastAPI:
     app = FastAPI(title="ivory-sidecar", version="0.1.0", lifespan=lifespan)
     app.state.data_dir = data_dir
 
+    from routes.ai import router as ai_router
     from routes.chat import router as chat_router
     from routes.health import router as health_router
 
     app.include_router(health_router)
     app.include_router(chat_router)
+    app.include_router(ai_router)
     return app
