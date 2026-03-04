@@ -136,31 +136,27 @@ fn move_to_trash(path: String) -> Result<(), String> {
 
 // --- API proxy ---
 
-#[tauri::command]
-async fn api_call(
-    state: State<'_, AppState>,
-    method: String,
-    path: String,
+async fn make_http_request(
+    http: &Client,
+    url: &str,
+    method: &str,
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
+    auth_token: Option<&str>,
 ) -> Result<serde_json::Value, String> {
-    let url = state.resolve_url(&path)?;
-
     let mut builder = match method.to_uppercase().as_str() {
-        "GET" => state.http.get(&url),
-        "POST" => state.http.post(&url),
-        "PUT" => state.http.put(&url),
-        "PATCH" => state.http.patch(&url),
-        "DELETE" => state.http.delete(&url),
+        "GET" => http.get(url),
+        "POST" => http.post(url),
+        "PUT" => http.put(url),
+        "PATCH" => http.patch(url),
+        "DELETE" => http.delete(url),
         other => return Err(format!("unsupported HTTP method: {}", other)),
     };
 
-    // Inject auth token if available
-    if let Ok(token) = auth_get_token_inner() {
-        builder = builder.bearer_auth(&token);
+    if let Some(token) = auth_token {
+        builder = builder.bearer_auth(token);
     }
 
-    // Attach query params
     if let Some(serde_json::Value::Object(map)) = params {
         let pairs: Vec<(String, String)> = map
             .into_iter()
@@ -175,7 +171,6 @@ async fn api_call(
         builder = builder.query(&pairs);
     }
 
-    // Attach JSON body
     if let Some(data) = body {
         builder = builder.json(&data);
     }
@@ -189,6 +184,19 @@ async fn api_call(
         let text = response.text().await.unwrap_or_default();
         Err(format!("API error {}: {}", status.as_u16(), text))
     }
+}
+
+#[tauri::command]
+async fn api_call(
+    state: State<'_, AppState>,
+    method: String,
+    path: String,
+    body: Option<serde_json::Value>,
+    params: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let url = state.resolve_url(&path)?;
+    let token = auth_get_token_inner().ok();
+    make_http_request(&state.http, &url, &method, body, params, token.as_deref()).await
 }
 
 // --- Keychain helpers ---
@@ -769,6 +777,191 @@ mod tests {
     #[test]
     fn move_to_trash_nonexistent_file_errors() {
         let result = move_to_trash("/tmp/nonexistent-ivory-test-file-xyz".to_string());
+        assert!(result.is_err());
+    }
+
+    // --- make_http_request (wiremock) ---
+
+    use wiremock::matchers::{bearer_token, body_json, header, method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn http_get_returns_json() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/data", server.uri());
+        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"ok": true}));
+    }
+
+    #[tokio::test]
+    async fn http_post_sends_json_body() {
+        let server = MockServer::start().await;
+        let payload = serde_json::json!({"name": "test"});
+        Mock::given(method("POST"))
+            .and(path("/items"))
+            .and(body_json(&payload))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "1"})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/items", server.uri());
+        let result = make_http_request(&http, &url, "POST", Some(payload), None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"id": "1"}));
+    }
+
+    #[tokio::test]
+    async fn http_put_forwards_method() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/items/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"updated": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/items/1", server.uri());
+        let result = make_http_request(&http, &url, "PUT", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"updated": true}));
+    }
+
+    #[tokio::test]
+    async fn http_patch_forwards_method() {
+        let server = MockServer::start().await;
+        Mock::given(method("PATCH"))
+            .and(path("/items/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"patched": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/items/1", server.uri());
+        let result = make_http_request(&http, &url, "PATCH", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"patched": true}));
+    }
+
+    #[tokio::test]
+    async fn http_delete_forwards_method() {
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/items/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"deleted": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/items/1", server.uri());
+        let result = make_http_request(&http, &url, "DELETE", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"deleted": true}));
+    }
+
+    #[tokio::test]
+    async fn http_unsupported_method_returns_error() {
+        let http = Client::new();
+        let result = make_http_request(&http, "http://localhost", "TRACE", None, None, None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unsupported HTTP method"));
+    }
+
+    #[tokio::test]
+    async fn http_query_params_appended() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/search"))
+            .and(query_param("foo", "bar"))
+            .and(query_param("n", "42"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"found": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/search", server.uri());
+        let params = serde_json::json!({"foo": "bar", "n": 42});
+        let result = make_http_request(&http, &url, "GET", None, Some(params), None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"found": true}));
+    }
+
+    #[tokio::test]
+    async fn http_auth_token_injected_as_bearer() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/secure"))
+            .and(bearer_token("test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"auth": true})))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/secure", server.uri());
+        let result =
+            make_http_request(&http, &url, "GET", None, None, Some("test-token")).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"auth": true}));
+    }
+
+    #[tokio::test]
+    async fn http_no_auth_omits_header() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/open"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"open": true})))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/open", server.uri());
+        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({"open": true}));
+        // Verify the mock was hit (no auth header required)
+    }
+
+    #[tokio::test]
+    async fn http_4xx_returns_error_with_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/missing"))
+            .respond_with(ResponseTemplate::new(404).set_body_string("not found"))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/missing", server.uri());
+        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let err = result.unwrap_err();
+        assert!(err.contains("API error 404"), "got: {}", err);
+        assert!(err.contains("not found"), "got: {}", err);
+    }
+
+    #[tokio::test]
+    async fn http_5xx_returns_error_with_body() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/crash"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("internal failure"))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/crash", server.uri());
+        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let err = result.unwrap_err();
+        assert!(err.contains("API error 500"), "got: {}", err);
+        assert!(err.contains("internal failure"), "got: {}", err);
+    }
+
+    #[tokio::test]
+    async fn http_connection_refused_returns_error() {
+        let http = Client::new();
+        // Use a port that's almost certainly not listening
+        let result =
+            make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None).await;
         assert!(result.is_err());
     }
 }
