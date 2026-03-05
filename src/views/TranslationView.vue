@@ -65,6 +65,9 @@ function updateEditorFromJob(job: TranslationJob | null) {
 updateEditorFromJob(activeJob.value ?? null);
 
 function activateJob(job: TranslationJob) {
+  if (sourceText.value.trim() && sourceText.value !== job.inputText) {
+    if (!confirm("You have unsaved text. Load this history entry and discard changes?")) return;
+  }
   activeJobId.value = job.id;
   updateEditorFromJob(job);
 }
@@ -78,6 +81,10 @@ const toast = inject<{ addToast: (message: string, type?: "success" | "error" | 
 async function runTranslation() {
   const input = sourceText.value.trim();
   if (!input) return;
+  if (sourceLanguage.value !== "auto" && sourceLanguage.value === targetLanguage.value) {
+    toast?.addToast("Source and target languages are the same.", "error");
+    return;
+  }
   isTranslating.value = true;
   try {
     const response = await mockTranslationRun({

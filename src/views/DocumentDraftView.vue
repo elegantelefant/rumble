@@ -67,14 +67,19 @@ function validateForm() {
   return Object.keys(errors).length === 0;
 }
 
-function generateDraft() {
+async function generateDraft() {
   if (!validateForm()) return;
   isGenerating.value = true;
-  // TODO: invoke("draft_generate", { template: selectedTemplate.value, params: formState })
-  setTimeout(() => {
-    isGenerating.value = false;
+  try {
+    // TODO: invoke("draft_generate", { template: selectedTemplate.value, params: formState })
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     toasts?.addToast("Draft prepared. Review before sharing with clients.", "success");
-  }, 1500);
+  } catch (error) {
+    console.error(error);
+    toasts?.addToast("Failed to generate draft. Please try again.", "error");
+  } finally {
+    isGenerating.value = false;
+  }
 }
 
 function exportDraft(format: "word" | "pdf") {
@@ -91,7 +96,7 @@ function exportDraft(format: "word" | "pdf") {
         <h1 class="h1">Document Draft</h1>
         <p class="body-muted">Generate drafts from your local templates.</p>
       </div>
-      <button class="btn-secondary">Manage Templates</button>
+      <button class="btn-secondary" type="button" @click="toasts?.addToast('Template management coming soon.', 'info')">Manage Templates</button>
     </header>
 
     <div class="grid gap-6 lg:grid-cols-[2fr,3fr]">
@@ -112,7 +117,7 @@ function exportDraft(format: "word" | "pdf") {
             {{ template.name }}
           </button>
         </div>
-        <button class="btn-secondary mt-4 w-full">Browse Local Templates...</button>
+        <button class="btn-secondary mt-4 w-full" type="button" @click="toasts?.addToast('Template browsing coming soon.', 'info')">Browse Local Templates...</button>
       </aside>
 
       <section class="card space-y-4">

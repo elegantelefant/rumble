@@ -94,13 +94,7 @@ const availableModels = computed(() => modelInventory.value.filter((model) => mo
 
 const messages = computed(() => activeThread.value?.messages ?? []);
 
-function ensureModelAvailability() {
-  if (!selectedModel.value && availableModels.value.length) {
-    selectedModel.value = availableModels.value[0].id;
-  }
-}
-
-ensureModelAvailability();
+// Model defaults to first available; no runtime re-check needed
 
 function startNewThread() {
   const newThread: ResearchThread = {
@@ -286,7 +280,7 @@ const workflowNotes = [
           <div class="flex flex-wrap items-center gap-3">
             <label class="text-sm font-medium text-[var(--primary-700)]">
               Model
-              <select class="input mt-1" v-model="selectedModel" @change="ensureModelAvailability">
+              <select class="input mt-1" v-model="selectedModel">
                 <option value="" disabled>Select a model (configure in Settings)</option>
                 <option
                   v-for="option in modelInventory"

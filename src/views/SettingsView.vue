@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, reactive, ref } from "vue";
+import { mockSaveSettings, mockTestSync } from "../modules/backend/backendClient";
 
 const toast = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
 
@@ -130,18 +131,29 @@ function removeSecret(id: string) {
   secrets.value = secrets.value.filter((secret) => secret.id !== id);
 }
 
-function saveSettings() {
+async function saveSettings() {
   isSaving.value = true;
-  // TODO: invoke("settings_update", { secrets, localConfig, workspaceStorage, appearanceSettings, syncSettings })
-  setTimeout(() => {
-    isSaving.value = false;
+  try {
+    await mockSaveSettings();
     toast?.addToast("Settings stored securely on this device.", "success");
-  }, 1000);
+  } catch (error) {
+    console.error(error);
+    toast?.addToast("Failed to save settings.", "error");
+  } finally {
+    isSaving.value = false;
+  }
 }
 
-function testSync() {
+async function testSync() {
+  const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
   toast?.addToast("Pinging sync server health endpoint...", "info");
-  // TODO: invoke("sync_test_connection", { server: syncSettings.useCustom ? syncSettings.customServer : syncSettings.server })
+  try {
+    const result = await mockTestSync(url);
+    toast?.addToast(result.ok ? "Sync server reachable." : (result.message ?? "Sync server unreachable."), result.ok ? "success" : "error");
+  } catch (error) {
+    console.error(error);
+    toast?.addToast("Failed to reach sync server.", "error");
+  }
 }
 
 const selectedProviderDetails = computed(() =>
@@ -172,6 +184,7 @@ const selectedProviderDetails = computed(() =>
     </div>
 
     <form class="card space-y-6" @submit.prevent="saveSettings">
+    <fieldset :disabled="isSaving">
       <section v-if="activeTab === 'providers'" class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
@@ -389,6 +402,7 @@ const selectedProviderDetails = computed(() =>
           </span>
         </button>
       </div>
+    </fieldset>
     </form>
   </div>
 </template>
