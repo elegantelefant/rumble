@@ -14,7 +14,7 @@ from models.generated import (
     ResearchResultResponse,
     ReviewRequest,
 )
-from routes.ai import _parse_llm_json
+from routes.ai import _parse_llm_json, _safe_construct
 from services import db, jobs, llm, prompts
 
 router = APIRouter(tags=["jobs"])
@@ -129,12 +129,12 @@ async def get_research_result(job_id: str) -> ResearchResultResponse:
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     result_data = json.loads(job["result"]) if job.get("result") else None
-    return ResearchResultResponse(
-        report_id=job["id"],
-        status=job["status"],
-        result=result_data.get("result") if result_data else None,
-        sources=result_data.get("sources") if result_data else None,
-    )
+    return _safe_construct(ResearchResultResponse, {
+        "report_id": job["id"],
+        "status": job["status"],
+        "result": result_data.get("result") if result_data else None,
+        "sources": None,
+    })
 
 
 # --- Shared poll helper ---

@@ -80,6 +80,7 @@ const threads = ref<ResearchThread[]>([
 const activeThreadId = ref(threads.value[0]?.id ?? null);
 const prompt = ref("");
 const selectedModel = ref(modelInventory.value.find((m) => m.available)?.id ?? "");
+const isResearching = ref(false);
 const showApiDocs = ref(false);
 const researchDocs = computed(() =>
   backendRegistry.value.filter((doc) => doc.command.includes("research")),
@@ -125,13 +126,14 @@ function startNewThread() {
 
 async function submitPrompt() {
   const thread = activeThread.value;
-  if (!thread || !prompt.value.trim()) return;
+  if (!thread || !prompt.value.trim() || isResearching.value) return;
 
   if (!selectedModel.value) {
     toasts?.addToast("Add an API key in Settings to unlock hosted research models.", "error");
     return;
   }
 
+  isResearching.value = true;
   const content = prompt.value.trim();
   prompt.value = "";
 
@@ -163,6 +165,7 @@ async function submitPrompt() {
     thread.status = "draft";
   } finally {
     thread.lastUpdated = new Date().toISOString();
+    isResearching.value = false;
   }
 }
 
@@ -309,7 +312,7 @@ const workflowNotes = [
             />
           </div>
           <div class="flex items-center justify-between">
-            <button class="btn-primary" type="button" @click="submitPrompt">Start Research</button>
+            <button class="btn-primary" type="button" :disabled="isResearching" @click="submitPrompt">Start Research</button>
             <span class="text-xs text-[var(--primary-500)]">
               Threads keep your transcripts and citations together for each matter.
             </span>

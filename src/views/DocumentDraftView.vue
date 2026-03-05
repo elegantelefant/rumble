@@ -1,7 +1,30 @@
 <script setup lang="ts">
-import { reactive, ref, inject } from "vue";
+import { computed, reactive, ref, inject, watch } from "vue";
 
 const toasts = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+
+type FieldConfig = { key: string; label: string; type?: string; placeholder?: string };
+
+const templateFields: Record<string, FieldConfig[]> = {
+  employment: [
+    { key: "employeeName", label: "Employee Name", placeholder: "Full name" },
+    { key: "startDate", label: "Start Date", type: "date" },
+    { key: "salary", label: "Salary", placeholder: "$100,000" },
+    { key: "position", label: "Position", placeholder: "Role" },
+  ],
+  nda: [
+    { key: "disclosingParty", label: "Disclosing Party", placeholder: "Company or person" },
+    { key: "receivingParty", label: "Receiving Party", placeholder: "Company or person" },
+    { key: "effectiveDate", label: "Effective Date", type: "date" },
+    { key: "duration", label: "Duration", placeholder: "e.g. 2 years" },
+  ],
+  service: [
+    { key: "serviceProvider", label: "Service Provider", placeholder: "Provider name" },
+    { key: "clientName", label: "Client Name", placeholder: "Client name" },
+    { key: "startDate", label: "Start Date", type: "date" },
+    { key: "scopeOfWork", label: "Scope of Work", placeholder: "Brief description" },
+  ],
+};
 
 const templates = [
   { id: "employment", name: "Employment Agreement" },
@@ -10,29 +33,37 @@ const templates = [
 ];
 
 const selectedTemplate = ref("employment");
-const formState = reactive({
-  employeeName: "",
-  startDate: "",
-  salary: "",
-  position: "",
-  terms: "",
-});
+const formState = reactive<Record<string, string>>({});
 const errors = reactive<Record<string, string>>({});
 const isGenerating = ref(false);
 
-function validateField(key: keyof typeof formState, label: string) {
+const activeFields = computed(() => templateFields[selectedTemplate.value] ?? []);
+const activeTemplateName = computed(
+  () => templates.find((t) => t.id === selectedTemplate.value)?.name ?? "Selected",
+);
+
+watch(selectedTemplate, () => {
+  Object.keys(formState).forEach((k) => delete formState[k]);
+  Object.keys(errors).forEach((k) => delete errors[k]);
+  formState.terms = "";
+});
+
+function sentenceCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function validateField(key: string, label: string) {
   if (!formState[key]?.toString().trim()) {
-    errors[key] = `${label} is required`;
+    errors[key] = `${sentenceCase(label)} is required`;
   } else {
     delete errors[key];
   }
 }
 
 function validateForm() {
-  validateField("employeeName", "Employee name");
-  validateField("startDate", "Start date");
-  validateField("salary", "Salary");
-  validateField("position", "Position");
+  for (const field of activeFields.value) {
+    validateField(field.key, field.label);
+  }
   return Object.keys(errors).length === 0;
 }
 
@@ -85,47 +116,18 @@ function exportDraft(format: "word" | "pdf") {
       </aside>
 
       <section class="card space-y-4">
-        <h2 class="caption-uppercase">Template: {{ selectedTemplate === "employment" ? "Employment Agreement" : "Selected" }}</h2>
+        <h2 class="caption-uppercase">Template: {{ activeTemplateName }}</h2>
         <form class="grid gap-4 md:grid-cols-2" @submit.prevent>
-          <label class="space-y-1 text-sm">
-            <span class="font-medium text-[var(--primary-700)]">Employee Name</span>
+          <label v-for="field in activeFields" :key="field.key" class="space-y-1 text-sm">
+            <span class="font-medium text-[var(--primary-700)]">{{ field.label }}</span>
             <input
-              v-model="formState.employeeName"
+              v-model="formState[field.key]"
+              :type="field.type ?? 'text'"
               class="input"
-              placeholder="Full name"
-              @blur="validateField('employeeName', 'Employee name')"
+              :placeholder="field.placeholder"
+              @blur="validateField(field.key, field.label)"
             />
-            <p v-if="errors.employeeName" class="text-xs text-[var(--error)]">{{ errors.employeeName }}</p>
-          </label>
-          <label class="space-y-1 text-sm">
-            <span class="font-medium text-[var(--primary-700)]">Start Date</span>
-            <input
-              v-model="formState.startDate"
-              type="date"
-              class="input"
-              @blur="validateField('startDate', 'Start date')"
-            />
-            <p v-if="errors.startDate" class="text-xs text-[var(--error)]">{{ errors.startDate }}</p>
-          </label>
-          <label class="space-y-1 text-sm">
-            <span class="font-medium text-[var(--primary-700)]">Salary</span>
-            <input
-              v-model="formState.salary"
-              class="input"
-              placeholder="$100,000"
-              @blur="validateField('salary', 'Salary')"
-            />
-            <p v-if="errors.salary" class="text-xs text-[var(--error)]">{{ errors.salary }}</p>
-          </label>
-          <label class="space-y-1 text-sm">
-            <span class="font-medium text-[var(--primary-700)]">Position</span>
-            <input
-              v-model="formState.position"
-              class="input"
-              placeholder="Role"
-              @blur="validateField('position', 'Position')"
-            />
-            <p v-if="errors.position" class="text-xs text-[var(--error)]">{{ errors.position }}</p>
+            <p v-if="errors[field.key]" class="text-xs text-[var(--error)]">{{ errors[field.key] }}</p>
           </label>
         </form>
 

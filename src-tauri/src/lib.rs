@@ -315,11 +315,23 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     // Find a free port synchronously via tauri's async runtime
     let port = tauri::async_runtime::block_on(find_available_port())?;
 
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {}", e))?;
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("failed to create app data dir: {}", e))?;
+
     let sidecar_cmd = app
         .shell()
         .sidecar("ivory-sidecar")
         .map_err(|e| format!("failed to create sidecar command: {}", e))?
-        .args(["--port", &port.to_string()]);
+        .args([
+            "--port",
+            &port.to_string(),
+            "--data-dir",
+            &data_dir.to_string_lossy(),
+        ]);
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
@@ -449,7 +461,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
-            mode: Mutex::new(BackendMode::Premium),
+            mode: Mutex::new(BackendMode::Ollama),
             http: Client::new(),
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),

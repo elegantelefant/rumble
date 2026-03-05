@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, inject, ref } from "vue";
 import {
   backendRegistry,
   mockDocumentChat,
   mockInitialReview,
   mockRegisterReview,
 } from "../modules/backend/backendClient";
+
+const toasts = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
 
 type ReviewStatus = "idle" | "running" | "ready";
 
@@ -36,6 +38,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const customPrompt = ref("");
 const question = ref("");
 const isSyncingBackend = ref(false);
+const isSending = ref(false);
 const showApiDocs = ref(false);
 
 function generateId() {
@@ -142,16 +145,14 @@ function handleDrop(event: DragEvent) {
 }
 
 function beginInitialReview(session: ReviewSession) {
-  if (session.reviewStatus === "ready") return;
+  if (session.reviewStatus === "ready" || session.reviewStatus === "running") return;
 
-  if (session.reviewStatus === "idle") {
-    session.messages.push({
-      id: generateId(),
-      role: "assistant",
-      content: `Starting initial review for ${session.file.name}.`,
-      timestamp: formatTimestamp(),
-    });
-  }
+  session.messages.push({
+    id: generateId(),
+    role: "assistant",
+    content: `Starting initial review for ${session.file.name}.`,
+    timestamp: formatTimestamp(),
+  });
 
   session.reviewStatus = "running";
   session.messages.push({
@@ -188,6 +189,11 @@ async function queueInitialReview(file: UploadedFile) {
     session.summary = detailed.summary;
     session.reviewStatus = "ready";
     session.file.lastReviewedAt = new Date().toISOString();
+  } catch (error) {
+    console.error(error);
+    const session = sessions.value[file.id];
+    if (session) session.reviewStatus = "idle";
+    toasts?.addToast("Failed to start initial review. Please try again.", "error");
   } finally {
     isSyncingBackend.value = false;
   }
@@ -195,20 +201,30 @@ async function queueInitialReview(file: UploadedFile) {
 
 async function askQuestion() {
   const session = activeSession.value;
-  if (!session || !question.value.trim()) return;
+  if (!session || !question.value.trim() || isSending.value) return;
 
+  isSending.value = true;
   const now = formatTimestamp();
+  const content = question.value;
+  question.value = "";
+
   session.messages.push({
     id: generateId(),
     role: "user",
-    content: question.value,
+    content,
     timestamp: now,
   });
 
-  const response = await mockDocumentChat(session.file.id, question.value);
-  session.messages.push(response);
-  session.file.lastReviewedAt = new Date().toISOString();
-  question.value = "";
+  try {
+    const response = await mockDocumentChat(session.file.id, content);
+    session.messages.push(response);
+    session.file.lastReviewedAt = new Date().toISOString();
+  } catch (error) {
+    console.error(error);
+    toasts?.addToast("Failed to get a response. Please try again.", "error");
+  } finally {
+    isSending.value = false;
+  }
 }
 
 const workflowSteps = [
@@ -456,7 +472,7 @@ const workflowSteps = [
               class="input flex-1"
               placeholder="Ask about obligations, timelines, or definitions..."
             />
-            <button type="submit" class="btn-primary">Send</button>
+            <button type="submit" class="btn-primary" :disabled="isSending">Send</button>
           </form>
         </div>
 

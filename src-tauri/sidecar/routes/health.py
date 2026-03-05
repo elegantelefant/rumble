@@ -36,7 +36,7 @@ async def ready() -> dict:
             resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             resp.raise_for_status()
             return {"status": "ready", "mode": "ollama"}
-    except (httpx.HTTPError, httpx.ConnectError):
+    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"status": "not_ready", "mode": "ollama", "error": "ollama unreachable"}
 
 
@@ -70,5 +70,5 @@ async def list_models() -> dict:
                 for i, m in enumerate(data.get("models", []))
             ]
             return {"models": models}
-    except (httpx.HTTPError, httpx.ConnectError):
+    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"models": []}

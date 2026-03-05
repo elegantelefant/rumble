@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, computed, onMounted, onBeforeUnmount } from "vue";
+import { shallowRef, computed, watch, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps<{
   open: boolean;
@@ -17,6 +17,10 @@ const filteredCommands = computed(() => {
   const q = query.value.toLowerCase().trim();
   if (!q) return props.commands;
   return props.commands.filter((cmd) => cmd.label.toLowerCase().includes(q));
+});
+
+watch(query, () => {
+  highlightedIndex.value = 0;
 });
 
 function resetState() {
