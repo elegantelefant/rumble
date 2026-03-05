@@ -25,6 +25,10 @@ __pycache__/
 .venv/
 ivory.db*
 
+# PyInstaller build artifacts
+src-tauri/sidecar/build/
+src-tauri/sidecar/dist/
+
 # UV cache
 .uv-cache/
 
