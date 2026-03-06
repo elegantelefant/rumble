@@ -32,6 +32,9 @@ src-tauri/sidecar/dist/
 # UV cache
 .uv-cache/
 
+# Specstory cache
+.specstory/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
