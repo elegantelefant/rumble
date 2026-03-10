@@ -111,6 +111,6 @@ describe("SidebarNav", () => {
 
   it("displays version info", () => {
     const wrapper = mountSidebar()
-    expect(wrapper.text()).toContain("Ivory v0.1.0a")
+    expect(wrapper.text()).toContain("Rumble v0.1.0a")
   })
 })

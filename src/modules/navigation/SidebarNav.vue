@@ -42,7 +42,7 @@ const fixedToolDefinitions: ToolDefinition[] = [
 const userInfo = {
   user: "CoastalTower238",
   team: "SilverEcho951",
-  version: "Ivory v0.1.0a",
+  version: "Rumble v0.1.0a",
 };
 
 const reorderableTools = ref<ToolDefinition[]>([...reorderableToolDefinitions]);
@@ -73,7 +73,7 @@ function handleItemClick(path: string, disabled?: boolean) {
     :class="[props.open ? 'translate-x-0' : '-translate-x-full md:translate-x-0']"
   >
     <div class="flex items-center justify-between px-4 py-4 md:hidden">
-      <span class="text-lg font-semibold">Elefant - Ivory</span>
+      <span class="text-lg font-semibold">Elefant - Rumble</span>
       <button class="btn-secondary text-white" @click="emit('close')">Close</button>
     </div>
 
@@ -82,7 +82,7 @@ function handleItemClick(path: string, disabled?: boolean) {
         <div class="flex items-center gap-3">
           <img :src="logoSrc" alt="Elefant logo" class="h-10 w-10 rounded-lg border border-[color:color-mix(in_srgb,var(--primary-400)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--primary-200)_70%,white)] object-contain p-1.5" />
           <div class="leading-tight">
-            <div class="text-xl font-bold tracking-tight text-white">Elefant - Ivory</div>
+            <div class="text-xl font-bold tracking-tight text-white">Elefant - Rumble</div>
             <div class="text-xs uppercase tracking-[0.45em] text-[var(--primary-500)]">Workspace</div>
           </div>
         </div>

@@ -29,7 +29,7 @@ describe("LoginView", () => {
     const wrapper = mountLogin()
     expect(wrapper.find('input[type="password"]').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain("Enter Ivory")
+    expect(wrapper.text()).toContain("Enter Rumble")
   })
 
   it("renders the remember checkbox", () => {

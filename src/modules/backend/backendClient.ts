@@ -1,4 +1,4 @@
-// ABOUTME: shared mock backend client for ivory front-end.
+// ABOUTME: shared mock backend client for rumble front-end.
 // ABOUTME: documents expectations for real invoke handlers and provides stubs.
 import { ref } from "vue";
 

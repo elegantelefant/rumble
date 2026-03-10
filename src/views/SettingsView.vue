@@ -79,7 +79,7 @@ const newSecret = reactive({
 
 const workspaceStorage = reactive({
   templatesPath: "~/Documents/LegalTemplates",
-  workspacePath: "~/Library/Application Support/Elefant/Ivory",
+  workspacePath: "~/Library/Application Support/Elefant/Rumble",
   briefcases: ["General research", "Litigation", "Transactions"],
   attachableResources: ["DocumentReview: Contract_2024.pdf", "Research: Tax compliance"],
 });
@@ -269,7 +269,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Template library</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Map Ivory to your firm template repository so drafting tools can reference the latest clauses.
+            Map Rumble to your firm template repository so drafting tools can reference the latest clauses.
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">
@@ -316,7 +316,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Layout preferences</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Ivory uses a navigation sidebar and a contextual chat/history sidebar. Configure their positions independently.
+            Rumble uses a navigation sidebar and a contextual chat/history sidebar. Configure their positions independently.
           </p>
         </div>
         <div class="grid gap-4 md:grid-cols-2">
@@ -348,7 +348,7 @@ const selectedProviderDetails = computed(() =>
           </label>
         </div>
         <p class="text-xs text-[var(--primary-500)]">
-          When both sidebars use the same side, Ivory collapses the contextual pane until a chat is active.
+          When both sidebars use the same side, Rumble collapses the contextual pane until a chat is active.
         </p>
       </section>
 
@@ -385,7 +385,7 @@ const selectedProviderDetails = computed(() =>
           Custom server URL
           <input v-model="syncSettings.customServer" :disabled="!syncSettings.useCustom" class="input mt-1" placeholder="https://sync.myfirm.com" />
           <span class="text-xs text-[var(--primary-500)]">
-            Build your own server using our reference repo: github.com/elefantlabs/ivory-sync
+            Build your own server using our reference repo: github.com/ielegante/rumble-sync
           </span>
         </label>
         <div class="flex justify-end">

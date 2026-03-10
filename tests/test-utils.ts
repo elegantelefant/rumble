@@ -1,4 +1,4 @@
-// ABOUTME: Shared test utilities for Ivory frontend tests.
+// ABOUTME: Shared test utilities for Rumble frontend tests.
 // ABOUTME: Provides withSetup helper for composable testing with lifecycle hooks.
 
 import { createApp, type App } from "vue"

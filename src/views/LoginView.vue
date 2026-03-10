@@ -37,7 +37,7 @@ async function handleSubmit() {
       <div class="flex flex-col items-center space-y-3 text-center">
         <BrandLogo />
         <div class="text-xs uppercase tracking-[0.32em] text-[var(--primary-500)]">Secure access</div>
-        <div class="body-muted">Enter Ivory by Elefant — all data stays on your machine.</div>
+        <div class="body-muted">Enter Rumble by Elefant — all data stays on your machine.</div>
       </div>
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
@@ -61,7 +61,7 @@ async function handleSubmit() {
         </label>
 
         <button type="submit" class="btn-primary w-full" :disabled="loading">
-          <span v-if="!loading">Enter Ivory</span>
+          <span v-if="!loading">Enter Rumble</span>
           <span v-else class="loading">Authenticating...</span>
         </button>
       </form>

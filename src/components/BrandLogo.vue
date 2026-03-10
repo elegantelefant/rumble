@@ -50,7 +50,7 @@ const props = withDefaults(
         class="uppercase tracking-[0.45em] text-[var(--primary-500)]"
         :class="props.variant === 'full' ? 'text-[0.68rem]' : 'text-[0.58rem]'"
       >
-        Ivory
+        Rumble
       </div>
     </div>
   </div>
