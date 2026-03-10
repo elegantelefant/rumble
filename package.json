@@ -1,5 +1,5 @@
 {
-  "name": "elefant-ivory",
+  "name": "elefant-rumble",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -36,5 +36,5 @@
     "vitest": "^4.0.18",
     "vue-tsc": "^2.1.10"
   },
-  "productDisplayName": "Elefant - Ivory"
+  "productDisplayName": "Elefant - Rumble"
 }

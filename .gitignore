@@ -23,7 +23,7 @@ target/
 __pycache__/
 *.pyc
 .venv/
-ivory.db*
+rumble.db*
 
 # PyInstaller build artifacts
 src-tauri/sidecar/build/

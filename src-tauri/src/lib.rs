@@ -1,4 +1,4 @@
-//! ABOUTME: hosts ivory tauri commands and runtime wiring.
+//! ABOUTME: hosts rumble tauri commands and runtime wiring.
 //! ABOUTME: coordinates tray icon, API proxy, keychain, sidecar lifecycle, and plugins.
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -14,7 +14,7 @@ use tauri_plugin_shell::ShellExt;
 use trash::delete;
 use walkdir::WalkDir;
 
-const SERVICE_NAME: &str = "elefant-ivory";
+const SERVICE_NAME: &str = "elefant-rumble";
 const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
@@ -324,7 +324,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
 
     let sidecar_cmd = app
         .shell()
-        .sidecar("ivory-sidecar")
+        .sidecar("rumble-sidecar")
         .map_err(|e| format!("failed to create sidecar command: {}", e))?
         .args([
             "--port",
@@ -474,7 +474,7 @@ pub fn run() {
                 let tray = TrayIconBuilder::new()
                     .icon(icon)
                     .icon_as_template(false)
-                    .tooltip("ivory")
+                    .tooltip("rumble")
                     .build(app)?;
                 app.manage(tray);
             }
@@ -778,7 +778,7 @@ mod tests {
     #[test]
     fn scan_folder_nonexistent_returns_empty() {
         // WalkDir silently returns nothing for non-existent paths
-        let result = scan_folder("/tmp/nonexistent-ivory-test-dir-xyz".to_string());
+        let result = scan_folder("/tmp/nonexistent-rumble-test-dir-xyz".to_string());
         assert!(result.is_ok());
         // WalkDir actually iterates once with an error entry, so it depends
         // on implementation — empty or error
@@ -788,7 +788,7 @@ mod tests {
 
     #[test]
     fn move_to_trash_nonexistent_file_errors() {
-        let result = move_to_trash("/tmp/nonexistent-ivory-test-file-xyz".to_string());
+        let result = move_to_trash("/tmp/nonexistent-rumble-test-file-xyz".to_string());
         assert!(result.is_err());
     }
 
