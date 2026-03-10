@@ -1,10 +1,10 @@
-# ABOUTME: Python sidecar project manifest for ivory local AI backend.
+# ABOUTME: Python sidecar project manifest for rumble local AI backend.
 # ABOUTME: Manages deps for FastAPI server, PydanticAI agents, and SQLite storage.
 
 [project]
-name = "ivory-sidecar"
+name = "rumble-sidecar"
 version = "0.1.0"
-description = "Local AI sidecar for Elefant Ivory (Ollama + BYOK)"
+description = "Local AI sidecar for Elefant Rumble (Ollama + BYOK)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ivory-sidecar = "main:cli"
+rumble-sidecar = "main:cli"
 
 [dependency-groups]
 dev = [

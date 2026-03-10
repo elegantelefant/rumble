@@ -53,10 +53,10 @@ def _uuid() -> str:
 async def init_db(data_dir: str | None = None) -> None:
     global _db
     if data_dir:
-        path = Path(data_dir) / "ivory.db"
+        path = Path(data_dir) / "rumble.db"
         path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        path = Path("ivory.db")
+        path = Path("rumble.db")
     _db = await aiosqlite.connect(str(path))
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")

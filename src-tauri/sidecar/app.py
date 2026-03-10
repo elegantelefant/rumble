@@ -1,4 +1,4 @@
-# ABOUTME: FastAPI application factory for the ivory sidecar.
+# ABOUTME: FastAPI application factory for the rumble sidecar.
 # ABOUTME: Wires up lifespan (DB init/close) and route modules.
 
 from contextlib import asynccontextmanager
@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(data_dir: str | None = None) -> FastAPI:
-    app = FastAPI(title="ivory-sidecar", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="rumble-sidecar", version="0.1.0", lifespan=lifespan)
     app.state.data_dir = data_dir
 
     from routes.ai import router as ai_router

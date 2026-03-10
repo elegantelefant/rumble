@@ -1,4 +1,4 @@
-# ABOUTME: PyInstaller spec for building the ivory-sidecar binary.
+# ABOUTME: PyInstaller spec for building the rumble-sidecar binary.
 # ABOUTME: Bundles FastAPI + Uvicorn + PydanticAI into a one-dir distributable.
 
 # -*- mode: python ; coding: utf-8 -*-
@@ -69,7 +69,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="ivory-sidecar",
+    name="rumble-sidecar",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

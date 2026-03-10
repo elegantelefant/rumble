@@ -1,4 +1,4 @@
-# ABOUTME: CLI entry point for the ivory sidecar server.
+# ABOUTME: CLI entry point for the rumble sidecar server.
 # ABOUTME: Parses --port and --data-dir args, prints PORT:{port} for Rust, runs uvicorn.
 
 import argparse
@@ -16,7 +16,7 @@ class _StartupPrinter(uvicorn.config.Config):
 
 
 def cli():
-    parser = argparse.ArgumentParser(description="Ivory sidecar server")
+    parser = argparse.ArgumentParser(description="Rumble sidecar server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--data-dir", type=str, default=None, help="Directory for SQLite DB")
     args = parser.parse_args()
