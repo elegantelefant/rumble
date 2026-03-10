@@ -1,4 +1,4 @@
-ABOUTME: ivory principal engineer audit log.
+ABOUTME: rumble principal engineer audit log.
 ABOUTME: appendix capturing page interactions, issues, and remediation plan.
 
 # Application Audit Report

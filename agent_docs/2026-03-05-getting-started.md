@@ -1,6 +1,6 @@
-# Getting Started with Elefant Ivory
+# Getting Started with Elefant Rumble
 
-Welcome to Elefant Ivory — your private, on-device legal assistant. Everything runs locally on your Mac. Your documents and conversations never leave your computer.
+Welcome to Elefant Rumble — your private, on-device legal assistant. Everything runs locally on your Mac. Your documents and conversations never leave your computer.
 
 ---
 
@@ -15,7 +15,7 @@ Welcome to Elefant Ivory — your private, on-device legal assistant. Everything
 
 ## Step 1: Install Ollama
 
-Ivory uses Ollama to run AI models privately on your Mac. It's free and takes about 2 minutes.
+Rumble uses Ollama to run AI models privately on your Mac. It's free and takes about 2 minutes.
 
 1. Open your web browser and go to **https://ollama.com/download**
 2. Click **Download for macOS**
@@ -28,7 +28,7 @@ That's it — Ollama runs quietly in the background.
 
 ## Step 2: Download a Language Model
 
-Ivory needs a language model to work. Open the **Terminal** app (search for "Terminal" in Spotlight with Cmd+Space) and paste this command:
+Rumble needs a language model to work. Open the **Terminal** app (search for "Terminal" in Spotlight with Cmd+Space) and paste this command:
 
 ```
 ollama pull llama3.2
@@ -40,17 +40,17 @@ You can close Terminal when it's done.
 
 ---
 
-## Step 3: Install Elefant Ivory
+## Step 3: Install Elefant Rumble
 
-1. Download `Elefant-Ivory-0.1.0-aarch64.zip` from the link you were given
+1. Open the Google Drive link you were sent and click **Download** (the file is about 68 MB)
 2. Double-click the zip file to unzip it
-3. Drag **Elefant - Ivory** into your **Applications** folder
+3. Drag **Elefant - Rumble** into your **Applications** folder
 
 ### If macOS says the app can't be opened
 
 This happens because the app isn't signed with Apple yet (it will be in a future release). To open it:
 
-1. Right-click (or Control-click) on **Elefant - Ivory** in Applications
+1. Right-click (or Control-click) on **Elefant - Rumble** in Applications
 2. Click **Open** from the menu
 3. In the dialog that appears, click **Open** again
 
@@ -61,27 +61,27 @@ You only need to do this once. After that, the app opens normally.
 ## Step 4: Open the App
 
 1. Make sure you see the Ollama icon (llama) in your menu bar. If not, open Ollama from Applications first.
-2. Open **Elefant - Ivory** from your Applications folder
-3. The app window should appear with "Elefant - Ivory" in the title bar
+2. Open **Elefant - Rumble** from your Applications folder
+3. The app window should appear with "Elefant - Rumble" in the title bar
 4. A small icon also appears in your menu bar
 
 ---
 
 ## Using the App
 
-Ivory has five main tools, accessible from the sidebar on the left:
+Rumble has five main tools, accessible from the sidebar on the left:
 
 ### Document Review
-Upload a PDF, DOCX, or TXT file by dragging it into the app or clicking **Browse Files**. Ivory will analyze the document and let you ask follow-up questions about it — like having a conversation about the document's contents.
+Upload a PDF, DOCX, or TXT file by dragging it into the app or clicking **Browse Files**. Rumble will analyze the document and let you ask follow-up questions about it — like having a conversation about the document's contents.
 
 ### Research Assistant
-Ask a legal research question and Ivory will produce a structured analysis with citations. Each research session is saved as a thread you can return to later.
+Ask a legal research question and Rumble will produce a structured analysis with citations. Each research session is saved as a thread you can return to later.
 
 ### Document Draft
 Choose a template (Employment Agreement, NDA, or Service Contract), fill in the details, and generate a first draft. You can export to Word or PDF.
 
 ### Translation
-Paste text in one language and translate it to another. Ivory supports English, French, German, Spanish, and Chinese. These are draft-quality translations — always have them reviewed by a certified translator before filing.
+Paste text in one language and translate it to another. Rumble supports English, French, German, Spanish, and Chinese. These are draft-quality translations — always have them reviewed by a certified translator before filing.
 
 ### Settings
 Configure AI providers, manage templates, and adjust how the app looks and feels. By default, everything runs through Ollama on your computer.

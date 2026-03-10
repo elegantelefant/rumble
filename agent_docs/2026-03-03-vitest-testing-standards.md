@@ -1,4 +1,4 @@
-# Vitest Testing Standards — Ivory Frontend
+# Vitest Testing Standards — Rumble Frontend
 
 Rules for writing tests in this codebase. Not guidelines — requirements.
 
@@ -392,7 +392,7 @@ import { invoke } from "@tauri-apps/api/core"
 vi.mocked(invoke).mockResolvedValue({ status: "ok" })
 ```
 
-This is the single most important mock in the Ivory test suite. Define it once in a shared test utility, reuse everywhere.
+This is the single most important mock in the Rumble test suite. Define it once in a shared test utility, reuse everywhere.
 
 ---
 

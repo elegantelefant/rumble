@@ -1,4 +1,4 @@
-# Ivory — Manual E2E Testing Runbook
+# Rumble — Manual E2E Testing Runbook
 
 > **Tester:** _______________
 > **Date:** _______________
@@ -33,8 +33,8 @@
 |---|------|----------|------------|--------|-------|
 | 1.1 | `pnpm install` in project root | Dependencies install without errors | LIKELY OK | [ ] | |
 | 1.2 | `cd src-tauri/sidecar && uv sync` | Python venv created, deps installed | LIKELY OK | [ ] | |
-| 1.3 | `pnpm tauri dev` | App window opens (800x600), title "Elefant - Ivory" | LIKELY OK — Vite + Tauri config look correct | [ ] | |
-| 1.4 | System tray icon appears | "ivory" icon visible in menu bar | LIKELY OK — icon embedded at compile time, but no click handler (tray is inert) | [ ] | |
+| 1.3 | `pnpm tauri dev` | App window opens (800x600), title "Elefant - Rumble" | LIKELY OK — Vite + Tauri config look correct | [ ] | |
+| 1.4 | System tray icon appears | "rumble" icon visible in menu bar | LIKELY OK — icon embedded at compile time, but no click handler (tray is inert) | [ ] | |
 | 1.5 | No white screen / crash on launch | Vue app renders inside the window | LIKELY OK | [ ] | |
 | 1.6 | Check terminal: sidecar starts | `PORT:<n>` printed, health check passes | **WILL FAIL** — sidecar binary is an 11-byte stub (`#!/bin/sh`). Must build real binary via `uv run pyinstaller sidecar.spec`, or run sidecar manually with `pnpm dev:sidecar` | [ ] | |
 | 1.7 | App lands on `/review` | Document Review page is visible | LIKELY OK — auth guard hardcoded to `true`, root redirects to `/review` | [ ] | |
@@ -43,9 +43,9 @@
 
 | ID | Severity | Issue |
 |----|----------|-------|
-| B1.1 | **BLOCKER** | `src-tauri/binaries/ivory-sidecar-aarch64-apple-darwin` is an 11-byte stub. No build script to produce the real PyInstaller binary. Sidecar will not start. Workaround: run `pnpm dev:sidecar` in a separate terminal. |
+| B1.1 | **BLOCKER** | `src-tauri/binaries/rumble-sidecar-aarch64-apple-darwin` is an 11-byte stub. No build script to produce the real PyInstaller binary. Sidecar will not start. Workaround: run `pnpm dev:sidecar` in a separate terminal. |
 | B1.2 | Medium | `sidecar.spec` is missing `routes.jobs` and `services.jobs` in `hiddenimports` — when a real binary IS built, the `/draft`, `/review`, `/research` endpoints will fail with ImportError. |
-| B1.3 | Medium | Sidecar writes `ivory.db` to CWD. When launched from Tauri, CWD may not be writable. Rust does not pass `--data-dir`. |
+| B1.3 | Medium | Sidecar writes `rumble.db` to CWD. When launched from Tauri, CWD may not be writable. Rust does not pass `--data-dir`. |
 | B1.4 | Low | `PORT:` is printed before uvicorn binds the socket — health polls may fail on slow cold starts (10 retries × 500ms = 5s budget). |
 | B1.5 | Low | Default `BackendMode` is `Premium` — all API calls route to `api.elefant.com`, not the sidecar. Must call `set_backend_mode("ollama")` to use local mode. |
 
@@ -85,7 +85,7 @@
 | 3.10 | Reorder: move last tool up | Order changes | LIKELY OK | [ ] | |
 | 3.11 | First item Up arrow disabled | Cannot move up | LIKELY OK | [ ] | |
 | 3.12 | Last item Down arrow disabled | Cannot move down | LIKELY OK | [ ] | |
-| 3.13 | User card at bottom | "CoastalTower238", "SilverEcho951", "Ivory v0.1.0a" | LIKELY OK — hardcoded values | [ ] | |
+| 3.13 | User card at bottom | "CoastalTower238", "SilverEcho951", "Rumble v0.1.0a" | LIKELY OK — hardcoded values | [ ] | |
 
 ### 3b. TopBar
 

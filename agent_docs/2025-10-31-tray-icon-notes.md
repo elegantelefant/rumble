@@ -1,4 +1,4 @@
-ABOUTME: tray icon research log for ivory tauri app.
+ABOUTME: tray icon research log for rumble tauri app.
 ABOUTME: captures decisions and follow-up questions.
 
 # Tray Icon Update Notes

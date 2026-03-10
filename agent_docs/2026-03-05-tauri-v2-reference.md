@@ -222,7 +222,7 @@ In `tauri.conf.json`:
 ```json
 {
   "bundle": {
-    "externalBin": ["binaries/ivory-sidecar"]
+    "externalBin": ["binaries/rumble-sidecar"]
   }
 }
 ```
@@ -232,14 +232,14 @@ In `tauri.conf.json`:
 Binary files must include the **target triple**:
 ```
 binaries/
-└── ivory-sidecar-aarch64-apple-darwin    # macOS ARM
-└── ivory-sidecar-x86_64-apple-darwin     # macOS Intel
-└── ivory-sidecar-x86_64-pc-windows-msvc.exe  # Windows
+└── rumble-sidecar-aarch64-apple-darwin    # macOS ARM
+└── rumble-sidecar-x86_64-apple-darwin     # macOS Intel
+└── rumble-sidecar-x86_64-pc-windows-msvc.exe  # Windows
 ```
 
 Get the target triple: `rustc --print host-tuple`
 
-The config references the base name only (`binaries/ivory-sidecar`). Tauri appends the target triple at build time.
+The config references the base name only (`binaries/rumble-sidecar`). Tauri appends the target triple at build time.
 
 ### Spawning from Rust
 
@@ -247,7 +247,7 @@ The config references the base name only (`binaries/ivory-sidecar`). Tauri appen
 use tauri_plugin_shell::ShellExt;
 
 let sidecar_cmd = app.shell()
-    .sidecar("ivory-sidecar")
+    .sidecar("rumble-sidecar")
     .expect("failed to create sidecar command")
     .args(["--port", &port.to_string()]);
 
@@ -296,7 +296,7 @@ tauri-plugin-shell = "2"
     {
       "identifier": "shell:allow-spawn",
       "allow": [
-        { "name": "binaries/ivory-sidecar", "sidecar": true }
+        { "name": "binaries/rumble-sidecar", "sidecar": true }
       ]
     }
   ]
@@ -784,7 +784,7 @@ If your sidecar needs to be built before `tauri build`:
     pip install pyinstaller
     pyinstaller sidecar.spec --noconfirm
     TARGET=$(rustc --print host-tuple)
-    cp dist/ivory-sidecar ../binaries/ivory-sidecar-$TARGET
+    cp dist/rumble-sidecar ../binaries/rumble-sidecar-$TARGET
 ```
 
 ---
@@ -814,7 +814,7 @@ panic = "abort"       # Smaller binary, no unwinding
 
 ### UPX Compression
 
-For sidecars: `upx --best ivory-sidecar` can reduce binary by 30-50%.
+For sidecars: `upx --best rumble-sidecar` can reduce binary by 30-50%.
 
 ---
 
@@ -873,13 +873,13 @@ tauri::Builder::default()
 
 ---
 
-## Ivory-Specific Patterns
+## Rumble-Specific Patterns
 
-These patterns are specific to how Ivory uses Tauri:
+These patterns are specific to how Rumble uses Tauri:
 
 ### Sidecar Lifecycle
 1. Tauri Core picks a random port
-2. Spawns `ivory-sidecar --port <N> --data-dir <app_data_dir>`
+2. Spawns `rumble-sidecar --port <N> --data-dir <app_data_dir>`
 3. Health-checks `GET /health/ready` until responsive
 4. Frontend proxies all API calls through Tauri commands to `http://localhost:<N>`
 
@@ -889,14 +889,14 @@ These patterns are specific to how Ivory uses Tauri:
 cd src-tauri/sidecar && uv run pyinstaller sidecar.spec --noconfirm
 
 # 2. Copy with target triple name
-cp dist/ivory-sidecar ../binaries/ivory-sidecar-$(rustc --print host-tuple)
+cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc --print host-tuple)
 
 # 3. Build Tauri app
 cd ../.. && pnpm tauri build --bundles app
 
 # 4. Package for distribution
 cd src-tauri/target/release/bundle/macos
-zip -r "Elefant-Ivory-0.1.0-aarch64.zip" "Elefant - Ivory.app"
+zip -r "Elefant-Rumble-0.1.0-aarch64.zip" "Elefant - Rumble.app"
 ```
 
 ### Backend Mode Routing

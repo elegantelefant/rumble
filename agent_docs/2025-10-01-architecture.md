@@ -46,12 +46,12 @@ The Elefant Toolbox evolves CleanSweep into a multi-tool legal assistant while k
 - **Entry point**: Continue mounting from `src/main.ts`, now importing a router.
 - **Layout components**:
   - `AppShell.vue`: Hosts the sidebar, top bar, and content outlet. Accepts props for sidebar position, user info, and app version.
-  - `SidebarNav.vue`: Renders the Elefant/Ivory tool list, reflecting active/disabled/premium states via props. Uses simple `@click` events to push router navigation.
-  - `TopBar.vue`: Houses breadcrumbs, contextual actions, and global status (sync indicator, notifications). It now renders the `BrandLogo` placeholder (Elefant primary wordmark with Ivory tag) so a production asset can drop in later.
+  - `SidebarNav.vue`: Renders the Elefant/Rumble tool list, reflecting active/disabled/premium states via props. Uses simple `@click` events to push router navigation.
+  - `TopBar.vue`: Houses breadcrumbs, contextual actions, and global status (sync indicator, notifications). It now renders the `BrandLogo` placeholder (Elefant primary wordmark with Rumble tag) so a production asset can drop in later.
 - **Routing**: Use Vue Router with routes `/login`, `/review`, `/draft`, `/research`, `/translation`, `/evals`, `/briefcases`, `/settings`. Evidence Review and Plugins routes render placeholder “coming soon” cards matching the spec.
 
 ### 2.3 Page Implementations
-- **Login (`/login`)**: A centered card component `LoginView.vue` with the Ivory brand mark, passphrase input, remember checkbox, and CTA button. Form submission emits `loginAttempt(passphrase)` and awaits an `invoke("auth_login", {...})` call. Errors and loading states mirror CleanSweep alerts but with inline feedback.
+- **Login (`/login`)**: A centered card component `LoginView.vue` with the Rumble brand mark, passphrase input, remember checkbox, and CTA button. Form submission emits `loginAttempt(passphrase)` and awaits an `invoke("auth_login", {...})` call. Errors and loading states mirror CleanSweep alerts but with inline feedback.
 - **Document Review (`/review`)**: Split view with an upload drop zone (`FileDropZone.vue`) and chat area (`ChatPanel.vue`).
   - **Data flow**: Upload emits `invoke("documents_add", files)`. Questions call `invoke("documents_query", { conversationId, question })`. Responses render `ChatMessage` components with citation badges.
 - **Document Draft (`/draft`)**: Two-column layout; left column lists templates (`TemplateList.vue`), right column hosts `DraftForm.vue`. Generating a draft calls `invoke("draft_generate", { templateId, params })` and streams updates to show progress.
@@ -82,9 +82,9 @@ The Elefant Toolbox evolves CleanSweep into a multi-tool legal assistant while k
 - **Keyboard shortcuts**: Use the Vue lifecycle to register shortcuts (`Cmd+K` for command palette, `Cmd+/` for help) that call `invoke("ui_shortcut", { action })`, letting Rust log or act accordingly.
 
 ### 2.8 Deliverables Checklist
-- Component skeletons for all routes with placeholder content and Ivory rebranding. ✅
+- Component skeletons for all routes with placeholder content and Rumble rebranding. ✅
 - IPC client module with stubbed command wrappers. ☐ (next)
-- Tailwind theme file defining the Ivory/ELEFANT tokens. ✅
+- Tailwind theme file defining the Rumble/ELEFANT tokens. ✅
 - Documentation comments in components describing the expected command interaction. ☐ (add inline as wiring matures)
 
 ## 3. BetterAuth Login Implementation Plan
@@ -122,7 +122,7 @@ LoginView → useAuth composable → invoke("auth_login")
    - Replace the current timeout stub in `LoginView.vue` with the composable’s `signIn` call; show BetterAuth error codes inline (e.g., lockouts, expired passphrase).
    - Swap the placeholder “LOGO” badge with an SVG asset when delivered; because `BrandLogo` already accepts a compact variant, the top bar and login card stay in sync.
 
-This plan keeps the login experience minimal while ensuring BetterAuth operates through Tauri’s secure IPC, matching Ivory’s local-first philosophy.
+This plan keeps the login experience minimal while ensuring BetterAuth operates through Tauri’s secure IPC, matching Rumble’s local-first philosophy.
 
 ---
 

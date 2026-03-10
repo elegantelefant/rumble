@@ -1,4 +1,4 @@
-# Ivory Test Checklist — Every Interaction & Function
+# Rumble Test Checklist — Every Interaction & Function
 
 ## Status Legend
 - [x] Already tested
@@ -225,7 +225,7 @@
 | 152 | Disable move-up for first | disabled attribute | [x] |
 | 153 | Disable move-down for last | disabled attribute | [x] |
 | 154 | Coming Soon sublabel | Text present | [x] |
-| 155 | Version info | "Ivory v0.1.0a" | [x] |
+| 155 | Version info | "Rumble v0.1.0a" | [x] |
 | 156 | Active path highlighting | activePath prop → highlight | [ ] |
 
 ### 2.6 DocumentDraftView Component
