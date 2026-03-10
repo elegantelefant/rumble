@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8286C17F3C11276B3F34F372"
-               BuildableName = "ivory_iOS.app"
-               BlueprintName = "ivory_iOS"
-               ReferencedContainer = "container:ivory.xcodeproj">
+               BuildableName = "rumble_iOS.app"
+               BlueprintName = "rumble_iOS"
+               ReferencedContainer = "container:rumble.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8286C17F3C11276B3F34F372"
-            BuildableName = "ivory_iOS.app"
-            BlueprintName = "ivory_iOS"
-            ReferencedContainer = "container:ivory.xcodeproj">
+            BuildableName = "rumble_iOS.app"
+            BlueprintName = "rumble_iOS"
+            ReferencedContainer = "container:rumble.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -70,9 +70,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8286C17F3C11276B3F34F372"
-            BuildableName = "ivory_iOS.app"
-            BlueprintName = "ivory_iOS"
-            ReferencedContainer = "container:ivory.xcodeproj">
+            BuildableName = "rumble_iOS.app"
+            BlueprintName = "rumble_iOS"
+            ReferencedContainer = "container:rumble.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -101,9 +101,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8286C17F3C11276B3F34F372"
-            BuildableName = "ivory_iOS.app"
-            BlueprintName = "ivory_iOS"
-            ReferencedContainer = "container:ivory.xcodeproj">
+            BuildableName = "rumble_iOS.app"
+            BlueprintName = "rumble_iOS"
+            ReferencedContainer = "container:rumble.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>

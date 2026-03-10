@@ -1,6 +1,6 @@
-name: ivory
+name: rumble
 options:
-  bundleIdPrefix: com.ianc.ivory
+  bundleIdPrefix: com.ielegante.rumble
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -10,8 +10,8 @@ configs:
 settingGroups:
   app:
     base:
-      PRODUCT_NAME: ivory
-      PRODUCT_BUNDLE_IDENTIFIER: com.ianc.ivory
+      PRODUCT_NAME: rumble
+      PRODUCT_BUNDLE_IDENTIFIER: com.ielegante.rumble
 targetTemplates:
   app:
     type: application
@@ -24,20 +24,20 @@ targetTemplates:
     settings:
       groups: [app]
 targets:
-  ivory_iOS:
+  rumble_iOS:
     type: application
     platform: iOS
     sources:
       - path: Sources
       - path: Assets.xcassets
       - path: Externals
-      - path: ivory_iOS
+      - path: rumble_iOS
       - path: assets
         buildPhase: resources
         type: folder
       - path: LaunchScreen.storyboard
     info:
-      path: ivory_iOS/Info.plist
+      path: rumble_iOS/Info.plist
       properties:
         LSRequiresIPhoneOS: true
         UILaunchStoryboardName: LaunchScreen
@@ -54,7 +54,7 @@ targets:
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
     entitlements:
-      path: ivory_iOS/ivory_iOS.entitlements
+      path: rumble_iOS/rumble_iOS.entitlements
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full

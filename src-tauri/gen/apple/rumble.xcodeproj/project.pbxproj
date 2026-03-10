@@ -23,7 +23,7 @@
 
 /* Begin PBXFileReference section */
 		124D2C5DD70301F000047C77 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
-		1529957B2EF309BB85414712 /* ivory_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ivory_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1529957B2EF309BB85414712 /* rumble_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = rumble_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2494F70CB1E245E879E45FC5 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		37F5C7CC9BCEAA18E4843060 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		42AD76C53AE0F6F81AFD6BF6 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -32,7 +32,7 @@
 		6AFABB3BDE28F392AB6E4959 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		75CE9081A735D258B51826CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8942B1CB81D3284484A54246 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
-		94080F4FEA250D780EBC7DEC /* ivory_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ivory_iOS.entitlements; sourceTree = "<group>"; };
+		94080F4FEA250D780EBC7DEC /* rumble_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = rumble_iOS.entitlements; sourceTree = "<group>"; };
 		96060CF9131D5214963A0F97 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		97625B26E96C0F276037B381 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		9892EAF25C8A491CF82D3DC2 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
@@ -71,13 +71,13 @@
 			path = ../../src;
 			sourceTree = "<group>";
 		};
-		6850960204D960DE4BB24423 /* ivory */ = {
+		6850960204D960DE4BB24423 /* rumble */ = {
 			isa = PBXGroup;
 			children = (
 				B570ED8F2637F3A1DD497670 /* main.mm */,
 				69C6A76BA111D209CC082FFE /* bindings */,
 			);
-			path = ivory;
+			path = rumble;
 			sourceTree = "<group>";
 		};
 		69C6A76BA111D209CC082FFE /* bindings */ = {
@@ -95,13 +95,13 @@
 			path = Externals;
 			sourceTree = "<group>";
 		};
-		733D3613F0909BC8F10CBC5E /* ivory_iOS */ = {
+		733D3613F0909BC8F10CBC5E /* rumble_iOS */ = {
 			isa = PBXGroup;
 			children = (
 				6AFABB3BDE28F392AB6E4959 /* Info.plist */,
-				94080F4FEA250D780EBC7DEC /* ivory_iOS.entitlements */,
+				94080F4FEA250D780EBC7DEC /* rumble_iOS.entitlements */,
 			);
-			path = ivory_iOS;
+			path = rumble_iOS;
 			sourceTree = "<group>";
 		};
 		9F7D90B5BF8A1A2CCE7595B6 /* Frameworks */ = {
@@ -122,7 +122,7 @@
 		A00C2366D1E92AD32307D463 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				6850960204D960DE4BB24423 /* ivory */,
+				6850960204D960DE4BB24423 /* rumble */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -130,7 +130,7 @@
 		BE6C3BCE58BDE17684677DDC /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1529957B2EF309BB85414712 /* ivory_iOS.app */,
+				1529957B2EF309BB85414712 /* rumble_iOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,7 +142,7 @@
 				75CE9081A735D258B51826CC /* Assets.xcassets */,
 				52D394954D77DD18C9C66814 /* LaunchScreen.storyboard */,
 				72E86438EC5730435072FC29 /* Externals */,
-				733D3613F0909BC8F10CBC5E /* ivory_iOS */,
+				733D3613F0909BC8F10CBC5E /* rumble_iOS */,
 				A00C2366D1E92AD32307D463 /* Sources */,
 				31E5269D7E2304ACC205BB0D /* src */,
 				9F7D90B5BF8A1A2CCE7595B6 /* Frameworks */,
@@ -153,9 +153,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		8286C17F3C11276B3F34F372 /* ivory_iOS */ = {
+		8286C17F3C11276B3F34F372 /* rumble_iOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8C1D51466B6F8E8342566A27 /* Build configuration list for PBXNativeTarget "ivory_iOS" */;
+			buildConfigurationList = 8C1D51466B6F8E8342566A27 /* Build configuration list for PBXNativeTarget "rumble_iOS" */;
 			buildPhases = (
 				08E3BD8F8559DA31ECF463EF /* Build Rust Code */,
 				014634AED20E1A2F2BD06E58 /* Sources */,
@@ -166,11 +166,11 @@
 			);
 			dependencies = (
 			);
-			name = ivory_iOS;
+			name = rumble_iOS;
 			packageProductDependencies = (
 			);
-			productName = ivory_iOS;
-			productReference = 1529957B2EF309BB85414712 /* ivory_iOS.app */;
+			productName = rumble_iOS;
+			productReference = 1529957B2EF309BB85414712 /* rumble_iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -182,7 +182,7 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 			};
-			buildConfigurationList = 1CDA72E3888D49FDCDDEC437 /* Build configuration list for PBXProject "ivory" */;
+			buildConfigurationList = 1CDA72E3888D49FDCDDEC437 /* Build configuration list for PBXProject "rumble" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -196,7 +196,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				8286C17F3C11276B3F34F372 /* ivory_iOS */,
+				8286C17F3C11276B3F34F372 /* rumble_iOS */,
 			);
 		};
 /* End PBXProject section */
@@ -258,7 +258,7 @@
 					arm64,
 				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = ivory_iOS/ivory_iOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = rumble_iOS/rumble_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
@@ -266,15 +266,15 @@
 					"$(inherited)",
 					"\".\"",
 				);
-				INFOPLIST_FILE = ivory_iOS/Info.plist;
+				INFOPLIST_FILE = rumble_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.ianc.ivory;
-				PRODUCT_NAME = ivory;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ielegante.rumble;
+				PRODUCT_NAME = rumble;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
@@ -408,7 +408,7 @@
 					arm64,
 				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = ivory_iOS/ivory_iOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = rumble_iOS/rumble_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
@@ -416,15 +416,15 @@
 					"$(inherited)",
 					"\".\"",
 				);
-				INFOPLIST_FILE = ivory_iOS/Info.plist;
+				INFOPLIST_FILE = rumble_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.ianc.ivory;
-				PRODUCT_NAME = ivory;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ielegante.rumble;
+				PRODUCT_NAME = rumble;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
@@ -434,7 +434,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1CDA72E3888D49FDCDDEC437 /* Build configuration list for PBXProject "ivory" */ = {
+		1CDA72E3888D49FDCDDEC437 /* Build configuration list for PBXProject "rumble" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				5E53B0F49553433D9B28AD53 /* debug */,
@@ -443,7 +443,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = debug;
 		};
-		8C1D51466B6F8E8342566A27 /* Build configuration list for PBXNativeTarget "ivory_iOS" */ = {
+		8C1D51466B6F8E8342566A27 /* Build configuration list for PBXNativeTarget "rumble_iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				44493BAFB9F1FC7285EDEBDA /* debug */,

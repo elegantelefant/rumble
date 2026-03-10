@@ -1,13 +1,13 @@
 # Uncomment the next line to define a global platform for your project
 
-target 'ivory_iOS' do
+target 'rumble_iOS' do
 platform :ios, '14.0'
-  # Pods for ivory_iOS
+  # Pods for rumble_iOS
 end
 
-target 'ivory_macOS' do
+target 'rumble_macOS' do
 platform :osx, '11.0'
-  # Pods for ivory_macOS
+  # Pods for rumble_macOS
 end
 
 # Delete the deployment target for iOS and macOS, causing it to be inherited from the Podfile
