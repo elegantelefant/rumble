@@ -66,14 +66,14 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           uv run pyinstaller sidecar.spec --noconfirm
-          cp dist/ivory-sidecar ../binaries/ivory-sidecar-${{ matrix.target }}
+          cp dist/rumble-sidecar ../binaries/rumble-sidecar-${{ matrix.target }}
         working-directory: src-tauri/sidecar
 
       - name: Build sidecar (Windows)
         if: runner.os == 'Windows'
         run: |
           uv run pyinstaller sidecar.spec --noconfirm
-          copy dist\ivory-sidecar.exe ..\binaries\ivory-sidecar-${{ matrix.target }}.exe
+          copy dist\rumble-sidecar.exe ..\binaries\rumble-sidecar-${{ matrix.target }}.exe
         working-directory: src-tauri/sidecar
         shell: cmd
 
@@ -84,7 +84,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: ivory-${{ matrix.target }}
+          name: rumble-${{ matrix.target }}
           path: src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
 
@@ -92,6 +92,6 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ivory-${{ matrix.target }}
+          name: rumble-${{ matrix.target }}
           path: src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error

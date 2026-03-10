@@ -1,4 +1,4 @@
-# Elefant Ivory
+# Elefant Rumble
 
 A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine.
 
@@ -50,7 +50,7 @@ pnpm tauri dev                        # start Tauri + Vite
 ```bash
 cd src-tauri/sidecar
 uv run pyinstaller sidecar.spec --noconfirm
-cp dist/ivory-sidecar ../binaries/ivory-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
+cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
 
 cd ../..
 pnpm tauri build
