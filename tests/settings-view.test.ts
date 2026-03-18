@@ -2,11 +2,17 @@
 // ABOUTME: Covers tab switching, secret management, form interactions, sync settings.
 
 import { mount } from "@vue/test-utils"
+import { invoke } from "@tauri-apps/api/core"
 import SettingsView from "../src/views/SettingsView.vue"
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
+  vi.mocked(invoke).mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -165,5 +171,52 @@ describe("SettingsView", () => {
       (cb) => cb.element.closest("label")?.textContent?.includes("custom sync"),
     )
     expect(customCheckbox).toBeDefined()
+  })
+
+  it("addSecret calls invoke store_api_key for hosted provider", async () => {
+    const wrapper = mountSettings()
+    const providerSelect = wrapper.find("select")
+    await providerSelect.setValue("openai")
+    const keyInput = wrapper.find('input[type="password"]')
+    await keyInput.setValue("sk-test-key-123")
+    const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")
+    await saveBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(invoke).toHaveBeenCalledWith("store_api_key", {
+      provider: "openai",
+      key: "sk-test-key-123",
+    })
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.stringContaining("Secret saved"),
+      "success",
+    )
+  })
+
+  it("shows error toast when keychain invoke fails", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("keychain denied"))
+    const wrapper = mountSettings()
+    const providerSelect = wrapper.find("select")
+    await providerSelect.setValue("openai")
+    const keyInput = wrapper.find('input[type="password"]')
+    await keyInput.setValue("sk-test-key-456")
+    const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")
+    await saveBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to store API key"),
+      "error",
+    )
+  })
+
+  it("clears form after successful secret save", async () => {
+    const wrapper = mountSettings()
+    const providerSelect = wrapper.find("select")
+    await providerSelect.setValue("openai")
+    const keyInput = wrapper.find('input[type="password"]')
+    await keyInput.setValue("sk-test-key-789")
+    const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")
+    await saveBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect((providerSelect.element as HTMLSelectElement).value).toBe("")
   })
 })
