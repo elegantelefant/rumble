@@ -1,5 +1,6 @@
 # ABOUTME: FastAPI application factory for the rumble sidecar.
 # ABOUTME: Wires up lifespan (DB init/close) and route modules.
+# TODO: Add authentication middleware (bearer token or shared secret from Tauri host)
 
 from contextlib import asynccontextmanager
 

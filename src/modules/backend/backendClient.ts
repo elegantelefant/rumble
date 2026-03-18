@@ -1,5 +1,6 @@
 // ABOUTME: shared mock backend client for rumble front-end.
 // ABOUTME: documents expectations for real invoke handlers and provides stubs.
+// TODO: Replace mock functions with real Tauri invoke() calls to sidecar API
 import { ref } from "vue";
 
 export type BackendStatus = "idle" | "running" | "ready" | "error";

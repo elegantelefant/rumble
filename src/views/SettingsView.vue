@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, reactive, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { mockSaveSettings, mockTestSync } from "../modules/backend/backendClient";
 
 const toast = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
@@ -105,16 +106,25 @@ function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function addSecret() {
+async function addSecret() {
   if (!newSecret.provider) return;
-  if (providerOptions.find((option) => option.id === newSecret.provider)?.requiresKey && !newSecret.key.trim()) {
+  const provider = providerOptions.find((option) => option.id === newSecret.provider);
+  if (provider?.requiresKey && !newSecret.key.trim()) {
     toast?.addToast("Enter the provider key before saving.", "error");
     return;
+  }
+  if (provider?.requiresKey) {
+    try {
+      await invoke("store_api_key", { provider: newSecret.provider, key: newSecret.key });
+    } catch (error) {
+      toast?.addToast(`Failed to store API key: ${error}`, "error");
+      return;
+    }
   }
   secrets.value.unshift({
     id: generateId(),
     provider: newSecret.provider,
-    label: newSecret.label || providerOptions.find((option) => option.id === newSecret.provider)?.label || "Provider",
+    label: newSecret.label || provider?.label || "Provider",
     addedAt: new Date().toISOString(),
     scope: newSecret.scope as SecretRecord["scope"],
     notes: newSecret.notes,
