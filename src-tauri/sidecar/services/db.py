@@ -135,15 +135,26 @@ async def add_message(chat_id: str, role: str, content: str) -> dict[str, Any]:
     db = _get_db()
     msg_id = _uuid()
     now = _now()
-    await db.execute(
-        "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
-        (msg_id, chat_id, role, content, now),
-    )
-    await db.execute(
-        "UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id)
-    )
-    await db.commit()
+    await db.execute("BEGIN")
+    try:
+        await db.execute(
+            "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+            (msg_id, chat_id, role, content, now),
+        )
+        await db.execute(
+            "UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id)
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return {"id": msg_id, "chat_id": chat_id, "role": role, "content": content, "created_at": now}
+
+
+async def delete_message(msg_id: str) -> None:
+    db = _get_db()
+    await db.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+    await db.commit()
 
 
 async def get_messages(chat_id: str) -> list[dict[str, Any]]:
@@ -195,7 +206,7 @@ async def update_job_status(job_id: str, status: str) -> None:
 async def set_job_result(job_id: str, result: str | None = None, error: str | None = None) -> None:
     db = _get_db()
     now = _now()
-    status = "completed" if result is not None else "failed"
+    status = "failed" if error is not None else ("completed" if result is not None else "failed")
     await db.execute(
         "UPDATE jobs SET status = ?, result = ?, error = ?, completed_at = ? WHERE id = ?",
         (status, result, error, now, job_id),

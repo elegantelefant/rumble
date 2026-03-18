@@ -7,10 +7,14 @@ from collections.abc import Coroutine
 
 from services import db
 
+_tasks: dict[str, asyncio.Task] = {}
+
 
 async def start_job(job_id: str, coro: Coroutine) -> None:
     """Spawn a background task that runs the coroutine and writes results to the DB."""
-    asyncio.create_task(_run_job(job_id, coro))
+    task = asyncio.create_task(_run_job(job_id, coro))
+    _tasks[job_id] = task
+    task.add_done_callback(lambda _t: _tasks.pop(job_id, None))
 
 
 async def _run_job(job_id: str, coro: Coroutine) -> None:

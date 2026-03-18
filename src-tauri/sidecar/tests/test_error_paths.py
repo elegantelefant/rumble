@@ -35,13 +35,12 @@ async def test_send_message_llm_failure_returns_502(client, chat_id):
     assert "LLM error" in resp.json()["detail"]
 
 
-async def test_send_message_llm_failure_persists_user_only(client, chat_id):
+async def test_send_message_llm_failure_cleans_up_user_message(client, chat_id):
     with patch("services.llm.send_message", new=AsyncMock(side_effect=RuntimeError("model exploded"))):
         await client.post(f"/chats/{chat_id}/message", json={"text": "Hello"})
     resp = await client.get(f"/chats/{chat_id}/messages")
     messages = resp.json()["messages"]
-    assert len(messages) == 1
-    assert messages[0]["role"] == "user"
+    assert len(messages) == 0
 
 
 # --- Chat stream failures ---
@@ -69,13 +68,12 @@ async def test_stream_llm_failure_emits_error_event(client, chat_id):
     assert "error" in types
 
 
-async def test_stream_llm_failure_no_assistant_persisted(client, chat_id):
+async def test_stream_llm_failure_cleans_up_user_message(client, chat_id):
     with patch("services.llm.stream_message", new=_failing_stream):
         await client.post(f"/chats/{chat_id}/stream", json={"text": "Hello"})
     resp = await client.get(f"/chats/{chat_id}/messages")
     messages = resp.json()["messages"]
-    assert len(messages) == 1
-    assert messages[0]["role"] == "user"
+    assert len(messages) == 0
 
 
 async def test_stream_partial_events_before_error(client, chat_id):

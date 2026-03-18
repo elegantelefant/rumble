@@ -72,15 +72,18 @@ async def send_message(chat_id: str, body: dict[str, Any]) -> dict:
     model_name = body.get("model") or None
 
     # Store user message
-    await db.add_message(chat_id, "user", text)
+    user_msg = await db.add_message(chat_id, "user", text)
 
     # Get conversation history for context
     messages = await db.get_messages(chat_id)
+    if not messages:
+        raise HTTPException(status_code=422, detail="no messages after insert")
 
-    # Get AI response
+    # Get AI response — clean up dangling user message on failure
     try:
         response_text = await llm.send_message(messages, model_name=model_name)
     except Exception as exc:
+        await db.delete_message(user_msg["id"])
         raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
 
     # Store assistant message
@@ -101,13 +104,16 @@ async def stream_message(chat_id: str, body: dict[str, Any]) -> EventSourceRespo
     model_name = body.get("model") or None
 
     # Store user message
-    await db.add_message(chat_id, "user", text)
+    user_msg = await db.add_message(chat_id, "user", text)
 
     # Get conversation history
     messages = await db.get_messages(chat_id)
+    if not messages:
+        raise HTTPException(status_code=422, detail="no messages after insert")
 
     async def event_generator():
         full_response = []
+        assistant_stored = False
         try:
             yield {"event": "message", "data": json.dumps({"type": "status", "value": "generating"})}
             async for chunk in llm.stream_message(messages, model_name=model_name):
@@ -117,9 +123,12 @@ async def stream_message(chat_id: str, body: dict[str, Any]) -> EventSourceRespo
             # Store complete assistant message
             complete_text = "".join(full_response)
             await db.add_message(chat_id, "assistant", complete_text)
+            assistant_stored = True
 
             yield {"event": "message", "data": json.dumps({"type": "done", "value": complete_text})}
         except Exception as exc:
+            if not assistant_stored:
+                await db.delete_message(user_msg["id"])
             yield {"event": "message", "data": json.dumps({"type": "error", "value": str(exc)})}
 
     return EventSourceResponse(event_generator())

@@ -128,12 +128,17 @@ async def get_research_result(job_id: str) -> ResearchResultResponse:
     job = await db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
-    result_data = json.loads(job["result"]) if job.get("result") else None
+    result_data = None
+    if job.get("result"):
+        try:
+            result_data = json.loads(job["result"])
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=502, detail=f"malformed result: {exc}") from exc
     return _safe_construct(ResearchResultResponse, {
         "report_id": job["id"],
         "status": job["status"],
         "result": result_data.get("result") if result_data else None,
-        "sources": None,
+        "sources": result_data.get("sources") if result_data else None,
     })
 
 
@@ -143,7 +148,12 @@ async def _poll_job(job_id: str) -> JobResultResponse:
     job = await db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
-    result_data = json.loads(job["result"]) if job.get("result") else None
+    result_data = None
+    if job.get("result"):
+        try:
+            result_data = json.loads(job["result"])
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=502, detail=f"malformed result: {exc}") from exc
     return JobResultResponse(
         id=job["id"],
         status=job["status"],
