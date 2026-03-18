@@ -2,6 +2,7 @@
 //! ABOUTME: coordinates tray icon, API proxy, keychain, sidecar lifecycle, and plugins.
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use reqwest::Client;
 use tauri::image::Image;
@@ -73,7 +74,7 @@ impl AppState {
     /// Premium mode: always cloud. Ollama/BYOK: cloud-only paths go to cloud,
     /// everything else goes to the local sidecar.
     fn resolve_url(&self, path: &str) -> Result<String, String> {
-        let mode = self.mode.lock().unwrap();
+        let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner());
         if *mode == BackendMode::Premium {
             return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
         }
@@ -86,12 +87,31 @@ impl AppState {
             return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
         }
 
-        let port = self.sidecar_port.lock().unwrap();
+        let port = self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
         match *port {
             Some(p) => Ok(format!("http://127.0.0.1:{}{}", p, path)),
             None => Err("sidecar not running".to_string()),
         }
     }
+}
+
+// --- Path validation ---
+
+fn validate_user_path(path: &str) -> Result<PathBuf, String> {
+    let canonical = std::fs::canonicalize(path).map_err(|e| format!("invalid path: {}", e))?;
+    let home = dirs::home_dir().ok_or_else(|| "cannot determine home directory".to_string())?;
+    let temp = std::env::temp_dir();
+    let allowed_roots: Vec<PathBuf> = vec![home, temp];
+    let allowed = allowed_roots
+        .iter()
+        .any(|root| canonical.starts_with(std::fs::canonicalize(root).unwrap_or(root.clone())));
+    if !allowed {
+        return Err(format!(
+            "path {} is outside allowed directories",
+            canonical.display()
+        ));
+    }
+    Ok(canonical)
 }
 
 // --- Filesystem commands (existing) ---
@@ -105,8 +125,9 @@ struct FileInfo {
 
 #[tauri::command]
 fn scan_folder(path: String) -> Result<Vec<FileInfo>, String> {
+    let validated = validate_user_path(&path)?;
     let mut files = Vec::new();
-    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(validated).into_iter().filter_map(|e| e.ok()) {
         let metadata = entry.metadata().map_err(|e| e.to_string())?;
         if metadata.is_file() {
             let size = metadata.len();
@@ -130,8 +151,8 @@ fn scan_folder(path: String) -> Result<Vec<FileInfo>, String> {
 
 #[tauri::command]
 fn move_to_trash(path: String) -> Result<(), String> {
-    let pathbuf = PathBuf::from(path);
-    delete(&pathbuf).map_err(|e| e.to_string())
+    let validated = validate_user_path(&path)?;
+    delete(&validated).map_err(|e| e.to_string())
 }
 
 // --- API proxy ---
@@ -179,7 +200,11 @@ async fn make_http_request(
     let status = response.status();
 
     if status.is_success() {
-        response.json().await.map_err(|e| e.to_string())
+        let text = response.text().await.map_err(|e| e.to_string())?;
+        if text.is_empty() {
+            return Ok(serde_json::json!({}));
+        }
+        serde_json::from_str(&text).map_err(|e| e.to_string())
     } else {
         let text = response.text().await.unwrap_or_default();
         Err(format!("API error {}: {}", status.as_u16(), text))
@@ -260,7 +285,7 @@ fn get_api_key(provider: String) -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn get_backend_mode(state: State<'_, AppState>) -> String {
-    let mode = state.mode.lock().unwrap();
+    let mode = state.mode.lock().unwrap_or_else(|e| e.into_inner());
     serde_json::to_string(&*mode).unwrap_or_else(|_| "\"premium\"".to_string())
 }
 
@@ -268,13 +293,15 @@ fn get_backend_mode(state: State<'_, AppState>) -> String {
 fn set_backend_mode(state: State<'_, AppState>, mode: String) -> Result<(), String> {
     let parsed: BackendMode =
         serde_json::from_str(&format!("\"{}\"", mode)).map_err(|e| e.to_string())?;
-    let mut current = state.mode.lock().unwrap();
+    let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
     *current = parsed;
     Ok(())
 }
 
 // --- Sidecar lifecycle ---
 
+/// TOCTOU: port may be reclaimed between bind and sidecar start.
+/// Low risk — the sidecar's `PORT:` protocol confirms the actual port used.
 async fn find_available_port() -> Result<u16, String> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -339,7 +366,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
 
     // Store the child process handle for cleanup
     {
-        let mut sidecar_child = state.sidecar_child.lock().unwrap();
+        let mut sidecar_child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
         *sidecar_child = Some(child);
     }
 
@@ -362,7 +389,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                                 match poll_health(&http_clone, p).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();
-                                        let mut sp = st.sidecar_port.lock().unwrap();
+                                        let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
                                         *sp = Some(p);
                                         port_confirmed = true;
                                         println!("[sidecar] ready on port {}", p);
@@ -385,7 +412,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         payload.code
                     );
                     let st = state_handle.state::<AppState>();
-                    let mut sp = st.sidecar_port.lock().unwrap();
+                    let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
                     *sp = None;
                     break;
                 }
@@ -399,18 +426,18 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
 }
 
 fn kill_sidecar(state: &AppState) {
-    let mut child = state.sidecar_child.lock().unwrap();
+    let mut child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(c) = child.take() {
         println!("[sidecar] shutting down");
         let _ = c.kill();
     }
-    let mut port = state.sidecar_port.lock().unwrap();
+    let mut port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
     *port = None;
 }
 
 #[tauri::command]
 async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let port = state.sidecar_port.lock().unwrap().clone();
+    let port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let running = port.is_some();
 
     let mut result = serde_json::json!({
@@ -462,7 +489,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             mode: Mutex::new(BackendMode::Ollama),
-            http: Client::new(),
+            http: Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .expect("failed to build HTTP client"),
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),
         })
@@ -739,16 +769,21 @@ mod tests {
 
     // --- scan_folder ---
 
+    fn home_tempdir() -> tempfile::TempDir {
+        let home = dirs::home_dir().expect("need $HOME for tests");
+        tempfile::tempdir_in(home).unwrap()
+    }
+
     #[test]
     fn scan_folder_empty_directory() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = home_tempdir();
         let result = scan_folder(dir.path().to_string_lossy().to_string()).unwrap();
         assert!(result.is_empty());
     }
 
     #[test]
     fn scan_folder_with_files() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = home_tempdir();
         let file_path = dir.path().join("test.txt");
         let mut f = std::fs::File::create(&file_path).unwrap();
         f.write_all(b"hello world").unwrap();
@@ -762,7 +797,7 @@ mod tests {
 
     #[test]
     fn scan_folder_nested_directories() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = home_tempdir();
         let sub = dir.path().join("subdir");
         std::fs::create_dir_all(&sub).unwrap();
         std::fs::File::create(dir.path().join("root.txt")).unwrap();
@@ -776,12 +811,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_folder_nonexistent_returns_empty() {
-        // WalkDir silently returns nothing for non-existent paths
-        let result = scan_folder("/tmp/nonexistent-rumble-test-dir-xyz".to_string());
-        assert!(result.is_ok());
-        // WalkDir actually iterates once with an error entry, so it depends
-        // on implementation — empty or error
+    fn scan_folder_nonexistent_returns_error() {
+        let home = dirs::home_dir().expect("need $HOME");
+        let result = scan_folder(
+            home.join("nonexistent-rumble-test-dir-xyz")
+                .to_string_lossy()
+                .to_string(),
+        );
+        assert!(result.is_err());
     }
 
     // --- move_to_trash ---

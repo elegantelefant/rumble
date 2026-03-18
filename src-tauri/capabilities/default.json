@@ -12,10 +12,14 @@
         {
           "name": "binaries/rumble-sidecar",
           "sidecar": true,
-          "args": true
+          "args": [
+            "--port",
+            { "validator": "\\d+" },
+            "--data-dir",
+            { "validator": ".+" }
+          ]
         }
       ]
-    },
-    "shell:allow-spawn"
+    }
   ]
 }
