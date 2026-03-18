@@ -831,7 +831,7 @@ mod tests {
 
     // --- make_http_request (wiremock) ---
 
-    use wiremock::matchers::{bearer_token, body_json, header, method, path, query_param};
+    use wiremock::matchers::{bearer_token, body_json, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -1012,5 +1012,55 @@ mod tests {
         let result =
             make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn http_empty_body_returns_empty_json_object() {
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/items/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/items/1", server.uri());
+        let result = make_http_request(&http, &url, "DELETE", None, None, None).await;
+        assert_eq!(result.unwrap(), serde_json::json!({}));
+    }
+
+    // --- validate_user_path ---
+
+    #[test]
+    fn validate_user_path_accepts_home_subdir() {
+        let home = dirs::home_dir().expect("need $HOME");
+        let dir = tempfile::tempdir_in(&home).unwrap();
+        let result = validate_user_path(&dir.path().to_string_lossy());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_user_path_rejects_etc_passwd() {
+        let result = validate_user_path("/etc/passwd");
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("outside allowed directories"),
+            "should reject /etc/passwd"
+        );
+    }
+
+    #[test]
+    fn validate_user_path_rejects_traversal() {
+        let home = dirs::home_dir().expect("need $HOME");
+        let traversal = format!("{}/../../../etc/passwd", home.display());
+        let result = validate_user_path(&traversal);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_user_path_rejects_nonexistent() {
+        let result = validate_user_path("/nonexistent/path/xyz");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid path"));
     }
 }
