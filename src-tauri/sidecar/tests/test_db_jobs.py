@@ -91,6 +91,16 @@ async def test_set_job_result_with_error(ephemeral_db):
     assert fetched["completed_at"] is not None
 
 
+async def test_set_job_result_both_result_and_error_sets_failed(ephemeral_db):
+    """When both result and error are provided, error takes priority — status is 'failed'."""
+    job = await db.create_job("draft", "{}")
+    await db.set_job_result(job["id"], result='{"draft": "text"}', error="partial failure")
+    fetched = await db.get_job(job["id"])
+    assert fetched["status"] == "failed"
+    assert fetched["error"] == "partial failure"
+    assert fetched["result"] == '{"draft": "text"}'
+
+
 # --- _get_db guard ---
 
 

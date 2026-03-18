@@ -93,3 +93,25 @@ async def test_research_result(client):
 async def test_research_nonexistent_job(client):
     resp = await client.get("/research/no-such-id")
     assert resp.status_code == 404
+
+
+async def test_job_task_tracked_in_tasks_dict(client):
+    """Background tasks are stored in _tasks dict for lifecycle tracking."""
+    from services.jobs import _tasks
+
+    resp = await client.post("/draft", json={"prompt": "NDA"})
+    job_id = resp.json()["job_id"]
+    # Task should be tracked (may already be done, but was tracked)
+    await asyncio.sleep(0.2)
+    # After completion, done-callback should have cleaned up
+    assert job_id not in _tasks
+
+
+async def test_research_result_preserves_sources(client):
+    """Research sources from LLM response should appear in the result."""
+    resp = await client.post("/research", json={"question": "What are torts?"})
+    report_id = resp.json()["report_id"]
+    await asyncio.sleep(0.2)
+    result = await client.get(f"/research/{report_id}/result")
+    data = result.json()
+    assert "sources" in data

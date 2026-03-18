@@ -143,6 +143,41 @@ async def test_job_lifecycle_queued_to_completed(client):
     pytest.fail("Job did not complete within timeout")
 
 
+# --- Malformed job result ---
+
+
+async def test_malformed_draft_result_returns_502(client):
+    """Corrupted JSON in job result column should yield 502."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("draft", "{}")
+    # Manually write invalid JSON into result column
+    raw_db = svc_db._get_db()
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result='NOT-JSON' WHERE id=?",
+        (job["id"],),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/draft/{job['id']}/result")
+    assert resp.status_code == 502
+    assert "malformed result" in resp.json()["detail"]
+
+
+async def test_malformed_research_result_returns_502(client):
+    """Corrupted JSON in research result should yield 502."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("research", "{}")
+    raw_db = svc_db._get_db()
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result='{{bad' WHERE id=?",
+        (job["id"],),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/research/{job['id']}/result")
+    assert resp.status_code == 502
+
+
 # --- _parse_llm_json tests (via endpoint behavior) ---
 # These are tested indirectly through the AI endpoints.
 # The mock returns clean JSON, so these pass.

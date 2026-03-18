@@ -2,6 +2,7 @@
 # ABOUTME: Covers create, list, get, delete, update, message send, and SSE stream.
 
 import json
+from unittest.mock import AsyncMock, patch
 
 
 # --- Chat CRUD via HTTP ---
@@ -155,6 +156,15 @@ async def test_stream_nonexistent_chat(client):
 async def test_stream_missing_text(client, chat_id):
     resp = await client.post(f"/chats/{chat_id}/stream", json={"text": ""})
     assert resp.status_code == 422
+
+
+async def test_send_message_llm_failure_cleans_up_dangling(client, chat_id):
+    """On LLM failure, the user message should be deleted — no dangling messages."""
+    with patch("services.llm.send_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
+        resp = await client.post(f"/chats/{chat_id}/message", json={"text": "Hello"})
+    assert resp.status_code == 502
+    msgs = await client.get(f"/chats/{chat_id}/messages")
+    assert len(msgs.json()["messages"]) == 0
 
 
 def _parse_sse(body: str) -> list[dict]:
