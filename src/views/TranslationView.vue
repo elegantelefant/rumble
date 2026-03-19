@@ -245,7 +245,7 @@ const dashboardNotes = [
           </label>
           <label class="text-sm font-medium text-[var(--primary-700)]">
             Translation
-            <textarea class="input mt-1 h-64 resize-none" readonly>{{ translatedText }}</textarea>
+            <textarea v-model="translatedText" class="input mt-1 h-64 resize-none" readonly />
           </label>
         </div>
 

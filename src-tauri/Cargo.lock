@@ -882,6 +882,7 @@ name = "elefant_rumble"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dirs",
  "keyring",
  "reqwest 0.12.23",
  "serde",

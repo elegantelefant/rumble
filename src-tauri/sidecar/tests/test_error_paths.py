@@ -125,19 +125,17 @@ async def test_research_job_llm_failure_stores_error(client):
 # --- Stateless AI endpoint failures ---
 
 
-async def test_clarify_llm_failure_propagates(client):
-    """Stateless AI routes don't catch LLM exceptions — they propagate unhandled."""
-    with (
-        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=RuntimeError("clarify boom"))),
-        pytest.raises(RuntimeError, match="clarify boom"),
-    ):
-        await client.post("/clarify", json={"ask": "What is tort?"})
+async def test_clarify_llm_failure_returns_502(client):
+    """Stateless AI routes return 502 with detail on LLM failure."""
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=RuntimeError("clarify boom"))):
+        resp = await client.post("/clarify", json={"ask": "What is tort?"})
+    assert resp.status_code == 502
+    assert "LLM error" in resp.json()["detail"]
 
 
-async def test_translate_llm_failure_propagates(client):
-    """Stateless AI routes don't catch LLM exceptions — they propagate unhandled."""
-    with (
-        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=RuntimeError("translate boom"))),
-        pytest.raises(RuntimeError, match="translate boom"),
-    ):
-        await client.post("/translate", json={"text": "Hello", "target_lang": "es"})
+async def test_translate_llm_failure_returns_502(client):
+    """Stateless AI routes return 502 with detail on LLM failure."""
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=RuntimeError("translate boom"))):
+        resp = await client.post("/translate", json={"text": "Hello", "target_lang": "es"})
+    assert resp.status_code == 502
+    assert "LLM error" in resp.json()["detail"]

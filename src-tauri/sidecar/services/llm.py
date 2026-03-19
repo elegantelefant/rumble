@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from services import prompts
 
@@ -21,16 +22,11 @@ def _build_agent(
 ) -> Agent:
     """Build a PydanticAI agent for the given provider config."""
     if api_key:
-        model = OpenAIModel(
-            model_name or "gpt-4o-mini",
-            api_key=api_key,
-        )
+        provider = OpenAIProvider(api_key=api_key)
+        model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
-        model = OpenAIModel(
-            model_name or OLLAMA_DEFAULT_MODEL,
-            base_url=OLLAMA_BASE_URL,
-            api_key="ollama",
-        )
+        provider = OpenAIProvider(base_url=OLLAMA_BASE_URL, api_key="ollama")
+        model = OpenAIModel(model_name or OLLAMA_DEFAULT_MODEL, provider=provider)
     return Agent(model=model, system_prompt=system_prompt)
 
 

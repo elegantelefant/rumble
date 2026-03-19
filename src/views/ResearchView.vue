@@ -90,8 +90,6 @@ const activeThread = computed(() =>
   activeThreadId.value ? threads.value.find((thread) => thread.id === activeThreadId.value) ?? null : null,
 );
 
-const availableModels = computed(() => modelInventory.value.filter((model) => model.available));
-
 const messages = computed(() => activeThread.value?.messages ?? []);
 
 // Model defaults to first available; no runtime re-check needed

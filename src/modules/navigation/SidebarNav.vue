@@ -96,7 +96,8 @@ function handleItemClick(path: string, disabled?: boolean) {
         <div
           v-for="(tool, index) in reorderableTools"
           :key="tool.path"
-          class="group relative flex items-center rounded-lg border border-transparent bg-[color:color-mix(in_srgb,var(--primary-900)_60%,var(--primary-800)_40%)]/60 transition hover:border-[var(--primary-700)]"
+          class="group relative flex items-center rounded-lg border border-transparent transition hover:border-[var(--primary-700)]"
+          :class="isActive(tool.path) ? 'bg-[color:color-mix(in_srgb,var(--primary-800)_70%,transparent)] border-l-[3px] border-l-[var(--accent-400)]' : 'bg-[color:color-mix(in_srgb,var(--primary-900)_60%,var(--primary-800)_40%)]/60'"
         >
           <button
             type="button"
@@ -128,7 +129,7 @@ function handleItemClick(path: string, disabled?: boolean) {
           </button>
           <div
             v-if="hasMultipleTools"
-            class="flex h-full w-10 flex-col items-center justify-center gap-1 border-l border-[color:color-mix(in_srgb,var(--primary-700)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--primary-900)_90%,black_10%)]"
+            class="flex h-full w-10 flex-col items-center justify-center gap-1 border-l border-[color:color-mix(in_srgb,var(--primary-700)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--primary-900)_90%,black_10%)] opacity-0 transition group-hover:opacity-100"
           >
             <button
               type="button"

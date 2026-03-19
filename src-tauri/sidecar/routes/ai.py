@@ -56,7 +56,10 @@ async def clarify(body: ClarifyRequest) -> ClarifyResponse:
         context_parts.append(f"Style: {body.drafting_style}")
     user_text = "\n".join([body.ask, *context_parts]) if context_parts else body.ask
 
-    raw = await llm.run_single_turn(user_text, prompts.CLARIFY)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.CLARIFY)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(ClarifyResponse, data)
 
@@ -64,7 +67,10 @@ async def clarify(body: ClarifyRequest) -> ClarifyResponse:
 @router.post("/chat_title/generate", response_model=ChatTitleResponse)
 async def generate_chat_title(body: ChatTitleRequest) -> ChatTitleResponse:
     user_text = "\n".join(body.messages)
-    raw = await llm.run_single_turn(user_text, prompts.CHAT_TITLE)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.CHAT_TITLE)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(ChatTitleResponse, data)
 
@@ -72,7 +78,10 @@ async def generate_chat_title(body: ChatTitleRequest) -> ChatTitleResponse:
 @router.post("/translate", response_model=TranslateResponse)
 async def translate(body: TranslateRequest) -> TranslateResponse:
     user_text = f"Translate to {body.target_lang}:\n{body.text}"
-    raw = await llm.run_single_turn(user_text, prompts.TRANSLATE)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.TRANSLATE)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(TranslateResponse, data)
 
@@ -81,7 +90,10 @@ async def translate(body: TranslateRequest) -> TranslateResponse:
 async def summarise_document(body: SummariseDocumentRequest) -> SummariseDocumentResponse:
     style_hint = f" (style: {body.style})" if body.style else ""
     user_text = f"Summarise this document{style_hint}:\n{body.text}"
-    raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_DOCUMENT)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_DOCUMENT)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(SummariseDocumentResponse, data)
 
@@ -92,7 +104,10 @@ async def summarise_chat(body: SummariseChatRequest) -> SummariseChatResponse:
     formatted = "\n".join(f"{m.get('role', '?')}: {m.get('content', '')}" for m in msgs)
     style_hint = f" (style: {body.style})" if body.style else ""
     user_text = f"Summarise this chat{style_hint}:\n{formatted}"
-    raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_CHAT)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_CHAT)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(SummariseChatResponse, data)
 
@@ -101,6 +116,9 @@ async def summarise_chat(body: SummariseChatRequest) -> SummariseChatResponse:
 async def summarise_search(body: SummariseSearchRequest) -> SummariseSearchResponse:
     results_text = "\n".join(f"- {r.title}: {r.id}" for r in body.results)
     user_text = f"Query: {body.query}\nResults:\n{results_text}"
-    raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_SEARCH)
+    try:
+        raw = await llm.run_single_turn(user_text, prompts.SUMMARISE_SEARCH)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM error: {exc}") from exc
     data = _parse_llm_json(raw)
     return _safe_construct(SummariseSearchResponse, data)
