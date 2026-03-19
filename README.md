@@ -2,7 +2,10 @@
 
 A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine.
 
+Runs on **macOS** (Apple Silicon + Intel), **Windows**, and **Linux**.
+
 **End users:** See [Getting Started](agent_docs/2026-03-05-getting-started.md) for installation and usage.
+**Build maintainers:** See [Installation Guide](agent_docs/2026-03-05-installation-guide.md) for CI/CD and build-from-source.
 
 ---
 
@@ -45,6 +48,14 @@ pnpm dev:sidecar                      # start Python sidecar
 pnpm tauri dev                        # start Tauri + Vite
 ```
 
+### Linux System Dependencies
+
+```bash
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+  patchelf libxdo-dev libssl-dev
+```
+
 ### Build Distributable
 
 ```bash
@@ -56,12 +67,19 @@ cd ../..
 pnpm tauri build
 ```
 
+Or push a version tag to build all platforms via GitHub Actions:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
 ### Tests
 
 ```bash
-pnpm vitest run                                    # frontend
-cd src-tauri/sidecar && uv run pytest -q           # python
-cd src-tauri && cargo test                         # rust
+pnpm vitest run                                    # frontend (126 tests)
+pnpm test:e2e                                     # playwright e2e (72+ tests)
+cd src-tauri/sidecar && uv run pytest -q           # python (119 tests)
+cd src-tauri && cargo test                         # rust (37 tests)
 ```
 
 ## License

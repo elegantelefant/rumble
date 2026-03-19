@@ -1,69 +1,138 @@
 # Getting Started with Elefant Rumble
 
-Welcome to Elefant Rumble — your private, on-device legal assistant. Everything runs locally on your Mac. Your documents and conversations never leave your computer.
+Welcome to Elefant Rumble — your private, on-device legal assistant. Everything runs locally on your computer. Your documents and conversations never leave your machine.
+
+Rumble runs on **macOS**, **Windows**, and **Linux**.
 
 ---
 
 ## What You Need
 
-- A Mac with Apple Silicon (M1, M2, M3, or M4)
-- macOS 14 (Sonoma) or later
 - At least 8 GB of RAM (16 GB recommended for larger models)
 - About 5 GB of free disk space (for the app + a language model)
+
+### Platform requirements
+
+| Platform | Version |
+|----------|---------|
+| macOS | 10.15 Catalina or later (Apple Silicon or Intel) |
+| Windows | Windows 10 (version 1803) or later |
+| Linux | Ubuntu 22.04, Fedora 38, or equivalent (x64) |
 
 ---
 
 ## Step 1: Install Ollama
 
-Rumble uses Ollama to run AI models privately on your Mac. It's free and takes about 2 minutes.
+Rumble uses Ollama to run AI models privately on your computer. It's free and takes about 2 minutes.
 
 1. Open your web browser and go to **https://ollama.com/download**
-2. Click **Download for macOS**
-3. Open the downloaded file and drag Ollama to your Applications folder
-4. Open Ollama from your Applications folder — you'll see a small llama icon appear in your menu bar (top-right of your screen)
+2. Download the installer for your platform
+3. Install and run Ollama
 
-That's it — Ollama runs quietly in the background.
+### macOS
+Download the .dmg, open it, and drag Ollama to your Applications folder. Open Ollama — a small llama icon appears in your menu bar.
+
+### Windows
+Download the .exe installer and run it. Ollama runs in the background — look for the llama icon in the system tray (bottom-right of your screen).
+
+### Linux
+Open a terminal and run:
+```
+curl -fsSL https://ollama.com/install.sh | sh
+```
+Then start the service: `ollama serve`
 
 ---
 
 ## Step 2: Download a Language Model
 
-Rumble needs a language model to work. Open the **Terminal** app (search for "Terminal" in Spotlight with Cmd+Space) and paste this command:
+Rumble needs a language model to work. Open a terminal and run:
 
 ```
 ollama pull llama3.2
 ```
 
-Press Enter and wait for the download to finish. This is about 2 GB and may take a few minutes depending on your internet speed.
+**How to open a terminal:**
+- **macOS:** Search for "Terminal" in Spotlight (Cmd+Space)
+- **Windows:** Search for "PowerShell" in the Start menu
+- **Linux:** Ctrl+Alt+T or search for "Terminal" in your app launcher
 
-You can close Terminal when it's done.
+Wait for the download to finish (~2 GB). You can close the terminal when done.
 
 ---
 
 ## Step 3: Install Elefant Rumble
 
-1. Open the Google Drive link you were sent and click **Download** (the file is about 68 MB)
-2. Double-click the zip file to unzip it
-3. Drag **Elefant - Rumble** into your **Applications** folder
+Download the installer for your platform from the link you were sent.
 
-### If macOS says the app can't be opened
+### macOS
+1. Open the `.dmg` file
+2. Drag **Elefant - Rumble** into your **Applications** folder
+3. Open the app from Applications
 
-This happens because the app isn't signed with Apple yet (it will be in a future release). To open it:
-
+**If macOS says the app can't be opened:**
+This happens because the app isn't signed with Apple yet (coming in a future release).
 1. Right-click (or Control-click) on **Elefant - Rumble** in Applications
 2. Click **Open** from the menu
 3. In the dialog that appears, click **Open** again
 
-You only need to do this once. After that, the app opens normally.
+You only need to do this once.
+
+### Windows
+1. Run the `.msi` or `.exe` installer
+2. Follow the prompts — the app installs to your Programs folder
+3. Open **Elefant - Rumble** from the Start menu
+
+**If Windows Defender shows a warning:**
+Click "More info" then "Run anyway". This happens because the app isn't code-signed yet.
+
+### Linux
+
+**Ubuntu/Debian (.deb):**
+```
+sudo dpkg -i elefant-rumble_0.1.0_amd64.deb
+```
+
+**AppImage (any distro):**
+```
+chmod +x Elefant-Rumble_0.1.0_amd64.AppImage
+./Elefant-Rumble_0.1.0_amd64.AppImage
+```
 
 ---
 
 ## Step 4: Open the App
 
-1. Make sure you see the Ollama icon (llama) in your menu bar. If not, open Ollama from Applications first.
-2. Open **Elefant - Rumble** from your Applications folder
-3. The app window should appear with "Elefant - Rumble" in the title bar
-4. A small icon also appears in your menu bar
+1. Make sure Ollama is running:
+   - **macOS:** Look for the llama icon in your menu bar. If missing, open Ollama from Applications.
+   - **Windows:** Look for the llama icon in the system tray. If missing, open Ollama from the Start menu.
+   - **Linux:** Run `ollama serve` in a terminal if it isn't already running.
+2. Open **Elefant - Rumble**
+3. The app window should appear. A tray icon also appears in your menu bar / system tray.
+
+---
+
+## Your First 5 Minutes
+
+Here's a quick walkthrough to see Rumble in action:
+
+### Upload and review a document
+1. Click **Document Review** in the sidebar
+2. Click **Browse Files** and pick any PDF, DOCX, or TXT file
+3. Rumble will analyze the document and produce an initial summary
+4. Type a follow-up question in the chat box — e.g. "What are the key obligations?"
+
+### Draft a document
+1. Click **Document Draft** in the sidebar
+2. Pick a template (try "Non-Disclosure Agreement")
+3. Fill in the party names and duration
+4. Click **Generate Draft**
+
+### Try a research question
+1. Click **Research** in the sidebar
+2. Type a question in the prompt area — e.g. "What are the elements of negligence in common law?"
+3. Click **Start Research**
+4. Rumble will produce a structured answer with citations
 
 ---
 
@@ -90,10 +159,10 @@ Configure AI providers, manage templates, and adjust how the app looks and feels
 
 ## Tips
 
-- **Everything is private.** Your documents and conversations stay on your Mac. Nothing is sent to the cloud unless you explicitly configure a hosted AI provider in Settings.
-- **Click any toast notification** (the small messages that appear at the bottom-right) to dismiss it early.
-- **Use Cmd+K** to open the shortcut palette for quick navigation.
-- **First response is slow?** That's normal — Ollama needs to load the model into memory the first time. Subsequent responses are faster.
+- **Everything is private.** Your documents and conversations stay on your machine. Nothing is sent to the cloud unless you explicitly configure a hosted AI provider in Settings.
+- **Keyboard shortcuts:** Use Cmd+K (macOS) or Ctrl+K (Windows/Linux) to open the shortcut palette for quick navigation.
+- **First response is slow?** That's normal — Ollama loads the model into memory on first use (~30 seconds). After that, responses take a few seconds.
+- **Want faster or better responses?** In Settings, add an OpenAI or Anthropic API key under "Providers & API keys". Hosted models are faster but send data to their servers.
 
 ---
 
@@ -101,11 +170,28 @@ Configure AI providers, manage templates, and adjust how the app looks and feels
 
 | What's happening | What to do |
 |---|---|
-| App says "sidecar not running" | Make sure Ollama is running (look for the llama icon in your menu bar) |
-| App won't open at all | Right-click the app → Open → click Open in the dialog |
-| No models show up | Open Terminal and run `ollama pull llama3.2` |
-| Responses are very slow | This is normal for the first message. If it stays slow, try a smaller model: `ollama pull llama3.2:1b` |
-| App crashes on launch | Restart your Mac and try again. If it persists, check Console.app for errors mentioning "elefant" |
+| App says "sidecar not running" | Make sure Ollama is running (check for the llama icon in your menu bar / system tray) |
+| App won't open (macOS) | Right-click the app → Open → click Open in the dialog |
+| App won't open (Windows) | Click "More info" → "Run anyway" on the Defender warning |
+| No models show up | Open a terminal and run `ollama pull llama3.2` |
+| Responses are very slow | Normal for the first message. If it stays slow, try a smaller model: `ollama pull llama3.2:1b` |
+| App crashes on launch | Restart your computer and try again. If it persists, check system logs for errors mentioning "elefant" |
+
+---
+
+## Uninstalling
+
+### macOS
+Drag **Elefant - Rumble** from Applications to the Trash. To also remove data: delete `~/Library/Application Support/com.ielegante.rumble/`
+
+### Windows
+Open Settings → Apps → find "Elefant - Rumble" → click Uninstall
+
+### Linux
+**Debian/Ubuntu:** `sudo apt remove elefant-rumble`
+**AppImage:** Delete the AppImage file
+
+To remove Ollama and models separately, see https://ollama.com/docs/uninstall
 
 ---
 
@@ -114,6 +200,6 @@ Configure AI providers, manage templates, and adjust how the app looks and feels
 If something isn't working, please share:
 1. What you were doing when the problem occurred
 2. Any error messages you saw
-3. Your macOS version (Apple menu → About This Mac)
+3. Your operating system and version
 
 Send this information to your Elefant contact and we'll help you get sorted.
