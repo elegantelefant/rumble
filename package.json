@@ -12,7 +12,8 @@
     "dev:sidecar": "cd src-tauri/sidecar && uv run python main.py --port 11435",
     "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/vue-query": "^5.92.9",
@@ -23,6 +24,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
