@@ -45,3 +45,11 @@ src-tauri/sidecar/dist/
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code
+.claude/
+
+# Playwright
+test-results/
+screenshots/
+playwright-report/
