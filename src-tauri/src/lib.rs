@@ -204,7 +204,8 @@ async fn make_http_request(
         if text.is_empty() {
             return Ok(serde_json::json!({}));
         }
-        serde_json::from_str(&text).map_err(|e| e.to_string())
+        serde_json::from_str(&text)
+            .map_err(|e| format!("failed to parse response as JSON from {}: {}", url, e))
     } else {
         let text = response.text().await.unwrap_or_default();
         Err(format!("API error {}: {}", status.as_u16(), text))
@@ -220,7 +221,13 @@ async fn api_call(
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let url = state.resolve_url(&path)?;
-    let token = auth_get_token_inner().ok();
+    let token = match auth_get_token_inner() {
+        Ok(t) => Some(t),
+        Err(e) => {
+            eprintln!("[keychain] failed to read auth token: {}", e);
+            None
+        }
+    };
     make_http_request(&state.http, &url, &method, body, params, token.as_deref()).await
 }
 
@@ -291,8 +298,12 @@ fn get_backend_mode(state: State<'_, AppState>) -> String {
 
 #[tauri::command]
 fn set_backend_mode(state: State<'_, AppState>, mode: String) -> Result<(), String> {
-    let parsed: BackendMode =
-        serde_json::from_str(&format!("\"{}\"", mode)).map_err(|e| e.to_string())?;
+    let parsed = match mode.as_str() {
+        "ollama" => BackendMode::Ollama,
+        "byok" => BackendMode::Byok,
+        "premium" => BackendMode::Premium,
+        other => return Err(format!("unknown backend mode: {}", other)),
+    };
     let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
     *current = parsed;
     Ok(())

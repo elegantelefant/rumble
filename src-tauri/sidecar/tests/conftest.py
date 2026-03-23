@@ -1,6 +1,7 @@
 # ABOUTME: Shared fixtures for sidecar tests.
 # ABOUTME: Provides ephemeral DB, FastAPI test client, and LLM mock.
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -59,9 +60,6 @@ async def _fake_stream_message(messages, system_prompt=None, model_name=None, ap
     user_text = messages[-1]["content"] if messages else ""
     for word in f"Echo: {user_text}".split():
         yield word + " "
-
-
-import json
 
 
 def _fake_run_single_turn(user_text, system_prompt, model_name=None, api_key=None):

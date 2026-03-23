@@ -69,6 +69,7 @@ function handleItemClick(path: string, disabled?: boolean) {
 
 <template>
   <aside
+    aria-label="Main navigation"
     class="sidebar fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-[var(--primary-800)] bg-[var(--primary-900)] text-white transition md:static md:translate-x-0"
     :class="[props.open ? 'translate-x-0' : '-translate-x-full md:translate-x-0']"
   >
