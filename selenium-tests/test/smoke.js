@@ -15,11 +15,14 @@ let tauriDriver;
 let driver;
 let exit = false;
 
+// Debug builds use the crate name on all platforms
 const BINARY_NAME =
-  platform() === "win32" ? "Elefant - Rumble.exe" : "elefant_rumble";
+  platform() === "win32" ? "elefant_rumble.exe" : "elefant_rumble";
 const BINARY_PATH = resolve(
   projectRoot,
-  "src-tauri/target/debug",
+  "src-tauri",
+  "target",
+  "debug",
   BINARY_NAME,
 );
 
