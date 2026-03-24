@@ -20,6 +20,7 @@ type ResearchThread = {
   summary: string;
   model: string;
   messages: Message[];
+  isResearching: boolean;
 };
 
 const toasts = useToast();
@@ -48,6 +49,7 @@ const threads = ref<ResearchThread[]>([
     summary:
       "Mapped nexus triggers for five jurisdictions and highlighted withholding obligations for digital services.",
     model: "elefant-local",
+    isResearching: false,
     messages: [
       {
         id: generateId(),
@@ -65,6 +67,7 @@ const threads = ref<ResearchThread[]>([
     lastUpdated: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
     summary: "Compiling supervisory guidance and recent enforcement actions involving data retention.",
     model: "elefant-local",
+    isResearching: false,
     messages: [
       {
         id: generateId(),
@@ -79,7 +82,6 @@ const threads = ref<ResearchThread[]>([
 const activeThreadId = ref(threads.value[0]?.id ?? null);
 const prompt = ref("");
 const selectedModel = ref(modelInventory.value.find((m) => m.available)?.id ?? "");
-const isResearching = ref(false);
 const showApiDocs = ref(false);
 const researchDocs = computed(() =>
   backendRegistry.value.filter((doc) => doc.command.includes("research")),
@@ -102,6 +104,7 @@ function startNewThread() {
     lastUpdated: new Date().toISOString(),
     summary: "No findings yet. Submit a question to begin the research pass.",
     model: selectedModel.value || "elefant-local",
+    isResearching: false,
     messages: [
       {
         id: generateId(),
@@ -117,14 +120,14 @@ function startNewThread() {
 
 async function submitPrompt() {
   const thread = activeThread.value;
-  if (!thread || !prompt.value.trim() || isResearching.value) return;
+  if (!thread || !prompt.value.trim() || thread.isResearching) return;
 
   if (!selectedModel.value) {
     toasts.addToast("Add an API key in Settings to unlock hosted research models.", "error");
     return;
   }
 
-  isResearching.value = true;
+  thread.isResearching = true;
   const content = prompt.value.trim();
   prompt.value = "";
 
@@ -156,7 +159,7 @@ async function submitPrompt() {
     thread.status = "draft";
   } finally {
     thread.lastUpdated = new Date().toISOString();
-    isResearching.value = false;
+    thread.isResearching = false;
   }
 }
 
@@ -303,7 +306,7 @@ const workflowNotes = [
             />
           </div>
           <div class="flex items-center justify-between">
-            <button class="btn-primary" type="button" :disabled="isResearching" @click="submitPrompt">Start Research</button>
+            <button class="btn-primary" type="button" :disabled="activeThread?.isResearching" @click="submitPrompt">Start Research</button>
             <span class="text-xs text-[var(--primary-500)]">
               Threads keep your transcripts and citations together for each matter.
             </span>

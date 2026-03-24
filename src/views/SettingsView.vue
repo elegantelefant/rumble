@@ -145,6 +145,8 @@ async function removeSecret(id: string) {
       await invoke("delete_api_key", { provider: secret.provider });
     } catch (e) {
       console.error("Failed to delete keychain entry:", e);
+      toast.addToast("Could not remove credential from system keychain.", "error");
+      return;
     }
   }
   secrets.value = secrets.value.filter((s) => s.id !== id);
@@ -165,6 +167,16 @@ async function saveSettings() {
 
 async function testSync() {
   const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
+  try {
+    new URL(url);
+  } catch {
+    toast.addToast("Invalid server URL.", "error");
+    return;
+  }
+  if (!url.startsWith("https://")) {
+    toast.addToast("Sync server must use HTTPS.", "error");
+    return;
+  }
   toast.addToast("Pinging sync server health endpoint...", "info");
   try {
     const result = await mockTestSync(url);

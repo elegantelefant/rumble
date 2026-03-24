@@ -48,9 +48,11 @@ function onKeydown(event: KeyboardEvent) {
     closePalette();
   } else if (event.key === "ArrowDown") {
     event.preventDefault();
+    if (filteredCommands.value.length === 0) return;
     highlightedIndex.value = (highlightedIndex.value + 1) % filteredCommands.value.length;
   } else if (event.key === "ArrowUp") {
     event.preventDefault();
+    if (filteredCommands.value.length === 0) return;
     highlightedIndex.value =
       (highlightedIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length;
   } else if (event.key === "Enter") {

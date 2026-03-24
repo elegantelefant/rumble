@@ -116,6 +116,15 @@ describe("CommandPalette", () => {
     expect(items[2].classes()).toContain("bg-[var(--primary-200)]")
   })
 
+  it("arrow keys do not corrupt index when no matches", async () => {
+    const wrapper = mountPalette()
+    await wrapper.find("input").setValue("zzzzzzz")
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }))
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain("No matches")
+  })
+
   it("displays shortcut text when provided", () => {
     const commands = [
       { id: "test", label: "Test", shortcut: "Ctrl+T", action: vi.fn() },

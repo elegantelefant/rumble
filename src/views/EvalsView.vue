@@ -98,22 +98,24 @@ function toggleModel(model: ModelOption) {
 }
 
 function runBenchmark(label: string) {
+  if (isRunning.value) return;
   if (!selectedModels.value.length) {
     toast.addToast("Select at least one model before running benchmarks.", "error");
     return;
   }
+  const capturedModels = [...selectedModels.value];
   isRunning.value = true;
   const readable = label.replace(/-/g, " ");
   toast.addToast(`Running ${readable} benchmark...`, "info");
-  // TODO: invoke("evals_run", { label, models: selectedModels.value.map((m) => m.id) })
-  mockEvalsRun(label, selectedModels.value.map((m) => m.id))
+  // TODO: invoke("evals_run", { label, models: capturedModels.map((m) => m.id) })
+  mockEvalsRun(label, capturedModels.map((m) => m.id))
     .then((response) => {
       benchmarkHistory.value.unshift({
         id: response.benchmarkId,
         name: readable,
         dataset: `Template benchmark (${label})`,
         ranAt: response.startedAt,
-        models: selectedModels.value.map((m) => m.id),
+        models: capturedModels.map((m) => m.id),
         notes: "Queued via quick-run trigger.",
         results: rubricMetrics.reduce<Record<string, number>>((acc, metric) => {
           acc[metric] = 0;

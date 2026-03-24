@@ -85,6 +85,19 @@ describe("SettingsView", () => {
     expect(wrapper.text()).not.toContain("Primary local runtime")
   })
 
+  it("does not remove secret from UI when keychain delete fails", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("keychain locked"))
+    const wrapper = mountSettings()
+    const removeBtn = wrapper.findAll("button").find((b) => b.text() === "Remove")
+    await removeBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(wrapper.text()).toContain("Primary local runtime")
+    expect(mockAddToast).toHaveBeenCalledWith(
+      "Could not remove credential from system keychain.",
+      "error",
+    )
+  })
+
   it("does not add secret without provider selected", async () => {
     const wrapper = mountSettings()
     const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")

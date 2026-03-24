@@ -38,8 +38,10 @@ type ReviewSession = {
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const customPrompt = ref("");
 const question = ref("");
-const isSyncingBackend = ref(false);
-const isSending = ref(false);
+const syncingCount = ref(0);
+const isSyncingBackend = computed(() => syncingCount.value > 0);
+const sendingCount = ref(0);
+const isSending = computed(() => sendingCount.value > 0);
 const showApiDocs = ref(false);
 
 function generateId() {
@@ -173,8 +175,8 @@ function openSession(id: string) {
 
 async function queueInitialReview(file: UploadedFile) {
   try {
-    isSyncingBackend.value = true;
-    const [summary] = await mockRegisterReview([
+    syncingCount.value++;
+    const results = await mockRegisterReview([
       {
         id: file.id,
         name: file.name,
@@ -182,6 +184,11 @@ async function queueInitialReview(file: UploadedFile) {
         customPrompt: file.prompt ?? null,
       },
     ]);
+    if (!results.length) {
+      toasts.addToast("File could not be registered for review.", "error");
+      return;
+    }
+    const summary = results[0];
     const session = sessions.value[file.id];
     if (!session) return;
     session.summary = summary.summary;
@@ -193,10 +200,13 @@ async function queueInitialReview(file: UploadedFile) {
   } catch (error) {
     console.error(error);
     const session = sessions.value[file.id];
-    if (session) session.reviewStatus = "idle";
+    if (session) {
+      session.reviewStatus = "idle";
+      session.messages = [];
+    }
     toasts.addToast("Failed to start initial review. Please try again.", "error");
   } finally {
-    isSyncingBackend.value = false;
+    syncingCount.value--;
   }
 }
 
@@ -204,7 +214,7 @@ async function askQuestion() {
   const session = activeSession.value;
   if (!session || !question.value.trim() || isSending.value) return;
 
-  isSending.value = true;
+  sendingCount.value++;
   const now = formatTimestamp();
   const content = question.value;
   question.value = "";
@@ -224,7 +234,7 @@ async function askQuestion() {
     console.error(error);
     toasts.addToast("Failed to get a response. Please try again.", "error");
   } finally {
-    isSending.value = false;
+    sendingCount.value--;
   }
 }
 
