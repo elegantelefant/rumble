@@ -29,6 +29,9 @@ rumble.db*
 src-tauri/sidecar/build/
 src-tauri/sidecar/dist/
 
+# Sidecar binaries (built per-platform by CI)
+src-tauri/binaries/rumble-sidecar-*
+
 # UV cache
 .uv-cache/
 
