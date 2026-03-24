@@ -7,12 +7,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from services.db import close_db, init_db
+from services.jobs import shutdown as shutdown_jobs
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db(app.state.data_dir)
     yield
+    await shutdown_jobs()
     await close_db()
 
 

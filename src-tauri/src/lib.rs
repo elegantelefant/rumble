@@ -400,6 +400,9 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar: {}", e))?;
 
+    // Kill any existing sidecar before spawning a new one
+    kill_sidecar(&state);
+
     // Store the child process handle for cleanup
     {
         let mut sidecar_child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
@@ -421,7 +424,6 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         if let Some(port_str) = trimmed.strip_prefix("PORT:") {
                             if let Ok(p) = port_str.parse::<u16>() {
                                 println!("[sidecar] reported port {}", p);
-                                // Poll health before confirming
                                 match poll_health(&http_clone, p).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();

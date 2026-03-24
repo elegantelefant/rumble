@@ -60,11 +60,12 @@ async def test_update_job_status_completed_sets_completed_at(ephemeral_db):
     assert fetched["completed_at"] is not None
 
 
-async def test_update_job_status_generic(ephemeral_db):
+async def test_update_job_status_failed(ephemeral_db):
     job = await db.create_job("draft", "{}")
-    await db.update_job_status(job["id"], "cancelled")
+    await db.update_job_status(job["id"], "failed")
     fetched = await db.get_job(job["id"])
-    assert fetched["status"] == "cancelled"
+    assert fetched["status"] == "failed"
+    assert fetched["completed_at"] is not None
 
 
 # --- set_job_result ---

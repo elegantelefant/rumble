@@ -34,10 +34,12 @@ def _to_message_history(messages: list[dict]) -> list[ModelMessage]:
     """Convert DB messages to PydanticAI message history (excludes the last user message)."""
     history: list[ModelMessage] = []
     for msg in messages[:-1]:
-        if msg["role"] == "user":
-            history.append(ModelRequest(parts=[UserPromptPart(content=msg["content"])]))
-        else:
-            history.append(ModelResponse(parts=[TextPart(content=msg["content"])]))
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "user":
+            history.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif content:
+            history.append(ModelResponse(parts=[TextPart(content=content)]))
     return history
 
 
@@ -49,7 +51,7 @@ async def send_message(
 ) -> str:
     """Send a message and return the full response text."""
     agent = _build_agent(system_prompt, model_name, api_key)
-    user_text = messages[-1]["content"] if messages else ""
+    user_text = messages[-1].get("content", "") if messages else ""
     result = await agent.run(user_text, message_history=_to_message_history(messages))
     return result.output
 
@@ -62,7 +64,7 @@ async def stream_message(
 ) -> AsyncIterator[str]:
     """Stream a message response, yielding text chunks."""
     agent = _build_agent(system_prompt, model_name, api_key)
-    user_text = messages[-1]["content"] if messages else ""
+    user_text = messages[-1].get("content", "") if messages else ""
     async with agent.run_stream(user_text, message_history=_to_message_history(messages)) as stream:
         async for chunk in stream.stream_text(delta=True):
             yield chunk

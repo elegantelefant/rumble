@@ -2,6 +2,7 @@
 # ABOUTME: Each endpoint takes a typed request, calls LLM once, and returns structured JSON.
 
 import json
+import re
 
 from fastapi import APIRouter, HTTPException
 
@@ -77,6 +78,8 @@ async def generate_chat_title(body: ChatTitleRequest) -> ChatTitleResponse:
 
 @router.post("/translate", response_model=TranslateResponse)
 async def translate(body: TranslateRequest) -> TranslateResponse:
+    if not re.match(r"^[a-zA-Z]{2,10}(-[a-zA-Z]{2,10})?$", body.target_lang):
+        raise HTTPException(status_code=422, detail="invalid target_lang format")
     user_text = f"Translate to {body.target_lang}:\n{body.text}"
     try:
         raw = await llm.run_single_turn(user_text, prompts.TRANSLATE)

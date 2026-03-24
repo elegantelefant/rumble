@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { shallowRef, computed, watch, ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps<{
   open: boolean;
@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 const query = shallowRef("");
 const highlightedIndex = shallowRef(0);
+const inputRef = ref<HTMLInputElement | null>(null);
 
 const filteredCommands = computed(() => {
   const q = query.value.toLowerCase().trim();
@@ -22,6 +23,13 @@ const filteredCommands = computed(() => {
 watch(query, () => {
   highlightedIndex.value = 0;
 });
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) nextTick(() => inputRef.value?.focus());
+  },
+);
 
 function resetState() {
   query.value = "";
@@ -66,23 +74,37 @@ onBeforeUnmount(() => {
 
 <template>
   <transition name="fade">
-    <div v-if="props.open" class="fixed inset-0 z-[999] flex items-start justify-center bg-black/30 backdrop-blur-sm">
+    <div
+      v-if="props.open"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+      class="fixed inset-0 z-[999] flex items-start justify-center bg-black/30 backdrop-blur-sm"
+      @click.self="closePalette"
+    >
       <div class="mt-24 w-full max-w-xl rounded-xl bg-white shadow-xl">
         <div class="border-b border-[var(--primary-200)] p-4">
           <label class="sr-only" for="palette-search">Search shortcuts</label>
           <input
             id="palette-search"
+            ref="inputRef"
             v-model="query"
             class="input"
             type="text"
             placeholder="Search shortcuts or jump to a workspace area..."
-            autofocus
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="palette-results"
+            :aria-activedescendant="filteredCommands[highlightedIndex]?.id ? `palette-opt-${filteredCommands[highlightedIndex].id}` : undefined"
           />
         </div>
-        <ul class="max-h-72 overflow-y-auto p-2">
+        <ul id="palette-results" role="listbox" class="max-h-72 overflow-y-auto p-2">
           <li
             v-for="(command, index) in filteredCommands"
+            :id="`palette-opt-${command.id}`"
             :key="command.id"
+            role="option"
+            :aria-selected="index === highlightedIndex"
             class="flex items-center justify-between rounded-md px-3 py-2 text-sm transition"
             :class="index === highlightedIndex ? 'bg-[var(--primary-200)]' : ''"
             @mouseenter="highlightedIndex = index"
@@ -111,17 +133,3 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 </style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

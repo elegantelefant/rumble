@@ -17,6 +17,16 @@ from models.generated import (
 from routes.ai import _parse_llm_json, _safe_construct
 from services import db, jobs, llm, prompts
 
+
+def _parse_job_json(raw: str) -> dict:
+    """Parse LLM output as JSON for background jobs. Raises ValueError, not HTTPException."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3].strip()
+    return json.loads(text)
+
 router = APIRouter(tags=["jobs"])
 
 
@@ -35,7 +45,7 @@ async def _run_draft(request: DraftRequest) -> dict:
     user_text = "\n".join([request.prompt, *context_parts]) if context_parts else request.prompt
 
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-    return _parse_llm_json(raw)
+    return _parse_job_json(raw)
 
 
 @router.post("/draft", response_model=JobCreatedResponse)
@@ -65,7 +75,7 @@ async def _run_review(request: ReviewRequest) -> dict:
     user_text = "\n".join([request.text, *context_parts]) if context_parts else request.text
 
     raw = await llm.run_single_turn(user_text, prompts.REVIEW)
-    return _parse_llm_json(raw)
+    return _parse_job_json(raw)
 
 
 @router.post("/review", response_model=JobCreatedResponse)
@@ -97,7 +107,7 @@ async def _run_research(request: ResearchRequest) -> dict:
     user_text = "\n".join([request.question, *context_parts]) if context_parts else request.question
 
     raw = await llm.run_single_turn(user_text, prompts.RESEARCH, model_name=request.model or None)
-    return _parse_llm_json(raw)
+    return _parse_job_json(raw)
 
 
 @router.post("/research", response_model=ResearchResponse)

@@ -4,7 +4,7 @@
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import aiosqlite
 
@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'queued',
+    status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'completed', 'failed')),
     request TEXT NOT NULL,
     result TEXT,
     error TEXT,
@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     started_at TEXT,
     completed_at TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 """
+
+JobStatus = Literal["queued", "running", "completed", "failed"]
 
 
 def _now() -> str:
@@ -135,7 +139,6 @@ async def add_message(chat_id: str, role: str, content: str) -> dict[str, Any]:
     db = _get_db()
     msg_id = _uuid()
     now = _now()
-    await db.execute("BEGIN")
     try:
         await db.execute(
             "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -191,7 +194,7 @@ async def get_job(job_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-async def update_job_status(job_id: str, status: str) -> None:
+async def update_job_status(job_id: str, status: JobStatus) -> None:
     db = _get_db()
     now = _now()
     if status == "running":

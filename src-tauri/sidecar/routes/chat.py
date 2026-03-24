@@ -2,12 +2,15 @@
 # ABOUTME: Handles chat sessions, message history, sync responses, and SSE streaming.
 
 import json
+import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
 from services import db, llm
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chats", tags=["chat"])
 
@@ -92,7 +95,7 @@ async def send_message(chat_id: str, body: dict[str, Any]) -> dict:
 
 
 @router.post("/{chat_id}/stream")
-async def stream_message(chat_id: str, body: dict[str, Any]) -> EventSourceResponse:
+async def stream_message(chat_id: str, body: dict[str, Any], request: Request) -> EventSourceResponse:
     chat = await db.get_chat(chat_id)
     if not chat:
         raise HTTPException(status_code=404, detail="chat not found")
@@ -127,6 +130,7 @@ async def stream_message(chat_id: str, body: dict[str, Any]) -> EventSourceRespo
 
             yield {"event": "message", "data": json.dumps({"type": "done", "value": complete_text})}
         except Exception as exc:
+            logger.exception("SSE stream error for chat %s", chat_id)
             if not assistant_stored:
                 await db.delete_message(user_msg["id"])
             yield {"event": "message", "data": json.dumps({"type": "error", "value": str(exc)})}
