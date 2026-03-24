@@ -16,7 +16,7 @@ let driver;
 let exit = false;
 
 const BINARY_NAME =
-  platform() === "win32" ? "Elefant - Rumble.exe" : "elefant-rumble";
+  platform() === "win32" ? "Elefant - Rumble.exe" : "elefant_rumble";
 const BINARY_PATH = resolve(
   projectRoot,
   "src-tauri/target/debug",
