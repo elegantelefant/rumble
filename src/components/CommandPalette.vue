@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, computed, watch, ref, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { shallowRef, computed, watch, ref, nextTick, onBeforeUnmount } from "vue";
 
 const props = defineProps<{
   open: boolean;
@@ -65,9 +65,17 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  window.addEventListener("keydown", onKeydown);
-});
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      window.addEventListener("keydown", onKeydown);
+    } else {
+      window.removeEventListener("keydown", onKeydown);
+    }
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);

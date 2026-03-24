@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { backendRegistry, mockTranslationRun } from "../modules/backend/backendClient";
+import { useModels } from "../composables/models";
 import { useToast } from "../composables/toast";
+import { generateId } from "../utils/ids";
 
 type TranslationJob = {
   id: string;
@@ -15,10 +17,6 @@ type TranslationJob = {
   model: string;
 };
 
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 const sourceLanguage = ref("auto");
 const targetLanguage = ref("es");
 const sourceText = ref("");
@@ -27,11 +25,7 @@ const selectedModel = ref("elefant-local");
 const showApiDocs = ref(false);
 const isTranslating = ref(false);
 
-const modelOptions = [
-  { id: "elefant-local", label: "Ollama · Elefant Legal Blend", available: true },
-  { id: "gpt-4.1-mini", label: "OpenAI GPT-4.1 mini", available: false },
-  { id: "sonnet-3.5", label: "Claude 3.5 Sonnet", available: false },
-];
+const { models: modelOptions } = useModels();
 
 const jobs = ref<TranslationJob[]>([
   {
@@ -63,7 +57,9 @@ function updateEditorFromJob(job: TranslationJob | null) {
   selectedModel.value = job.model;
 }
 
-updateEditorFromJob(activeJob.value ?? null);
+watch(activeJob, (job) => {
+  updateEditorFromJob(job ?? null);
+}, { immediate: true });
 
 function activateJob(job: TranslationJob) {
   if (sourceText.value.trim() && sourceText.value !== job.inputText) {

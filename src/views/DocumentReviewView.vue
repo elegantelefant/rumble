@@ -7,6 +7,8 @@ import {
   mockRegisterReview,
 } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
+import type { ChatMessage } from "../types/chat";
+import { generateId, formatTimestamp } from "../utils/ids";
 
 const toasts = useToast();
 
@@ -20,17 +22,9 @@ type UploadedFile = {
   prompt?: string;
 };
 
-type SessionMessage = {
-  id: string;
-  role: "assistant" | "user";
-  content: string;
-  timestamp: string;
-  citations?: string[];
-};
-
 type ReviewSession = {
   file: UploadedFile;
-  messages: SessionMessage[];
+  messages: ChatMessage[];
   summary: string;
   reviewStatus: ReviewStatus;
 };
@@ -43,14 +37,6 @@ const isSyncingBackend = computed(() => syncingCount.value > 0);
 const sendingCount = ref(0);
 const isSending = computed(() => sendingCount.value > 0);
 const showApiDocs = ref(false);
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function formatTimestamp(date = new Date()) {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 const initialSessionId = generateId();
 

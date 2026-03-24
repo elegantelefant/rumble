@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { FileText, Edit3, Microscope, BookOpen, Globe, Settings, ArrowUp, ArrowDown } from "lucide-vue-next";
+import { currentUser } from "../../composables/user";
 
 const props = defineProps<{
   open: boolean;
@@ -39,11 +40,7 @@ const fixedToolDefinitions: ToolDefinition[] = [
   { label: "Settings", icon: Settings, path: "/settings" },
 ];
 
-const userInfo = {
-  user: "CoastalTower238",
-  team: "SilverEcho951",
-  version: "Rumble v0.1.0a",
-};
+const userInfo = currentUser;
 
 const reorderableTools = ref<ToolDefinition[]>([...reorderableToolDefinitions]);
 
@@ -191,7 +188,7 @@ function handleItemClick(path: string, disabled?: boolean) {
     <div class="space-y-3 px-5 pb-6 pt-4 text-sm text-[var(--primary-300)]">
       <div class="rounded-lg border border-[color:color-mix(in_srgb,var(--primary-700)_70%,transparent)] bg-[color:color-mix(in_srgb,var(--primary-900)_85%,black_15%)] px-3 py-4">
         <div class="text-xs uppercase text-[var(--primary-500)]">Signed in</div>
-        <div class="mt-1 text-sm font-semibold text-white">{{ userInfo.user }}</div>
+        <div class="mt-1 text-sm font-semibold text-white">{{ userInfo.name }}</div>
         <div class="text-xs text-[var(--primary-400)]">Team · {{ userInfo.team }}</div>
       </div>
       <div class="text-xs text-[var(--primary-500)]">

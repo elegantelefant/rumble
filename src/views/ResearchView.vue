@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { backendRegistry, mockResearchRun } from "../modules/backend/backendClient";
+import { useModels } from "../composables/models";
 import { useToast } from "../composables/toast";
-
-type Message = {
-  id: string;
-  role: "assistant" | "user";
-  content: string;
-  timestamp: string;
-  citations?: string[];
-};
+import type { ChatMessage } from "../types/chat";
+import { generateId, formatTimestamp } from "../utils/ids";
 
 type ResearchThread = {
   id: string;
@@ -19,25 +14,13 @@ type ResearchThread = {
   lastUpdated: string;
   summary: string;
   model: string;
-  messages: Message[];
+  messages: ChatMessage[];
   isResearching: boolean;
 };
 
 const toasts = useToast();
 
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function formatTime(date = new Date()) {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-const modelInventory = ref([
-  { id: "gpt-4.1-mini", label: "GPT-4.1 mini", provider: "OpenAI", available: false },
-  { id: "sonnet-3.5", label: "Claude 3.5 Sonnet", provider: "Anthropic", available: false },
-  { id: "elefant-local", label: "Ollama · Elefant Legal Blend", provider: "Local", available: true },
-]);
+const { models: modelInventory } = useModels();
 
 const threads = ref<ResearchThread[]>([
   {
@@ -55,7 +38,7 @@ const threads = ref<ResearchThread[]>([
         id: generateId(),
         role: "assistant",
         content: "Ask a question to expand this research thread.",
-        timestamp: formatTime(),
+        timestamp: formatTimestamp(),
       },
     ],
   },
@@ -73,7 +56,7 @@ const threads = ref<ResearchThread[]>([
         id: generateId(),
         role: "assistant",
         content: "Working through the supervisory decisions and ENISA recommendations.",
-        timestamp: formatTime(),
+        timestamp: formatTimestamp(),
       },
     ],
   },
@@ -110,7 +93,7 @@ function startNewThread() {
         id: generateId(),
         role: "assistant",
         content: "Ready whenever you are. What would you like me to investigate?",
-        timestamp: formatTime(),
+        timestamp: formatTimestamp(),
       },
     ],
   };
@@ -135,7 +118,7 @@ async function submitPrompt() {
     id: generateId(),
     role: "user",
     content,
-    timestamp: formatTime(),
+    timestamp: formatTimestamp(),
   });
   thread.status = "running";
   thread.lastUpdated = new Date().toISOString();
@@ -148,7 +131,7 @@ async function submitPrompt() {
       id: generateId(),
       role: "assistant",
       content: response.answer,
-      timestamp: formatTime(),
+      timestamp: formatTimestamp(),
       citations: response.citations,
     });
     thread.status = "complete";

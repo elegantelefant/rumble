@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { backendRegistry, mockEvalsRun } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
+import { generateId } from "../utils/ids";
 
 type ModelOption = {
   id: string;
@@ -29,10 +30,6 @@ const rubricMetrics = [
   "Legal reasoning",
   "Risk management",
 ];
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 const models = ref<ModelOption[]>([
   { id: "gpt-4.1-mini", label: "GPT-4.1 mini", provider: "OpenAI", available: false, selected: false },

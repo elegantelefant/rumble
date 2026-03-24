@@ -3,6 +3,7 @@ import { computed, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { mockSaveSettings, mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
+import { generateId } from "../utils/ids";
 
 const toast = useToast();
 
@@ -102,10 +103,6 @@ const syncSettings = reactive({
 });
 
 const isSaving = ref(false);
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 async function addSecret() {
   if (!newSecret.provider) return;

@@ -123,7 +123,7 @@ function exportDraft(format: "word" | "pdf") {
 
       <section class="card space-y-4">
         <h2 class="caption-uppercase">Template: {{ activeTemplateName }}</h2>
-        <form class="grid gap-4 md:grid-cols-2" @submit.prevent>
+        <form class="grid gap-4 md:grid-cols-2" @submit.prevent="generateDraft">
           <label v-for="field in activeFields" :key="field.key" class="space-y-1 text-sm">
             <span class="font-medium text-[var(--primary-700)]">{{ field.label }}</span>
             <input

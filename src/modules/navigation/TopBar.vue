@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { currentUser } from "../../composables/user";
 
 const emit = defineEmits<{
   (e: "toggle-sidebar"): void;
@@ -48,8 +49,8 @@ const confidentialityMessage = computed(() =>
           CT
         </div>
         <div class="text-left leading-tight">
-          <div class="font-medium text-[var(--primary-700)]">CoastalTower238</div>
-          <div class="text-xs text-[var(--primary-500)]">Team · SilverEcho951</div>
+          <div class="font-medium text-[var(--primary-700)]">{{ currentUser.name }}</div>
+          <div class="text-xs text-[var(--primary-500)]">Team · {{ currentUser.team }}</div>
         </div>
       </div>
     </div>
