@@ -83,7 +83,7 @@ async function runTranslation() {
   const input = sourceText.value.trim();
   if (!input) return;
   if (sourceLanguage.value !== "auto" && sourceLanguage.value === targetLanguage.value) {
-    toast?.addToast("Source and target languages are the same.", "error");
+    toast.addToast("Source and target languages are the same.", "error");
     return;
   }
   isTranslating.value = true;
@@ -111,10 +111,10 @@ async function runTranslation() {
     jobs.value.unshift(newJob);
     activeJobId.value = newJob.id;
     translatedText.value = output;
-    toast?.addToast("Translation generated via mock backend.", "success");
+    toast.addToast("Translation generated via mock backend.", "success");
   } catch (error) {
     console.error(error);
-    toast?.addToast("Mock backend failed to translate text.", "error");
+    toast.addToast("Mock backend failed to translate text.", "error");
   } finally {
     isTranslating.value = false;
   }

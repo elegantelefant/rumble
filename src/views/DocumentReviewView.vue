@@ -194,7 +194,7 @@ async function queueInitialReview(file: UploadedFile) {
     console.error(error);
     const session = sessions.value[file.id];
     if (session) session.reviewStatus = "idle";
-    toasts?.addToast("Failed to start initial review. Please try again.", "error");
+    toasts.addToast("Failed to start initial review. Please try again.", "error");
   } finally {
     isSyncingBackend.value = false;
   }
@@ -222,7 +222,7 @@ async function askQuestion() {
     session.file.lastReviewedAt = new Date().toISOString();
   } catch (error) {
     console.error(error);
-    toasts?.addToast("Failed to get a response. Please try again.", "error");
+    toasts.addToast("Failed to get a response. Please try again.", "error");
   } finally {
     isSending.value = false;
   }

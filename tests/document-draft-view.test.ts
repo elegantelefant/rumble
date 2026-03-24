@@ -3,6 +3,7 @@
 
 import { mount } from "@vue/test-utils"
 import DocumentDraftView from "../src/views/DocumentDraftView.vue"
+import { TOAST_KEY } from "../src/composables/toast"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -12,7 +13,7 @@ function mountDraft() {
   return mount(DocumentDraftView, {
     global: {
       provide: {
-        toast: { addToast: vi.fn() },
+        [TOAST_KEY as symbol]: { addToast: vi.fn() },
       },
     },
   })

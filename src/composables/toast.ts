@@ -9,6 +9,10 @@ export type ToastApi = {
 
 export const TOAST_KEY: InjectionKey<ToastApi> = Symbol("toast");
 
-export function useToast(): ToastApi | undefined {
-  return inject(TOAST_KEY);
+export function useToast(): ToastApi {
+  const api = inject(TOAST_KEY);
+  if (!api) {
+    throw new Error("useToast() called outside ToastProvider");
+  }
+  return api;
 }

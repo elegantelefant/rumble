@@ -3,6 +3,7 @@
 
 import { mount } from "@vue/test-utils"
 import ResearchView from "../src/views/ResearchView.vue"
+import { TOAST_KEY } from "../src/composables/toast"
 
 vi.mock("../src/modules/backend/backendClient", () => ({
   backendRegistry: { value: [] },
@@ -19,7 +20,7 @@ function mountResearch() {
   return mount(ResearchView, {
     global: {
       provide: {
-        toast: { addToast: mockAddToast },
+        [TOAST_KEY as symbol]: { addToast: mockAddToast },
       },
     },
   })

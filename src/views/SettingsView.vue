@@ -111,14 +111,14 @@ async function addSecret() {
   if (!newSecret.provider) return;
   const provider = providerOptions.find((option) => option.id === newSecret.provider);
   if (provider?.requiresKey && !newSecret.key.trim()) {
-    toast?.addToast("Enter the provider key before saving.", "error");
+    toast.addToast("Enter the provider key before saving.", "error");
     return;
   }
   if (provider?.requiresKey) {
     try {
       await invoke("store_api_key", { provider: newSecret.provider, key: newSecret.key });
     } catch (error) {
-      toast?.addToast(`Failed to store API key: ${error}`, "error");
+      toast.addToast(`Failed to store API key: ${error}`, "error");
       return;
     }
   }
@@ -135,7 +135,7 @@ async function addSecret() {
   newSecret.key = "";
   newSecret.scope = "global";
   newSecret.notes = "";
-  toast?.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
+  toast.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
 }
 
 async function removeSecret(id: string) {
@@ -154,10 +154,10 @@ async function saveSettings() {
   isSaving.value = true;
   try {
     await mockSaveSettings();
-    toast?.addToast("Settings stored securely on this device.", "success");
+    toast.addToast("Settings stored securely on this device.", "success");
   } catch (error) {
     console.error(error);
-    toast?.addToast("Failed to save settings.", "error");
+    toast.addToast("Failed to save settings.", "error");
   } finally {
     isSaving.value = false;
   }
@@ -165,13 +165,13 @@ async function saveSettings() {
 
 async function testSync() {
   const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
-  toast?.addToast("Pinging sync server health endpoint...", "info");
+  toast.addToast("Pinging sync server health endpoint...", "info");
   try {
     const result = await mockTestSync(url);
-    toast?.addToast(result.ok ? "Sync server reachable." : (result.message ?? "Sync server unreachable."), result.ok ? "success" : "error");
+    toast.addToast(result.ok ? "Sync server reachable." : (result.message ?? "Sync server unreachable."), result.ok ? "success" : "error");
   } catch (error) {
     console.error(error);
-    toast?.addToast("Failed to reach sync server.", "error");
+    toast.addToast("Failed to reach sync server.", "error");
   }
 }
 

@@ -3,6 +3,7 @@
 
 import { mount } from "@vue/test-utils"
 import TranslationView from "../src/views/TranslationView.vue"
+import { TOAST_KEY } from "../src/composables/toast"
 
 vi.mock("../src/modules/backend/backendClient", () => ({
   backendRegistry: { value: [] },
@@ -18,7 +19,7 @@ function mountTranslation() {
   return mount(TranslationView, {
     global: {
       provide: {
-        toast: { addToast: mockAddToast },
+        [TOAST_KEY as symbol]: { addToast: mockAddToast },
       },
     },
   })

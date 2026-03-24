@@ -120,7 +120,7 @@ async function submitPrompt() {
   if (!thread || !prompt.value.trim() || isResearching.value) return;
 
   if (!selectedModel.value) {
-    toasts?.addToast("Add an API key in Settings to unlock hosted research models.", "error");
+    toasts.addToast("Add an API key in Settings to unlock hosted research models.", "error");
     return;
   }
 
@@ -139,7 +139,7 @@ async function submitPrompt() {
   thread.summary = "Research underway. Results will include citations and suggested follow-ups.";
 
   try {
-    toasts?.addToast("Research request sent to backend.", "info");
+    toasts.addToast("Research request sent to backend.", "info");
     const response = await mockResearchRun(thread.id, content);
     thread.messages.push({
       id: generateId(),
@@ -152,7 +152,7 @@ async function submitPrompt() {
     thread.summary = response.answer.slice(0, 180) + (response.answer.length > 180 ? "..." : "");
   } catch (error) {
     console.error(error);
-    toasts?.addToast("Mock backend failed to return research results.", "error");
+    toasts.addToast("Mock backend failed to return research results.", "error");
     thread.status = "draft";
   } finally {
     thread.lastUpdated = new Date().toISOString();

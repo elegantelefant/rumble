@@ -74,10 +74,10 @@ async function generateDraft() {
   try {
     // TODO: invoke("draft_generate", { template: selectedTemplate.value, params: formState })
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    toasts?.addToast("Draft prepared. Review before sharing with clients.", "success");
+    toasts.addToast("Draft prepared. Review before sharing with clients.", "success");
   } catch (error) {
     console.error(error);
-    toasts?.addToast("Failed to generate draft. Please try again.", "error");
+    toasts.addToast("Failed to generate draft. Please try again.", "error");
   } finally {
     isGenerating.value = false;
   }
@@ -85,7 +85,7 @@ async function generateDraft() {
 
 function exportDraft(format: "word" | "pdf") {
   // TODO: invoke("draft_export", { format })
-  toasts?.addToast(`Exported draft as ${format.toUpperCase()}.`, "info");
+  toasts.addToast(`Exported draft as ${format.toUpperCase()}.`, "info");
   void format;
 }
 </script>
@@ -97,7 +97,7 @@ function exportDraft(format: "word" | "pdf") {
         <h1 class="h1">Document Draft</h1>
         <p class="body-muted">Generate drafts from your local templates.</p>
       </div>
-      <button class="btn-secondary" type="button" @click="toasts?.addToast('Template management coming soon.', 'info')">Manage Templates</button>
+      <button class="btn-secondary" type="button" @click="toasts.addToast('Template management coming soon.', 'info')">Manage Templates</button>
     </header>
 
     <div class="grid gap-6 lg:grid-cols-[2fr,3fr]">
@@ -118,7 +118,7 @@ function exportDraft(format: "word" | "pdf") {
             {{ template.name }}
           </button>
         </div>
-        <button class="btn-secondary mt-4 w-full" type="button" @click="toasts?.addToast('Template browsing coming soon.', 'info')">Browse Local Templates...</button>
+        <button class="btn-secondary mt-4 w-full" type="button" @click="toasts.addToast('Template browsing coming soon.', 'info')">Browse Local Templates...</button>
       </aside>
 
       <section class="card space-y-4">

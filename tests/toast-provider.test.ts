@@ -24,7 +24,7 @@ const ToastConsumer = defineComponent({
     const toast = useToast()
     return { toast }
   },
-  template: `<button data-testid="add" @click="toast?.addToast('Hello', 'info')">Add</button>`,
+  template: `<button data-testid="add" @click="toast.addToast('Hello', 'info')">Add</button>`,
 })
 
 function mountProvider() {
@@ -34,6 +34,16 @@ function mountProvider() {
     },
   })
 }
+
+describe("useToast", () => {
+  it("throws when called outside provider", () => {
+    const Orphan = defineComponent({
+      setup() { useToast(); return {}; },
+      template: "<div />",
+    });
+    expect(() => mount(Orphan)).toThrow("useToast() called outside ToastProvider");
+  });
+});
 
 describe("ToastProvider", () => {
   it("renders slot content", () => {
@@ -83,7 +93,7 @@ describe("ToastProvider", () => {
         const toast = useToast()
         return { toast }
       },
-      template: `<button data-testid="add" @click="toast?.addToast('Saved', 'success')">Add</button>`,
+      template: `<button data-testid="add" @click="toast.addToast('Saved', 'success')">Add</button>`,
     })
 
     const wrapper = mount(ToastProvider, {
@@ -101,7 +111,7 @@ describe("ToastProvider", () => {
         const toast = useToast()
         return { toast }
       },
-      template: `<button data-testid="add" @click="toast?.addToast('Failed', 'error')">Add</button>`,
+      template: `<button data-testid="add" @click="toast.addToast('Failed', 'error')">Add</button>`,
     })
 
     const wrapper = mount(ToastProvider, {

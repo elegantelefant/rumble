@@ -99,12 +99,12 @@ function toggleModel(model: ModelOption) {
 
 function runBenchmark(label: string) {
   if (!selectedModels.value.length) {
-    toast?.addToast("Select at least one model before running benchmarks.", "error");
+    toast.addToast("Select at least one model before running benchmarks.", "error");
     return;
   }
   isRunning.value = true;
   const readable = label.replace(/-/g, " ");
-  toast?.addToast(`Running ${readable} benchmark...`, "info");
+  toast.addToast(`Running ${readable} benchmark...`, "info");
   // TODO: invoke("evals_run", { label, models: selectedModels.value.map((m) => m.id) })
   mockEvalsRun(label, selectedModels.value.map((m) => m.id))
     .then((response) => {
@@ -120,10 +120,10 @@ function runBenchmark(label: string) {
           return acc;
         }, {}),
       });
-      toast?.addToast(`${readable} benchmark completed. Review the results below.`, "success");
+      toast.addToast(`${readable} benchmark completed. Review the results below.`, "success");
     })
     .catch(() => {
-      toast?.addToast("Mock backend failed to queue benchmark.", "error");
+      toast.addToast("Mock backend failed to queue benchmark.", "error");
     })
     .finally(() => {
       isRunning.value = false;
