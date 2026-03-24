@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "TranslationView" });
 import { computed, ref, watch } from "vue";
 import { backendRegistry, mockTranslationRun } from "../modules/backend/backendClient";
 import { useModels } from "../composables/models";

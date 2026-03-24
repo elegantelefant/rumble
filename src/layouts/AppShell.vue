@@ -77,7 +77,11 @@ onBeforeUnmount(() => {
       <TopBar @toggle-sidebar="toggleSidebar" @toggle-palette="openPalette" />
 
       <main class="flex-1 overflow-auto bg-[var(--primary-100)] p-6">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <KeepAlive include="DocumentReviewView,ResearchView,TranslationView">
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </main>
     </div>
 

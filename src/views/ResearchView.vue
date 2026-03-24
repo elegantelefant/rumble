@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "ResearchView" });
 import { computed, ref } from "vue";
 import { backendRegistry, mockResearchRun } from "../modules/backend/backendClient";
 import { useModels } from "../composables/models";

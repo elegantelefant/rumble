@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "DocumentReviewView" });
 import { computed, ref } from "vue";
 import {
   backendRegistry,
