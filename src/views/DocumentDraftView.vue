@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, ref, inject, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
+import { useToast } from "../composables/toast";
 
-const toasts = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+const toasts = useToast();
 
 type FieldConfig = { key: string; label: string; type?: string; placeholder?: string };
 

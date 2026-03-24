@@ -2,8 +2,9 @@
 // ABOUTME: Covers toast addition, auto-dismiss via fake timers, and toast rendering.
 
 import { mount } from "@vue/test-utils"
-import { defineComponent, inject } from "vue"
+import { defineComponent } from "vue"
 import ToastProvider from "../src/components/ToastProvider.vue"
+import { useToast } from "../src/composables/toast"
 
 beforeAll(() => {
   vi.useFakeTimers()
@@ -20,7 +21,7 @@ beforeEach(() => {
 // Child component that exposes the injected toast API for testing
 const ToastConsumer = defineComponent({
   setup() {
-    const toast = inject<{ addToast: (msg: string, type?: string, duration?: number) => void }>("toast")
+    const toast = useToast()
     return { toast }
   },
   template: `<button data-testid="add" @click="toast?.addToast('Hello', 'info')">Add</button>`,
@@ -79,7 +80,7 @@ describe("ToastProvider", () => {
     // Mount a custom consumer that adds a success toast
     const SuccessConsumer = defineComponent({
       setup() {
-        const toast = inject<{ addToast: (msg: string, type?: string) => void }>("toast")
+        const toast = useToast()
         return { toast }
       },
       template: `<button data-testid="add" @click="toast?.addToast('Saved', 'success')">Add</button>`,
@@ -97,7 +98,7 @@ describe("ToastProvider", () => {
   it("applies correct CSS class for error type", async () => {
     const ErrorConsumer = defineComponent({
       setup() {
-        const toast = inject<{ addToast: (msg: string, type?: string) => void }>("toast")
+        const toast = useToast()
         return { toast }
       },
       template: `<button data-testid="add" @click="toast?.addToast('Failed', 'error')">Add</button>`,

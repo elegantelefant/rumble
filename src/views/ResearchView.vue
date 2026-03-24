@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, ref } from "vue";
 import { backendRegistry, mockResearchRun } from "../modules/backend/backendClient";
+import { useToast } from "../composables/toast";
 
 type Message = {
   id: string;
@@ -21,9 +22,7 @@ type ResearchThread = {
   messages: Message[];
 };
 
-const toasts = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>(
-  "toast",
-);
+const toasts = useToast();
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);

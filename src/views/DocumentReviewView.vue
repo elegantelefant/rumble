@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, ref } from "vue";
 import {
   backendRegistry,
   mockDocumentChat,
   mockInitialReview,
   mockRegisterReview,
 } from "../modules/backend/backendClient";
+import { useToast } from "../composables/toast";
 
-const toasts = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+const toasts = useToast();
 
 type ReviewStatus = "idle" | "running" | "ready";
 

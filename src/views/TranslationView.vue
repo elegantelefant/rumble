@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, ref } from "vue";
 import { backendRegistry, mockTranslationRun } from "../modules/backend/backendClient";
+import { useToast } from "../composables/toast";
 
 type TranslationJob = {
   id: string;
@@ -76,7 +77,7 @@ const translationDocs = computed(() =>
   backendRegistry.value.filter((doc) => doc.command.includes("translation")),
 );
 
-const toast = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+const toast = useToast();
 
 async function runTranslation() {
   const input = sourceText.value.trim();

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, provide, reactive } from "vue";
+import { TOAST_KEY } from "../composables/toast";
 
 type Toast = {
   id: number;
@@ -33,7 +34,7 @@ onBeforeUnmount(() => {
   timers.clear();
 });
 
-provide("toast", { addToast });
+provide(TOAST_KEY, { addToast });
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, ref } from "vue";
 import { backendRegistry, mockEvalsRun } from "../modules/backend/backendClient";
+import { useToast } from "../composables/toast";
 
 type ModelOption = {
   id: string;
@@ -75,7 +76,7 @@ const benchmarkHistory = ref<BenchmarkRun[]>([
 ]);
 
 const isRunning = ref(false);
-const toast = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+const toast = useToast();
 const showApiDocs = ref(false);
 const evalDocs = computed(() =>
   backendRegistry.value.filter((doc) => doc.command.includes("eval")),

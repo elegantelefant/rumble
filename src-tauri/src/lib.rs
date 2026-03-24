@@ -127,7 +127,7 @@ struct FileInfo {
 fn scan_folder(path: String) -> Result<Vec<FileInfo>, String> {
     let validated = validate_user_path(&path)?;
     let mut files = Vec::new();
-    for entry in WalkDir::new(validated).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(validated).max_depth(10).into_iter().filter_map(|e| e.ok()) {
         let metadata = entry.metadata().map_err(|e| e.to_string())?;
         if metadata.is_file() {
             let size = metadata.len();
@@ -144,6 +144,9 @@ fn scan_folder(path: String) -> Result<Vec<FileInfo>, String> {
                 size,
                 modified,
             });
+            if files.len() >= 10_000 {
+                break;
+            }
         }
     }
     Ok(files)
@@ -270,8 +273,18 @@ fn auth_clear_token() -> Result<(), String> {
     }
 }
 
+const ALLOWED_PROVIDERS: &[&str] = &["elefant-local", "openai", "anthropic"];
+
+fn validate_provider(provider: &str) -> Result<(), String> {
+    if !ALLOWED_PROVIDERS.contains(&provider) {
+        return Err(format!("unknown provider: {}", provider));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn store_api_key(provider: String, key: String) -> Result<(), String> {
+    validate_provider(&provider)?;
     let entry_name = format!("byok_{}", provider);
     keyring_entry(&entry_name)?
         .set_password(&key)
@@ -280,10 +293,22 @@ fn store_api_key(provider: String, key: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_api_key(provider: String) -> Result<Option<String>, String> {
+    validate_provider(&provider)?;
     let entry_name = format!("byok_{}", provider);
     match keyring_entry(&entry_name)?.get_password() {
         Ok(k) => Ok(Some(k)),
         Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_api_key(provider: String) -> Result<(), String> {
+    validate_provider(&provider)?;
+    let entry_name = format!("byok_{}", provider);
+    match keyring_entry(&entry_name)?.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -539,6 +564,7 @@ pub fn run() {
             auth_clear_token,
             store_api_key,
             get_api_key,
+            delete_api_key,
             // Backend mode
             get_backend_mode,
             set_backend_mode,

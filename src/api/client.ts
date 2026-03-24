@@ -11,10 +11,15 @@ export const apiClient = async <T>(
   // Parse body from RequestInit if present
   let body: unknown = null;
   if (config.body) {
-    body =
-      typeof config.body === "string"
-        ? JSON.parse(config.body)
-        : config.body;
+    if (typeof config.body === "string") {
+      try {
+        body = JSON.parse(config.body);
+      } catch {
+        body = config.body;
+      }
+    } else {
+      body = config.body;
+    }
   }
 
   // Extract query params from URL if present

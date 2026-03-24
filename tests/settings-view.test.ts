@@ -4,6 +4,7 @@
 import { mount } from "@vue/test-utils"
 import { invoke } from "@tauri-apps/api/core"
 import SettingsView from "../src/views/SettingsView.vue"
+import { TOAST_KEY } from "../src/composables/toast"
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -25,7 +26,7 @@ function mountSettings() {
   return mount(SettingsView, {
     global: {
       provide: {
-        toast: { addToast: mockAddToast },
+        [TOAST_KEY as symbol]: { addToast: mockAddToast },
       },
     },
   })

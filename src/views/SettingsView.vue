@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { mockSaveSettings, mockTestSync } from "../modules/backend/backendClient";
+import { useToast } from "../composables/toast";
 
-const toast = inject<{ addToast: (message: string, type?: "success" | "error" | "info") => void }>("toast");
+const toast = useToast();
 
 const tabs = [
   { id: "providers", label: "Providers & API keys" },
@@ -137,8 +138,16 @@ async function addSecret() {
   toast?.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
 }
 
-function removeSecret(id: string) {
-  secrets.value = secrets.value.filter((secret) => secret.id !== id);
+async function removeSecret(id: string) {
+  const secret = secrets.value.find((s) => s.id === id);
+  if (secret) {
+    try {
+      await invoke("delete_api_key", { provider: secret.provider });
+    } catch (e) {
+      console.error("Failed to delete keychain entry:", e);
+    }
+  }
+  secrets.value = secrets.value.filter((s) => s.id !== id);
 }
 
 async function saveSettings() {
