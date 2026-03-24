@@ -16,7 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-22.04, windows-latest]
+        # Windows disabled: msedgedriver version mismatch causes WebDriver to hang.
+        # See https://tauri.app/develop/tests/webdriver/ — "If the two versions
+        # do not match, you may experience your WebDriver testing suite hanging."
+        # Re-enable once msedgedriver-tool reliably matches the CI runner's Edge.
+        platform: [ubuntu-22.04]
 
     steps:
       - uses: actions/checkout@v4
