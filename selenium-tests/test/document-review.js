@@ -1,18 +1,20 @@
 // ABOUTME: Selenium tests for Document Review view.
-// ABOUTME: Covers runbook Phase 4 — upload zone, sessions, chat workspace.
+// ABOUTME: Covers spec §5 — upload zone, sessions, chat workspace.
 
 import { By } from "selenium-webdriver";
 import { expect } from "chai";
-import { getDriver, navigateTo, waitFor, waitForText } from "./helpers.js";
+import { getDriver, navigateTo, waitFor, waitForText, screenshot } from "./helpers.js";
 
 describe("Document Review", function () {
   before(async function () {
     await navigateTo("/review");
+    await screenshot("review_page_loaded");
   });
 
   it("page heading is Document Review", async function () {
     const driver = getDriver();
     const h1 = await driver.findElement(By.css("h1"));
+    await screenshot("review_heading");
     expect(await h1.getText()).to.equal("Document Review");
   });
 
@@ -20,14 +22,15 @@ describe("Document Review", function () {
     const driver = getDriver();
     const page = await driver.findElement(By.css("main"));
     const text = await page.getText();
+    await screenshot("review_trust_badge");
     expect(text).to.match(/confidential|local|device/i);
   });
 
   it("file upload drop zone is visible", async function () {
     const driver = getDriver();
-    // Look for the drop zone or browse button
     const page = await driver.findElement(By.css("main"));
     const text = await page.getText();
+    await screenshot("review_drop_zone");
     expect(text).to.match(/drag|drop|browse|upload/i);
   });
 
@@ -35,37 +38,37 @@ describe("Document Review", function () {
     const driver = getDriver();
     const page = await driver.findElement(By.css("main"));
     const text = await page.getText();
+    await screenshot("review_pre_seeded_session");
     expect(text).to.include("Contract_2024.pdf");
   });
 
   it("custom prompt textarea exists", async function () {
     const driver = getDriver();
     const textareas = await driver.findElements(By.css("textarea"));
+    await screenshot("review_custom_prompt_textarea");
     expect(textareas.length).to.be.greaterThan(0);
   });
 
   it("clicking session shows chat workspace", async function () {
     const driver = getDriver();
-    // Click on the pre-seeded session
     const sessionEl = await driver.findElement(
       By.xpath("//*[contains(text(),'Contract_2024.pdf')]"),
     );
+    await screenshot("review_before_session_click");
     await sessionEl.click();
-
-    // Wait for chat area to appear — look for message input or chat messages
-    await new Promise((r) => setTimeout(r, 600)); // wait for mock review
+    await new Promise((r) => setTimeout(r, 600));
+    await screenshot("review_after_session_click");
     const page = await driver.findElement(By.css("main"));
     const text = await page.getText();
-    // Should show session details or chat messages
     expect(text.length).to.be.greaterThan(50);
   });
 
   it("chat input field exists when session is active", async function () {
     const driver = getDriver();
-    // Look for text input or textarea for follow-up questions
     const inputs = await driver.findElements(
       By.css('input[type="text"], textarea'),
     );
+    await screenshot("review_chat_input");
     expect(inputs.length).to.be.greaterThan(0);
   });
 
@@ -73,6 +76,39 @@ describe("Document Review", function () {
     const driver = getDriver();
     const page = await driver.findElement(By.css("main"));
     const text = await page.getText();
+    await screenshot("review_api_surface_toggle");
     expect(text).to.match(/api|surface/i);
+  });
+
+  it("clicking toggle expands/collapses API surface panel", async function () {
+    const driver = getDriver();
+    // Find and click the "API surface" button to expand
+    const toggleBtn = await driver.findElement(
+      By.xpath("//button[contains(text(),'API surface')]"),
+    );
+    await screenshot("review_api_panel_before_expand");
+    await toggleBtn.click();
+    await new Promise((r) => setTimeout(r, 300));
+    await screenshot("review_api_panel_expanded");
+
+    // Assert the panel is now visible with "Backend expectations" heading
+    const page = await driver.findElement(By.css("main"));
+    const expandedText = await page.getText();
+    expect(expandedText).to.include("Backend expectations");
+
+    // Click "Hide" button to collapse
+    const hideBtn = await driver.findElement(
+      By.xpath("//button[contains(text(),'Hide')]"),
+    );
+    await screenshot("review_api_panel_before_collapse");
+    await hideBtn.click();
+    await new Promise((r) => setTimeout(r, 300));
+    await screenshot("review_api_panel_collapsed");
+
+    // Assert the panel is gone
+    const collapsedText = await (
+      await driver.findElement(By.css("main"))
+    ).getText();
+    expect(collapsedText).to.not.include("Backend expectations");
   });
 });
