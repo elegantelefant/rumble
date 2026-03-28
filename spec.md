@@ -71,7 +71,7 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 5.7 Chat input field exists when session is active
 - [x] 5.8 API surface toggle button is present
 - [x] 5.9 Clicking toggle expands/collapses API surface panel
-- [ ] 5.10 Sending empty question does nothing (no new message appears)
+- [x] 5.10 Sending empty question does nothing (no new message appears)
 - [ ] 5.11 Session card shows filename, size, and status badge
 
 ---

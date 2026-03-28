@@ -111,4 +111,45 @@ describe("Document Review", function () {
     ).getText();
     expect(collapsedText).to.not.include("Backend expectations");
   });
+
+  it("sending empty question does nothing", async function () {
+    const driver = getDriver();
+
+    // Ensure session is active — click the pre-seeded session if chat input isn't visible
+    const inputs = await driver.findElements(By.css("#document-question"));
+    if (inputs.length === 0) {
+      const sessionEl = await driver.findElement(
+        By.xpath("//*[contains(text(),'Contract_2024.pdf')]"),
+      );
+      await sessionEl.click();
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    await screenshot("review_empty_send_before");
+
+    // Count existing messages
+    const messagesBefore = await driver.findElements(
+      By.css(".message-user, .message-assistant"),
+    );
+    const countBefore = messagesBefore.length;
+
+    // Ensure the input is empty
+    const input = await driver.findElement(By.css("#document-question"));
+    await input.clear();
+    await screenshot("review_empty_send_input_cleared");
+
+    // Submit the empty form
+    const sendBtn = await driver.findElement(
+      By.css('button[type="submit"].btn-primary'),
+    );
+    await sendBtn.click();
+    await new Promise((r) => setTimeout(r, 500));
+    await screenshot("review_empty_send_after");
+
+    // Count messages after — should be unchanged
+    const messagesAfter = await driver.findElements(
+      By.css(".message-user, .message-assistant"),
+    );
+    expect(messagesAfter.length).to.equal(countBefore);
+  });
 });
