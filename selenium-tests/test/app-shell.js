@@ -3,23 +3,25 @@
 
 import { By, Key, until } from "selenium-webdriver";
 import { expect } from "chai";
-import { getDriver, navigateTo, waitFor, waitForText } from "./helpers.js";
+import { getDriver, navigateTo, waitFor, waitForText, screenshot } from "./helpers.js";
 
 describe("AppShell — Sidebar", function () {
   it("sidebar is visible with branding", async function () {
     const driver = getDriver();
+    await screenshot("sidebar_initial");
     const sidebar = await driver.findElement(By.css("aside"));
     const text = await sidebar.getText();
     expect(text).to.include("Elefant");
     expect(text).to.include("Rumble");
-    // "Workspace" may be uppercased by CSS
     expect(text.toLowerCase()).to.include("workspace");
+    await screenshot("sidebar_branding_verified");
   });
 
   it("shows all navigation items", async function () {
     const driver = getDriver();
     const sidebar = await driver.findElement(By.css("aside"));
     const text = await sidebar.getText();
+    await screenshot("sidebar_nav_items");
     expect(text).to.include("Document Review");
     expect(text).to.include("Research");
     expect(text).to.include("Document Draft");
@@ -32,11 +34,13 @@ describe("AppShell — Sidebar", function () {
     const driver = getDriver();
     const sidebar = await driver.findElement(By.css("aside"));
     const text = await sidebar.getText();
+    await screenshot("sidebar_coming_soon");
     expect(text).to.include("Coming Soon");
   });
 
   it("shows user info card", async function () {
     const driver = getDriver();
+    await screenshot("sidebar_user_card");
     const sidebar = await driver.findElement(By.css("aside"));
     const text = await sidebar.getText();
     expect(text).to.include("CoastalTower238");
@@ -48,7 +52,7 @@ describe("AppShell — Sidebar", function () {
     const driver = getDriver();
     const sidebar = await driver.findElement(By.css("aside"));
     const text = await sidebar.getText();
-    // CSS uppercase transforms the visual text
+    await screenshot("sidebar_confidentiality_tagline");
     expect(text.toLowerCase()).to.include("confidential ai tools");
   });
 
@@ -65,15 +69,16 @@ describe("AppShell — Sidebar", function () {
     ];
 
     for (const { label, heading } of routes) {
+      await screenshot(`sidebar_before_click_${label.replace(/\s/g, "_")}`);
       const btn = await driver.findElement(
         By.xpath(`//aside//button[.//div[text()='${label}']]`),
       );
       await btn.click();
-      // Wait for the specific heading to appear
       await driver.wait(
         until.elementLocated(By.xpath(`//h1[text()='${heading}']`)),
         5000,
       );
+      await screenshot(`sidebar_after_click_${label.replace(/\s/g, "_")}`);
       const h1 = await driver.findElement(By.css("h1"));
       const text = await h1.getText();
       expect(text).to.equal(heading);
@@ -83,23 +88,17 @@ describe("AppShell — Sidebar", function () {
   it("sidebar reorder — move first item down, boundary arrows disabled", async function () {
     this.timeout(15_000);
     const driver = getDriver();
-
-    // Navigate to a known page first
     await navigateTo("/review");
+    await screenshot("sidebar_reorder_initial");
 
-    // Helper: get ordered tool labels from the reorderable nav
     async function getToolLabels() {
       const nav = await driver.findElement(
         By.css('nav[aria-label="Primary tools"]'),
       );
-      const toolDivs = await nav.findElements(
-        By.css(":scope > div"),
-      );
+      const toolDivs = await nav.findElements(By.css(":scope > div"));
       const labels = [];
       for (const div of toolDivs) {
-        const labelEl = await div.findElement(
-          By.css(".text-sm.font-semibold"),
-        );
+        const labelEl = await div.findElement(By.css(".text-sm.font-semibold"));
         labels.push(await labelEl.getText());
       }
       return labels;
@@ -111,28 +110,25 @@ describe("AppShell — Sidebar", function () {
     const secondLabel = initialOrder[1];
     const lastLabel = initialOrder[initialOrder.length - 1];
 
-    // Verify first item's Up arrow is disabled
     const upBtn = await driver.findElement(
       By.css(`button[aria-label="Move ${firstLabel} up"]`),
     );
     expect(await upBtn.getAttribute("disabled")).to.not.be.null;
+    await screenshot("sidebar_reorder_first_up_disabled");
 
-    // Verify last item's Down arrow is disabled
     const downBtnLast = await driver.findElement(
       By.css(`button[aria-label="Move ${lastLabel} down"]`),
     );
     expect(await downBtnLast.getAttribute("disabled")).to.not.be.null;
+    await screenshot("sidebar_reorder_last_down_disabled");
 
-    // Click move-down on first item (use JS click to bypass opacity:0)
     const downBtnFirst = await driver.findElement(
       By.css(`button[aria-label="Move ${firstLabel} down"]`),
     );
     await driver.executeScript("arguments[0].click()", downBtnFirst);
-
-    // Wait for Vue reactivity
     await new Promise((r) => setTimeout(r, 300));
+    await screenshot("sidebar_reorder_after_move");
 
-    // Verify order changed: first and second should be swapped
     const newOrder = await getToolLabels();
     expect(newOrder[0]).to.equal(secondLabel);
     expect(newOrder[1]).to.equal(firstLabel);
@@ -140,7 +136,6 @@ describe("AppShell — Sidebar", function () {
 
   it("evidence review click does not navigate", async function () {
     const driver = getDriver();
-    // First go to review
     const reviewBtn = await driver.findElement(
       By.xpath("//aside//button[.//div[text()='Document Review']]"),
     );
@@ -149,14 +144,14 @@ describe("AppShell — Sidebar", function () {
       until.elementLocated(By.xpath("//h1[text()='Document Review']")),
       5000,
     );
+    await screenshot("sidebar_before_evidence_click");
 
-    // Now click the disabled evidence review
     const evidenceBtn = await driver.findElement(
       By.xpath("//aside//button[.//div[text()='Evidence Review']]"),
     );
     await evidenceBtn.click();
+    await screenshot("sidebar_after_evidence_click");
 
-    // Should still be on document review
     const h1 = await driver.findElement(By.css("h1"));
     const text = await h1.getText();
     expect(text).to.equal("Document Review");
@@ -168,7 +163,7 @@ describe("AppShell — TopBar", function () {
     const driver = getDriver();
     const header = await driver.findElement(By.css("header"));
     const text = await header.getText();
-    // CSS may uppercase the text
+    await screenshot("topbar_confidentiality");
     expect(text.toLowerCase()).to.include("local & confidential");
   });
 
@@ -177,14 +172,28 @@ describe("AppShell — TopBar", function () {
     const btn = await driver.findElement(
       By.css('header button[aria-label="Open shortcuts"]'),
     );
+    await screenshot("topbar_shortcuts_button");
     expect(btn).to.exist;
+  });
+
+  it("user avatar chip shows initials", async function () {
+    const driver = getDriver();
+    await screenshot("topbar_avatar_before");
+    const chip = await driver.findElement(
+      By.css('header [aria-label="Current user"]'),
+    );
+    const avatar = await chip.findElement(By.css(".rounded-full.h-8.w-8"));
+    const initials = await avatar.getText();
+    await screenshot("topbar_avatar_initials");
+    expect(initials).to.match(/^[A-Z]{1,3}$/);
+    expect(initials).to.equal("CT");
   });
 });
 
 describe("AppShell — Command Palette", function () {
   it("opens via Cmd+K and lists commands", async function () {
     const driver = getDriver();
-    // Trigger Cmd+K (Meta on Mac)
+    await screenshot("palette_before_open");
     await driver
       .actions()
       .keyDown(Key.META)
@@ -192,27 +201,26 @@ describe("AppShell — Command Palette", function () {
       .keyUp(Key.META)
       .perform();
 
-    // Wait for palette dialog
     const dialog = await waitFor(
       '[role="dialog"][aria-label="Command palette"]',
     );
     expect(dialog).to.exist;
+    await screenshot("palette_opened");
 
-    // Should have listbox with options
     const listbox = await driver.findElement(By.css('[role="listbox"]'));
     const options = await listbox.findElements(By.css('[role="option"]'));
     expect(options.length).to.be.greaterThan(0);
+    await screenshot("palette_commands_listed");
   });
 
   it("search input filters commands", async function () {
     const driver = getDriver();
-    // Palette should still be open from previous test
     const input = await driver.findElement(By.css("#palette-search"));
     await input.clear();
+    await screenshot("palette_filter_before_type");
     await input.sendKeys("doc");
-
-    // Wait for filter to apply
     await new Promise((r) => setTimeout(r, 300));
+    await screenshot("palette_filter_after_type_doc");
 
     const options = await driver.findElements(By.css('[role="option"]'));
     expect(options.length).to.be.greaterThan(0);
@@ -224,14 +232,12 @@ describe("AppShell — Command Palette", function () {
 
   it("closes on Escape", async function () {
     const driver = getDriver();
-    // Send Escape to the search input which has focus
     const input = await driver.findElement(By.css("#palette-search"));
+    await screenshot("palette_before_escape");
     await input.sendKeys(Key.ESCAPE);
-
-    // Wait for transition to complete
     await new Promise((r) => setTimeout(r, 300));
+    await screenshot("palette_after_escape");
 
-    // Dialog should be gone
     const dialogs = await driver.findElements(
       By.css('[role="dialog"][aria-label="Command palette"]'),
     );
@@ -240,7 +246,6 @@ describe("AppShell — Command Palette", function () {
 
   it("no matches message", async function () {
     const driver = getDriver();
-    // Reopen palette
     await driver
       .actions()
       .keyDown(Key.META)
@@ -253,6 +258,7 @@ describe("AppShell — Command Palette", function () {
     await input.clear();
     await input.sendKeys("zzz");
     await new Promise((r) => setTimeout(r, 300));
+    await screenshot("palette_no_matches");
 
     const page = await driver.findElement(
       By.css('[role="dialog"][aria-label="Command palette"]'),
@@ -260,14 +266,12 @@ describe("AppShell — Command Palette", function () {
     const text = await page.getText();
     expect(text.toLowerCase()).to.include("no matches");
 
-    // Clean up: close palette
     await input.sendKeys(Key.ESCAPE);
     await new Promise((r) => setTimeout(r, 300));
   });
 
   it("arrow keys move highlight", async function () {
     const driver = getDriver();
-    // Open palette
     await driver
       .actions()
       .keyDown(Key.META)
@@ -275,29 +279,27 @@ describe("AppShell — Command Palette", function () {
       .keyUp(Key.META)
       .perform();
     await waitFor('[role="dialog"][aria-label="Command palette"]');
+    await screenshot("palette_arrow_initial");
 
-    // First option should be highlighted
     let options = await driver.findElements(By.css('[role="option"]'));
     let firstSelected = await options[0].getAttribute("aria-selected");
     expect(firstSelected).to.equal("true");
 
-    // Arrow down should move highlight
     const input = await driver.findElement(By.css("#palette-search"));
     await input.sendKeys(Key.ARROW_DOWN);
     await new Promise((r) => setTimeout(r, 100));
+    await screenshot("palette_arrow_down");
 
     options = await driver.findElements(By.css('[role="option"]'));
     let secondSelected = await options[1].getAttribute("aria-selected");
     expect(secondSelected).to.equal("true");
 
-    // Clean up
     await input.sendKeys(Key.ESCAPE);
     await new Promise((r) => setTimeout(r, 300));
   });
 
   it("enter navigates and closes", async function () {
     const driver = getDriver();
-    // Open palette
     await driver
       .actions()
       .keyDown(Key.META)
@@ -305,13 +307,13 @@ describe("AppShell — Command Palette", function () {
       .keyUp(Key.META)
       .perform();
     await waitFor('[role="dialog"][aria-label="Command palette"]');
+    await screenshot("palette_before_enter");
 
-    // Press Enter on first highlighted item
     const input = await driver.findElement(By.css("#palette-search"));
     await input.sendKeys(Key.ENTER);
     await new Promise((r) => setTimeout(r, 500));
+    await screenshot("palette_after_enter");
 
-    // Palette should close
     const dialogs = await driver.findElements(
       By.css('[role="dialog"][aria-label="Command palette"]'),
     );
@@ -320,7 +322,6 @@ describe("AppShell — Command Palette", function () {
 
   it("click option navigates", async function () {
     const driver = getDriver();
-    // Open palette
     await driver
       .actions()
       .keyDown(Key.META)
@@ -328,13 +329,13 @@ describe("AppShell — Command Palette", function () {
       .keyUp(Key.META)
       .perform();
     await waitFor('[role="dialog"][aria-label="Command palette"]');
+    await screenshot("palette_before_click_option");
 
-    // Click first option
     const option = await driver.findElement(By.css('[role="option"]'));
     await option.click();
     await new Promise((r) => setTimeout(r, 500));
+    await screenshot("palette_after_click_option");
 
-    // Palette should close
     const dialogs = await driver.findElements(
       By.css('[role="dialog"][aria-label="Command palette"]'),
     );

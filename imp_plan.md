@@ -37,6 +37,7 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 
 - [x] T3.1 `it("shows confidentiality label")` — find `<header>`, assert text includes "local & confidential" (case-insensitive)
 - [x] T3.2 `it("shows shortcuts button")` — find `header button[aria-label="Open shortcuts"]`
+- [x] T3.3 `it("user avatar chip shows initials")` — find `header [aria-label="Current user"]`, find `.rounded-full.h-8.w-8` inside, assert text matches /^[A-Z]{1,3}$/ and equals "CT"
 
 ### Command Palette (Spec §4)
 

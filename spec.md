@@ -41,7 +41,7 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 
 - [x] 3.1 TopBar shows "Local & Confidential" label
 - [x] 3.2 Shortcuts button (`aria-label="Open shortcuts"`) is present
-- [ ] 3.3 User avatar chip shows initials
+- [x] 3.3 User avatar chip shows initials
 
 ---
 
