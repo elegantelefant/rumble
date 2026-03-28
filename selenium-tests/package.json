@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "mocha --timeout 60000"
+    "test": "mocha"
   },
   "dependencies": {
     "chai": "^5.2.1",
