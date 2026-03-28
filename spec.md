@@ -4,8 +4,10 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 
 **Legend:**
 - [ ] Not yet tested
-- [x] Selenium test passes
+- [x] Selenium test passes (with screenshots in `e2e-screenshots/`)
 - [!] Selenium test fails — add bug to Bugs Encountered below
+
+**Every test must screenshot before/after every interaction and assertion.** Screenshots are saved to `e2e-screenshots/` with auto-incrementing names. A test without screenshots is incomplete.
 
 ---
 
@@ -134,17 +136,17 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 
 ## 10. Cross-Cutting — Toast System
 
-- [ ] 10.1 Triggering an action that produces a success toast shows green notification
-- [ ] 10.2 Toast auto-dismisses after ~3 seconds
-- [ ] 10.3 Multiple simultaneous toasts stack independently
+- [x] 10.1 Triggering an action that produces a success toast shows green notification
+- [x] 10.2 Toast auto-dismisses after ~3 seconds
+- [x] 10.3 Multiple simultaneous toasts stack independently
 
 ---
 
 ## 11. Navigation State Preservation (KeepAlive)
 
-- [ ] 11.1 Enter text in Document Review chat, navigate to Settings, navigate back — text is preserved
-- [ ] 11.2 Enter text in Research prompt, navigate away and back — text is preserved
-- [ ] 11.3 Enter text in Translation source area, navigate away and back — text is preserved
+- [x] 11.1 Enter text in Document Review chat, navigate to Settings, navigate back — text is preserved
+- [x] 11.2 Enter text in Research prompt, navigate away and back — text is preserved
+- [x] 11.3 Enter text in Translation source area, navigate away and back — text is preserved
 
 ---
 

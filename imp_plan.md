@@ -122,11 +122,11 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 
 ## Test Files: Future (Spec §10–11)
 
-- [ ] T10.1 Toast verification — trigger a settings save, wait for green toast element, assert auto-dismiss after 3s
-- [ ] T10.2 Multiple toasts — trigger two actions in quick succession, assert 2 toast elements
-- [ ] T11.1 KeepAlive: Document Review — type in chat input, navigate to settings, navigate back, assert text preserved
-- [ ] T11.2 KeepAlive: Research — type in prompt textarea, navigate away and back, assert preserved
-- [ ] T11.3 KeepAlive: Translation ��� type in source area, navigate away and back, assert preserved
+- [x] T10.1 Toast verification — trigger a settings save, wait for green toast element, assert auto-dismiss after 3s
+- [x] T10.2 Multiple toasts — trigger two actions in quick succession, assert 2 toast elements
+- [x] T11.1 KeepAlive: Document Review — type in chat input, navigate to settings, navigate back, assert text preserved
+- [x] T11.2 KeepAlive: Research — type in prompt textarea, navigate away and back, assert preserved
+- [x] T11.3 KeepAlive: Translation ��� type in source area, navigate away and back, assert preserved
 
 ---
 
