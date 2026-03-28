@@ -31,7 +31,7 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T2.5 `it("shows confidentiality tagline")` — assert aside text includes "confidential ai tools" (case-insensitive, CSS uppercases)
 - [x] T2.6 `it("navigates to each active route")` — loop through 5 routes, click sidebar button via XPath `//aside//button[.//div[text()='${label}']]`, wait for h1 to match expected heading
 - [x] T2.7 `it("evidence review click does not navigate")` — navigate to /review, click evidence, assert h1 still "Document Review"
-- [ ] T2.8 `it("sidebar reorder")` — click move-down arrow on first item, verify order changed. Check first item Up arrow is `disabled`. Check last item Down arrow is `disabled`.
+- [x] T2.8 `it("sidebar reorder")` — click move-down arrow on first item, verify order changed. Check first item Up arrow is `disabled`. Check last item Down arrow is `disabled`.
 
 ### TopBar (Spec §3)
 

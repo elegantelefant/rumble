@@ -29,9 +29,9 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 2.9 Confidentiality tagline present: "Confidential AI Tools"
 - [x] 2.10 Clicking each active nav item navigates to correct page (Document Review, Research, Document Draft, Translation, Settings)
 - [x] 2.11 Clicking Evidence Review does NOT navigate away from current page
-- [ ] 2.12 Sidebar reorder: move first tool down, order changes
-- [ ] 2.13 Sidebar reorder: first item Up arrow is disabled
-- [ ] 2.14 Sidebar reorder: last item Down arrow is disabled
+- [x] 2.12 Sidebar reorder: move first tool down, order changes
+- [x] 2.13 Sidebar reorder: first item Up arrow is disabled
+- [x] 2.14 Sidebar reorder: last item Down arrow is disabled
 
 ---
 

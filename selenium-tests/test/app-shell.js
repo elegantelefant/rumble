@@ -80,6 +80,64 @@ describe("AppShell — Sidebar", function () {
     }
   });
 
+  it("sidebar reorder — move first item down, boundary arrows disabled", async function () {
+    this.timeout(15_000);
+    const driver = getDriver();
+
+    // Navigate to a known page first
+    await navigateTo("/review");
+
+    // Helper: get ordered tool labels from the reorderable nav
+    async function getToolLabels() {
+      const nav = await driver.findElement(
+        By.css('nav[aria-label="Primary tools"]'),
+      );
+      const toolDivs = await nav.findElements(
+        By.css(":scope > div"),
+      );
+      const labels = [];
+      for (const div of toolDivs) {
+        const labelEl = await div.findElement(
+          By.css(".text-sm.font-semibold"),
+        );
+        labels.push(await labelEl.getText());
+      }
+      return labels;
+    }
+
+    const initialOrder = await getToolLabels();
+    expect(initialOrder.length).to.be.greaterThan(1);
+    const firstLabel = initialOrder[0];
+    const secondLabel = initialOrder[1];
+    const lastLabel = initialOrder[initialOrder.length - 1];
+
+    // Verify first item's Up arrow is disabled
+    const upBtn = await driver.findElement(
+      By.css(`button[aria-label="Move ${firstLabel} up"]`),
+    );
+    expect(await upBtn.getAttribute("disabled")).to.not.be.null;
+
+    // Verify last item's Down arrow is disabled
+    const downBtnLast = await driver.findElement(
+      By.css(`button[aria-label="Move ${lastLabel} down"]`),
+    );
+    expect(await downBtnLast.getAttribute("disabled")).to.not.be.null;
+
+    // Click move-down on first item (use JS click to bypass opacity:0)
+    const downBtnFirst = await driver.findElement(
+      By.css(`button[aria-label="Move ${firstLabel} down"]`),
+    );
+    await driver.executeScript("arguments[0].click()", downBtnFirst);
+
+    // Wait for Vue reactivity
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Verify order changed: first and second should be swapped
+    const newOrder = await getToolLabels();
+    expect(newOrder[0]).to.equal(secondLabel);
+    expect(newOrder[1]).to.equal(firstLabel);
+  });
+
   it("evidence review click does not navigate", async function () {
     const driver = getDriver();
     // First go to review
