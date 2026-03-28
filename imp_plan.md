@@ -79,6 +79,8 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T6.6 `it("generate button")` — assert /generate|draft/i in main text
 - [x] T6.7 `it("export buttons")` — assert /word|pdf|export/i in main text
 - [x] T6.8 `it("privacy notice")` — assert /privacy|local|confidential|device/i
+- [x] T6.9 `it("clicking NDA template switches context")` — click "Non-Disclosure", assert heading includes "Non-Disclosure", assert form fields match /disclosing|receiving|duration/i
+- [x] T6.10 `it("generate draft with empty fields shows validation errors")` — clear all fields, click Generate Draft, assert error text matches /required/i
 
 ---
 
@@ -92,6 +94,8 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T7.6 `it("prompt textarea")` — count textareas > 0
 - [x] T7.7 `it("API key requirement")` — assert /api key/i in main text
 - [x] T7.8 `it("click thread activates")` — click first thread button, assert content updates
+- [x] T7.9 `it("thread status badges visible")` — assert main text includes "Complete", "In Progress", or "Draft" (status badge text)
+- [x] T7.10 `it("submitting empty prompt does nothing")` — clear textarea, click send, assert no new messages appear
 
 ---
 
@@ -105,6 +109,7 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T8.6 `it("translate button")` — assert /translate/i in main text
 - [x] T8.7 `it("draft quality warning")` — assert /draft|quality|disclaimer/i
 - [x] T8.8 `it("jurisdiction disclaimer")` — assert /jurisdiction|legal|accuracy/i
+- [x] T8.9 `it("model selector present")` — assert main text includes "Model" and a `<select>` with model options
 
 ---
 
@@ -121,6 +126,7 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T9.9 `it("sync — team code")` — check input value contains "SilverEcho951"
 - [x] T9.10 `it("sync — test connection button")` — assert /test connection/i
 - [x] T9.11 `it("save button")` — assert /save/i
+- [x] T9.12 `it("appearance tab options")` — click Appearance tab, assert /theme|sidebar|position/i, assert `<select>` elements for theme and sidebar position
 
 ---
 

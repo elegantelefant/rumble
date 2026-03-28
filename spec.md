@@ -85,8 +85,8 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 6.5 "Generate Draft" button exists
 - [x] 6.6 Export buttons present (Word/PDF)
 - [x] 6.7 Data privacy notice visible
-- [ ] 6.8 Clicking NDA template switches context (heading changes)
-- [ ] 6.9 Clicking "Generate Draft" with empty fields shows validation errors
+- [x] 6.8 Clicking NDA template switches context (heading changes)
+- [x] 6.9 Clicking "Generate Draft" with empty fields shows validation errors
 
 ---
 
@@ -99,8 +99,8 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 7.5 Prompt textarea exists
 - [x] 7.6 Hosted models show "API key" requirement text
 - [x] 7.7 Clicking a thread activates it (content area updates)
-- [ ] 7.8 Thread status badges are visible (colors for in-progress, complete)
-- [ ] 7.9 Submitting empty prompt does nothing
+- [x] 7.8 Thread status badges are visible (colors for in-progress, complete)
+- [x] 7.9 Submitting empty prompt does nothing
 
 ---
 
@@ -114,7 +114,7 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 8.6 Translate button exists
 - [x] 8.7 Draft quality warning visible
 - [x] 8.8 Jurisdiction disclaimer visible
-- [ ] 8.9 Model selector present
+- [x] 8.9 Model selector present
 
 ---
 
@@ -129,7 +129,7 @@ What to test. Each checkbox is a test case. Check it off when the selenium test 
 - [x] 9.7 Sync tab: enable checkbox present
 - [x] 9.8 Sync tab: team code "SilverEcho951" visible
 - [x] 9.9 Sync tab: "Test Connection" button present
-- [ ] 9.10 Appearance tab: theme/sidebar position options exist
+- [x] 9.10 Appearance tab: theme/sidebar position options exist
 - [x] 9.11 Save button exists
 
 ---
