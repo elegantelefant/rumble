@@ -152,4 +152,31 @@ describe("Document Review", function () {
     );
     expect(messagesAfter.length).to.equal(countBefore);
   });
+
+  it("session card shows filename, size, and status badge", async function () {
+    const driver = getDriver();
+    // Navigate fresh to /review so the session list is visible
+    await navigateTo("/review");
+    await screenshot("review_session_card_before");
+
+    // Find the session card button for the pre-seeded session
+    const sessionCard = await driver.findElement(
+      By.xpath(
+        "//button[.//span[contains(text(),'Contract_2024.pdf')]]",
+      ),
+    );
+    const cardText = await sessionCard.getText();
+    await screenshot("review_session_card_text");
+
+    // Filename
+    expect(cardText).to.include("Contract_2024.pdf");
+
+    // Size in MB
+    expect(cardText).to.match(/2\.3\s*MB/);
+
+    // Status badge — pre-seeded session has reviewStatus "ready" → "Summary ready"
+    expect(cardText).to.include("Summary ready");
+
+    await screenshot("review_session_card_verified");
+  });
 });

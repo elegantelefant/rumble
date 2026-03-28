@@ -65,7 +65,7 @@ How to implement each test from `spec.md`. Each task is a checkbox. Check it off
 - [x] T5.9 `it("API surface toggle")` — main text matches /api|surface/i
 - [x] T5.10 `it("clicking toggle expands/collapses API surface panel")` — click "API surface" button, assert "Backend expectations" appears; click again (or "Hide"), assert section gone
 - [x] T5.11 `it("sending empty question does nothing")` — count messages, submit empty input, assert count unchanged
-- [ ] T5.12 `it("session card shows filename, size, and status badge")` — assert session card text includes filename, MB, and status text
+- [x] T5.12 `it("session card shows filename, size, and status badge")` — assert session card text includes filename, MB, and status text
 
 ---
 
