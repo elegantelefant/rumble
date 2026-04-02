@@ -31,10 +31,10 @@ Every AI endpoint must handle real LLM output without 500 errors.
 
 ### 2A. Chat (multi-turn)
 
-- [ ] 2.1 `POST /chats/{id}/message` sends full conversation history to the LLM (not just the last message)
-- [ ] 2.2 LLM response reflects prior context (e.g. "as I mentioned earlier...")
-- [ ] 2.3 `POST /chats/{id}/stream` also sends full history and streams correctly
-- [ ] 2.4 Chat with 5+ messages still works (history doesn't exceed token limits gracefully)
+- [x] 2.1 `POST /chats/{id}/message` sends full conversation history to the LLM (not just the last message)
+- [x] 2.2 LLM response reflects prior context (e.g. "as I mentioned earlier...")
+- [x] 2.3 `POST /chats/{id}/stream` also sends full history and streams correctly
+- [x] 2.4 Chat with 5+ messages still works (history doesn't exceed token limits gracefully)
 
 ### 2B. JSON parsing
 
@@ -69,13 +69,13 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 
 ### 3A. Document Review (`/review`)
 
-- [ ] 3.1 Uploading a file calls sidecar `/review` endpoint (not `mockRegisterReview`)
-- [ ] 3.2 Initial review result appears in the chat (summary + messages)
-- [ ] 3.3 Follow-up questions call sidecar `/chats/{id}/message` and display response
+- [x] 3.1 Uploading a file calls sidecar `/review` endpoint (not `mockRegisterReview`)
+- [x] 3.2 Initial review result appears in the chat (summary + messages)
+- [x] 3.3 Follow-up questions call sidecar `/chats/{id}/message` and display response
 - [ ] 3.4 Streaming responses show text appearing incrementally (SSE via `/chats/{id}/stream`)
-- [ ] 3.5 Send button is disabled while a request is in flight
-- [ ] 3.6 Network/LLM error shows toast — does not leave UI in broken state
-- [ ] 3.7 Failed initial review resets session to allow retry
+- [x] 3.5 Send button is disabled while a request is in flight
+- [x] 3.6 Network/LLM error shows toast — does not leave UI in broken state
+- [x] 3.7 Failed initial review resets session to allow retry
 
 ### 3B. Research (`/research`)
 

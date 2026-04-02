@@ -130,12 +130,12 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3B. Wire Document Review (spec 3.1–3.7)
 
-- [ ] **P3.2** In `src/views/DocumentReviewView.vue`:
+- [x] **P3.2** In `src/views/DocumentReviewView.vue`:
   - Replace `mockRegisterReview()` call (~line 166) with `createReviewJob()` from sidecar API.
   - Replace `mockInitialReview()` (~line 182) with `pollJobResult("review", jobId)` — poll until complete.
   - Replace `mockDocumentChat()` (~line 217) with `sendMessage(chatId, question)`.
-- [ ] **P3.3** Add loading state: set `isSending = true` before `sendMessage`, reset in finally block. Bind `:disabled="isSending"` on the Send button.
-- [ ] **P3.4** Add error handling: wrap each call in try/catch. On error: show toast, reset UI state (remove dangling user message if response failed, reset review status if initial review failed).
+- [x] **P3.3** Add loading state: set `isSending = true` before `sendMessage`, reset in finally block. Bind `:disabled="isSending"` on the Send button.
+- [x] **P3.4** Add error handling: wrap each call in try/catch. On error: show toast, reset UI state (remove dangling user message if response failed, reset review status if initial review failed).
 - [ ] **P3.5** Test: upload a file → verify review appears → ask a follow-up → verify response → verify errors show toast.
 
 ### 3C. Wire Research (spec 3.8–3.12)

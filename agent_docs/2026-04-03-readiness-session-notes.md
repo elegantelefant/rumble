@@ -35,3 +35,15 @@
 **Polling helpers included.** `waitForJob()` and `waitForResearch()` poll at 1.5s intervals with a 3-minute timeout. These abstract the create-then-poll pattern that draft/review/research views all need.
 
 **No lint config in this project.** Unlike the Nuxt monorepo, Rumble doesn't have ESLint or perfectionist configured. Verified with `vue-tsc --noEmit` (type-checks clean) and `pnpm vitest run` (129/129 pass).
+
+### Phase 3B — Wire Document Review — 2026-04-02
+
+**File reading uses FileReader.readAsText().** This works for `.txt` files. For `.pdf` and `.docx`, the browser reads raw bytes as text — the result will be garbled/unusable. A proper solution needs a file parsing library (e.g. `pdfjs-dist` for PDF, `mammoth` for DOCX). For now, only `.txt` files will produce meaningful reviews.
+
+**Chat context seeding.** After the review job completes, we create a sidecar chat and seed it with the full document text + review summary as the first message. This gives the LLM full context for follow-up questions. Trade-off: the seeding `sendMessage` call generates an LLM response we discard. An alternative would be to directly insert messages into the DB, but that would require a new sidecar endpoint.
+
+**Streaming (spec 3.4) not wired.** The view uses sync `sendMessage` rather than SSE `streamMessage`. SSE through Tauri IPC would require a different approach (Tauri event listener rather than invoke). Left as a separate task.
+
+**Removed demo seed session.** The initial Contract_2024.pdf demo session was hardcoded mock data. Replaced with an empty sessions dict so the view starts clean.
+
+**Spec items 2.1–2.4 checked off retroactively.** These were verified in the previous session (P2.4–P2.7 in imp plan) but never marked in the spec.
