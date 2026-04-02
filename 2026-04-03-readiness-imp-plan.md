@@ -105,7 +105,7 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 - [x] **P2.10** Test draft job: verified with correct payload (`prompt` + `parties` as list[dict]).
 - [x] **P2.11** Test review job: verified with `text` field. Returns summary + issues.
 - [x] **P2.12** Test research job: verified. Required `_normalize_sources()` fix for SearchResult schema.
-- [ ] **P2.13** Verify failed jobs: kill Ollama mid-request. Check that job status becomes "failed" with error message, not stuck at "running" forever.
+- [x] **P2.13** Verify failed jobs: kill Ollama mid-request. Check that job status becomes "failed" with error message, not stuck at "running" forever. **Fixed:** `_poll_job` and `get_research_result` now include error message in result field for failed jobs. Added 4 tests in `test_jobs.py` + updated 2 existing tests in `test_error_paths.py`.
 
 ---
 

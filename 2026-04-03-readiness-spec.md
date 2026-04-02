@@ -59,7 +59,7 @@ Every AI endpoint must handle real LLM output without 500 errors.
 - [x] 2.17 `POST /draft` creates job, `/draft/{id}/result` returns completed result
 - [x] 2.18 `POST /review` creates job, `/review/{id}/result` returns completed result
 - [x] 2.19 `POST /research` creates job, `/research/{id}/result` returns completed result
-- [ ] 2.20 Failed jobs store error message and return status "failed" (not hang forever)
+- [x] 2.20 Failed jobs store error message and return status "failed" (not hang forever)
 
 ---
 

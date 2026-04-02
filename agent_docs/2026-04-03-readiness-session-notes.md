@@ -63,3 +63,11 @@
 **Added draft result display.** The original view had no output area — only the form and buttons. Added a `<pre>` block for the draft text and a yellow warning box for any `warnings` from the result payload. Used `whitespace-pre-wrap` for readable multi-paragraph output.
 
 **Validation already worked.** The existing `validateForm()` checks all required fields and shows inline errors. Spec item 3.16 was already satisfied before this change.
+
+### P2.13 — Failed jobs error surfacing — 2026-04-02
+
+**Error was stored but never returned.** `services/jobs.py` correctly catches exceptions and stores the error via `db.set_job_result(error=...)`, setting `status="failed"`. But `_poll_job` in `routes/jobs.py` only read `job["result"]` (which is `None` for failures) and never looked at `job["error"]`. The client got `{"status":"failed","result":null}` — useless for UX.
+
+**Can't add `error` field to response models.** `JobResultResponse` and `ResearchResultResponse` both have `extra='forbid'` (auto-generated, immutable). Fix: stuff the error into the `result` field — `{"error": "..."}` for `JobResultResponse` (dict type) and the raw error string for `ResearchResultResponse` (str type). The client checks `status === "failed"` and reads `result.error` or `result` accordingly.
+
+**Existing tests asserted the broken behavior.** `test_error_paths.py` had two tests asserting `data["result"] is None` for failed jobs — that was the old (incorrect) behavior. Updated to assert the error message is present.
