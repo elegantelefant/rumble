@@ -26,8 +26,10 @@ router = APIRouter(tags=["ai"])
 
 
 def _parse_llm_json(raw: str) -> dict:
-    """Parse LLM output as JSON, stripping markdown fences if present."""
+    """Parse LLM output as JSON, stripping thinking tags and markdown fences."""
     text = raw.strip()
+    # Strip <think>...</think> blocks (reasoning models like DeepSeek-R1)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     # Strip markdown fence if present (handles preamble text before fence)
     if "```" in text:
         parts = text.split("```")

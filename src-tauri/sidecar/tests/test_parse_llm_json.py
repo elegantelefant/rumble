@@ -62,3 +62,24 @@ def test_nested_json():
 def test_whitespace_padding():
     raw = '  \n  {"key": "value"}  \n  '
     assert _parse_llm_json(raw) == {"key": "value"}
+
+
+def test_think_tags_before_json():
+    raw = '<think>I should generate a short title</think>\n{"title": "Force Majeure"}'
+    assert _parse_llm_json(raw) == {"title": "Force Majeure"}
+
+
+def test_think_tags_before_fenced_json():
+    raw = '<think>Let me think about this</think>\n```json\n{"key": "value"}\n```'
+    assert _parse_llm_json(raw) == {"key": "value"}
+
+
+def test_think_tags_multiline():
+    raw = '<think>\nStep 1: parse the request\nStep 2: generate title\n</think>\n{"title": "Test"}'
+    assert _parse_llm_json(raw) == {"title": "Test"}
+
+
+def test_think_tags_only_returns_502():
+    with pytest.raises(HTTPException) as exc_info:
+        _parse_llm_json("<think>thinking...</think>")
+    assert exc_info.value.status_code == 502
