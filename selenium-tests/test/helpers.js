@@ -25,6 +25,10 @@ let driver;
  * Call once in the root suite's before() hook.
  */
 export function buildApp() {
+  if (process.env.SKIP_BUILD) {
+    console.log("SKIP_BUILD set — assuming frontend already built.");
+    return;
+  }
   const result = spawnSync("pnpm", ["build"], {
     cwd: projectRoot,
     stdio: "inherit",
@@ -41,7 +45,7 @@ export function buildApp() {
  */
 export async function startDriver() {
   // Start vite preview server
-  previewServer = spawn("pnpm", ["preview", "--port", String(PREVIEW_PORT)], {
+  previewServer = spawn("pnpm", ["preview", "--port", String(PREVIEW_PORT), "--host"], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
     shell: true,

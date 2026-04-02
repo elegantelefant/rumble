@@ -32,6 +32,10 @@ jobs:
 
       - run: pnpm install
 
+      # Build frontend before tests — CI is faster with a separate step
+      # and avoids shell/PATH issues inside xvfb-run.
+      - run: pnpm build
+
       # Chrome is pre-installed on GitHub runners.
       # Selenium Manager (bundled with selenium-webdriver 4.34+)
       # auto-downloads a matching chromedriver — no manual install needed.
@@ -43,6 +47,8 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: xvfb-run npm test
         working-directory: selenium-tests
+        env:
+          SKIP_BUILD: "1"
 
       - name: Upload screenshots
         if: always()
