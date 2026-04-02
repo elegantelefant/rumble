@@ -1,5 +1,5 @@
-# ABOUTME: Selenium e2e tests via tauri-driver on Linux and Windows.
-# ABOUTME: Builds the full app then runs smoke tests against the real binary.
+# ABOUTME: Selenium E2E tests via headless Chrome against Vite preview.
+# ABOUTME: Builds the Vue frontend, serves via preview, runs selenium tests.
 
 name: WebDriver E2E
 
@@ -16,34 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows disabled: msedgedriver version mismatch causes WebDriver to hang.
-        # See https://tauri.app/develop/tests/webdriver/ — "If the two versions
-        # do not match, you may experience your WebDriver testing suite hanging."
-        # Re-enable once msedgedriver-tool reliably matches the CI runner's Edge.
         platform: [ubuntu-22.04]
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux system deps
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update && sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libxdo-dev libssl-dev webkit2gtk-driver xvfb
-
-      - name: Install Windows Edge Driver
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          cargo install --git https://github.com/chippers/msedgedriver-tool
-          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
-          "$PWD" | Out-File -FilePath $env:GITHUB_PATH -Append
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - uses: pnpm/action-setup@v4
         with:
@@ -54,39 +30,11 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-
       - run: pnpm install
 
-      - run: uv sync
-        working-directory: src-tauri/sidecar
-
-      # Build sidecar binary for this platform
-      - name: Build sidecar (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          uv run pyinstaller sidecar.spec --noconfirm
-          mkdir -p ../binaries
-          TRIPLE=$(rustc -vV | grep host | cut -d' ' -f2)
-          cp dist/rumble-sidecar ../binaries/rumble-sidecar-$TRIPLE
-        working-directory: src-tauri/sidecar
-
-      - name: Build sidecar (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          uv run pyinstaller sidecar.spec --noconfirm
-          if not exist ..\binaries mkdir ..\binaries
-          copy dist\rumble-sidecar.exe ..\binaries\rumble-sidecar-x86_64-pc-windows-msvc.exe
-        working-directory: src-tauri/sidecar
-        shell: cmd
-
-      - run: cargo install tauri-driver --locked
+      # Chrome is pre-installed on GitHub runners.
+      # Selenium Manager (bundled with selenium-webdriver 4.34+)
+      # auto-downloads a matching chromedriver — no manual install needed.
 
       - run: npm install
         working-directory: selenium-tests
@@ -96,7 +44,10 @@ jobs:
         run: xvfb-run npm test
         working-directory: selenium-tests
 
-      - name: Selenium (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: npm test
-        working-directory: selenium-tests
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-${{ matrix.platform }}
+          path: e2e-screenshots/
+          if-no-files-found: ignore
