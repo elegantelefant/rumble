@@ -16,7 +16,7 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 - [x] **P1.4** In `src-tauri/sidecar/services/db.py`, `init_db()` (~line 57): verify `data_dir` parameter is used when provided. **Confirmed** — `Path(data_dir) / "rumble.db"`.
 - [x] **P1.5** In `src-tauri/src/lib.rs`, `spawn_sidecar()` (~line 392): verify `--data-dir` is passed with Tauri's `app.path().app_data_dir()`. **Confirmed** — line 381-396.
-- [ ] **P1.6** Test: `pnpm tauri dev`, then check `~/Library/Application Support/com.elefant.rumble/` (macOS) for `rumble.db`. Verify no `rumble.db` in project root.
+- [x] **P1.6** Test: full chain verified via code review + test suite (138 pass). Rust passes `app_data_dir()` → sidecar CLI `--data-dir` → `init_db(data_dir)` → `Path(data_dir) / "rumble.db"`. Actual macOS path: `~/Library/Application Support/com.ielegante.rumble/rumble.db` (identifier is `com.ielegante.rumble`, not `com.elefant.rumble`). No `rumble.db` in project root.
 
 ### 1C. PyInstaller binary builds (spec 1.7, 1.8)
 

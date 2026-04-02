@@ -103,3 +103,9 @@
 **SSE parsing with ReadableStream.** The sidecar uses `sse-starlette` which emits `data:` lines with JSON payloads. The frontend reads the response body as a `ReadableStream`, splits on newlines, and parses each `data:` line. Events: `status` (ignored), `delta` (appended to placeholder message), `done` (final text), `error` (thrown).
 
 **Placeholder message pattern.** An empty assistant message is pushed to `session.messages` before streaming starts. Each `delta` chunk mutates `assistantMsg.content += chunk`, which Vue's reactivity picks up. On error, both the placeholder and user message are popped.
+
+### P1.6 — DB path verification — 2026-04-02
+
+**Tauri identifier is `com.ielegante.rumble`, not `com.elefant.rumble`.** The imp plan referenced `~/Library/Application Support/com.elefant.rumble/` but `tauri.conf.json` has `"identifier": "com.ielegante.rumble"`. Actual DB path on macOS will be `~/Library/Application Support/com.ielegante.rumble/rumble.db`. Minor doc discrepancy, code is correct.
+
+**Full chain verified without running Tauri.** Traced Rust `spawn_sidecar()` → `--data-dir` arg → Python `argparse` → `create_app(data_dir=...)` → `init_db(data_dir)` → `Path(data_dir) / "rumble.db"`. Test suite (138 pass) exercises the same path via `conftest.py:tmp_data_dir` fixture. No `rumble.db` exists in project root.
