@@ -132,6 +132,23 @@ async def get_research_status(job_id: str) -> dict:
     }
 
 
+def _normalize_sources(raw_sources: list | None) -> list[dict] | None:
+    """Convert LLM source output into SearchResult-compatible dicts."""
+    if not raw_sources:
+        return None
+    normalized = []
+    for i, src in enumerate(raw_sources):
+        if isinstance(src, str):
+            normalized.append({"id": f"src-{i}", "title": src})
+        elif isinstance(src, dict):
+            if "id" not in src:
+                src["id"] = f"src-{i}"
+            if "title" not in src:
+                src["title"] = src.get("name", src.get("url", f"Source {i+1}"))
+            normalized.append(src)
+    return normalized
+
+
 @router.get("/research/{job_id}/result", response_model=ResearchResultResponse)
 async def get_research_result(job_id: str) -> ResearchResultResponse:
     job = await db.get_job(job_id)
@@ -143,11 +160,12 @@ async def get_research_result(job_id: str) -> ResearchResultResponse:
             result_data = json.loads(job["result"])
         except json.JSONDecodeError as exc:
             raise HTTPException(status_code=502, detail=f"malformed result: {exc}") from exc
+    sources = _normalize_sources(result_data.get("sources")) if result_data else None
     return _safe_construct(ResearchResultResponse, {
         "report_id": job["id"],
         "status": job["status"],
         "result": result_data.get("result") if result_data else None,
-        "sources": result_data.get("sources") if result_data else None,
+        "sources": sources,
     })
 
 
