@@ -1,7 +1,8 @@
 <script setup lang="ts">
 defineOptions({ name: "ResearchView" });
 import { computed, ref } from "vue";
-import { backendRegistry, mockResearchRun } from "../modules/backend/backendClient";
+import { backendRegistry } from "../modules/backend/backendClient";
+import { createResearchJob, waitForResearch } from "../api/sidecar";
 import { useModels } from "../composables/models";
 import { useToast } from "../composables/toast";
 import type { ChatMessage } from "../types/chat";
@@ -127,19 +128,31 @@ async function submitPrompt() {
 
   try {
     toasts.addToast("Research request sent to backend.", "info");
-    const response = await mockResearchRun(thread.id, content);
+    const job = await createResearchJob({ question: content, model: selectedModel.value || undefined });
+    const result = await waitForResearch(job.report_id);
+
+    if (result.status === "failed") {
+      throw new Error("Research failed — the AI could not process this query.");
+    }
+
+    const answer = result.result ?? "No findings returned.";
+    const citations = (result.sources ?? []).map(
+      (s) => s.title || s.url || s.id,
+    );
+
     thread.messages.push({
       id: generateId(),
       role: "assistant",
-      content: response.answer,
+      content: answer,
       timestamp: formatTimestamp(),
-      citations: response.citations,
+      citations,
     });
     thread.status = "complete";
-    thread.summary = response.answer.slice(0, 180) + (response.answer.length > 180 ? "..." : "");
+    thread.summary = answer.slice(0, 180) + (answer.length > 180 ? "..." : "");
   } catch (error) {
     console.error(error);
-    toasts.addToast("Mock backend failed to return research results.", "error");
+    const msg = error instanceof Error ? error.message : "Research request failed.";
+    toasts.addToast(msg, "error");
     thread.status = "draft";
   } finally {
     thread.lastUpdated = new Date().toISOString();
