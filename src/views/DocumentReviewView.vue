@@ -1,12 +1,8 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
 import { computed, ref } from "vue";
-import {
-  backendRegistry,
-  mockDocumentChat,
-  mockInitialReview,
-  mockRegisterReview,
-} from "../modules/backend/backendClient";
+import { backendRegistry } from "../modules/backend/backendClient";
+import { createChat, createReviewJob, sendMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
@@ -28,7 +24,18 @@ type ReviewSession = {
   messages: ChatMessage[];
   summary: string;
   reviewStatus: ReviewStatus;
+  chatId: string | null;
+  fileText: string;
 };
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsText(file);
+  });
+}
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const customPrompt = ref("");
@@ -39,45 +46,9 @@ const sendingCount = ref(0);
 const isSending = computed(() => sendingCount.value > 0);
 const showApiDocs = ref(false);
 
-const initialSessionId = generateId();
+const sessions = ref<Record<string, ReviewSession>>({});
 
-const sessions = ref<Record<string, ReviewSession>>({
-  [initialSessionId]: {
-    file: {
-      id: initialSessionId,
-      name: "Contract_2024.pdf",
-      size: 2.3,
-      lastReviewedAt: new Date().toISOString(),
-    },
-    reviewStatus: "ready",
-    summary:
-      "Initial review prepared for Contract_2024.pdf. Key focus areas: obligations, deadlines, and risk language.",
-    messages: [
-      {
-        id: generateId(),
-        role: "assistant",
-        content: "How can I help you analyze Contract_2024.pdf?",
-        timestamp: formatTimestamp(),
-      },
-      {
-        id: generateId(),
-        role: "user",
-        content: "Highlight the key renewal obligations.",
-        timestamp: formatTimestamp(),
-      },
-      {
-        id: generateId(),
-        role: "assistant",
-        content:
-          "Renewal clauses flagged: • Notice deadline 60 days prior to term end • Automatic renewal unless written notice • Pricing escalation tied to CPI adjustments.",
-        timestamp: formatTimestamp(),
-        citations: ["Contract_2024.pdf · Section 4"],
-      },
-    ],
-  },
-});
-
-const activeSessionId = ref<string | null>(initialSessionId);
+const activeSessionId = ref<string | null>(null);
 
 const orderedSessions = computed(() =>
   Object.values(sessions.value).sort((a, b) =>
@@ -95,7 +66,19 @@ function triggerFilePicker() {
   fileInputRef.value?.click();
 }
 
-function registerFile(file: File) {
+async function registerFile(file: File) {
+  let fileText: string;
+  try {
+    fileText = await readFileAsText(file);
+  } catch {
+    toasts.addToast(`Could not read ${file.name}. Only plain-text files are supported.`, "error");
+    return;
+  }
+  if (!fileText.trim()) {
+    toasts.addToast(`${file.name} appears to be empty.`, "error");
+    return;
+  }
+
   const id = generateId();
   const details: UploadedFile = {
     id,
@@ -110,18 +93,20 @@ function registerFile(file: File) {
     reviewStatus: "idle",
     summary: "",
     messages: [],
+    chatId: null,
+    fileText,
   };
 
   customPrompt.value = "";
   openSession(id);
-  queueInitialReview(details);
+  queueInitialReview(details, fileText);
 }
 
 function handleFiles(files: FileList | null) {
   if (!files) return;
-  Array.from(files)
-    .filter((file) => /\.(pdf|docx|txt)$/i.test(file.name))
-    .forEach(registerFile);
+  for (const file of Array.from(files).filter((f) => /\.(pdf|docx|txt)$/i.test(f.name))) {
+    registerFile(file);
+  }
 }
 
 function handleInputChange(event: Event) {
@@ -160,28 +145,61 @@ function openSession(id: string) {
   beginInitialReview(session);
 }
 
-async function queueInitialReview(file: UploadedFile) {
+async function queueInitialReview(file: UploadedFile, fileText: string) {
   try {
     syncingCount.value++;
-    const results = await mockRegisterReview([
-      {
-        id: file.id,
-        name: file.name,
-        sizeBytes: Math.round(file.size * 1024 * 1024),
-        customPrompt: file.prompt ?? null,
-      },
-    ]);
-    if (!results.length) {
-      toasts.addToast("File could not be registered for review.", "error");
-      return;
-    }
-    const summary = results[0];
+
+    // 1. Create a review job with the document text
+    const jobResponse = await createReviewJob({
+      text: fileText,
+      instructions: file.prompt ?? undefined,
+    });
+
     const session = sessions.value[file.id];
     if (!session) return;
-    session.summary = summary.summary;
-    const detailed = await mockInitialReview(file.id);
-    session.messages.push(...detailed.messages);
-    session.summary = detailed.summary;
+
+    // 2. Poll until the job completes
+    const result = await waitForJob("review", jobResponse.job_id);
+
+    if (result.status === "failed") {
+      throw new Error("Review failed — the AI could not process this document.");
+    }
+
+    // 3. Extract summary and issues from result
+    const payload = result.result as Record<string, unknown> | undefined;
+    const summary = (payload?.summary as string) ?? "Review complete.";
+    const issues = (payload?.issues as Array<Record<string, string>>) ?? [];
+
+    session.summary = summary;
+
+    // Build assistant messages from the review result
+    if (summary) {
+      session.messages.push({
+        id: generateId(),
+        role: "assistant",
+        content: summary,
+        timestamp: formatTimestamp(),
+      });
+    }
+    if (issues.length) {
+      const issueText = issues
+        .map((issue, i) => `${i + 1}. **${issue.severity ?? "Info"}** — ${issue.description ?? issue.issue ?? JSON.stringify(issue)}`)
+        .join("\n");
+      session.messages.push({
+        id: generateId(),
+        role: "assistant",
+        content: `Issues found:\n${issueText}`,
+        timestamp: formatTimestamp(),
+      });
+    }
+
+    // 4. Create a chat session for follow-up questions
+    const chat = await createChat(file.name);
+    session.chatId = chat.id;
+
+    // Seed the chat with the document context so follow-ups have context
+    await sendMessage(chat.id, `I've uploaded a document called "${file.name}". Here is the text:\n\n${fileText}\n\nThe initial review summary is:\n${summary}`);
+
     session.reviewStatus = "ready";
     session.file.lastReviewedAt = new Date().toISOString();
   } catch (error) {
@@ -201,6 +219,11 @@ async function askQuestion() {
   const session = activeSession.value;
   if (!session || !question.value.trim() || isSending.value) return;
 
+  if (!session.chatId) {
+    toasts.addToast("No chat session — please re-upload the document.", "error");
+    return;
+  }
+
   sendingCount.value++;
   const now = formatTimestamp();
   const content = question.value;
@@ -214,11 +237,18 @@ async function askQuestion() {
   });
 
   try {
-    const response = await mockDocumentChat(session.file.id, content);
-    session.messages.push(response);
+    const response = await sendMessage(session.chatId, content);
+    session.messages.push({
+      id: response.id,
+      role: "assistant",
+      content: response.content,
+      timestamp: formatTimestamp(),
+    });
     session.file.lastReviewedAt = new Date().toISOString();
   } catch (error) {
     console.error(error);
+    // Remove the dangling user message on failure
+    session.messages.pop();
     toasts.addToast("Failed to get a response. Please try again.", "error");
   } finally {
     sendingCount.value--;
