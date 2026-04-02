@@ -1,14 +1,18 @@
 // ABOUTME: Shared Selenium setup/teardown for Rumble E2E tests.
-// ABOUTME: Builds the app, starts preview server, connects Chrome WebDriver.
+// ABOUTME: Builds the app, starts preview server, connects Chrome WebDriver, screenshots every step.
 
 import { Builder, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import { spawn, spawnSync } from "child_process";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { writeFileSync, mkdirSync, existsSync } from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "../..");
+const screenshotDir = resolve(projectRoot, "e2e-screenshots");
+
+let screenshotCounter = 0;
 
 const PREVIEW_PORT = 4173;
 const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
@@ -140,4 +144,23 @@ export async function waitForText(text, timeoutMs = 5000) {
     until.elementLocated({ xpath: `//*[contains(text(),'${text}')]` }),
     timeoutMs,
   );
+}
+
+/**
+ * Take a screenshot and save to e2e-screenshots/.
+ * Name format: NNN_<label>.png (auto-incrementing counter for ordering).
+ * Call this before/after every interaction and assertion.
+ */
+export async function screenshot(label) {
+  if (!driver) return;
+  if (!existsSync(screenshotDir)) {
+    mkdirSync(screenshotDir, { recursive: true });
+  }
+  screenshotCounter++;
+  const padded = String(screenshotCounter).padStart(3, "0");
+  const safeName = label.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+  const filePath = resolve(screenshotDir, `${padded}_${safeName}.png`);
+  const base64 = await driver.takeScreenshot();
+  writeFileSync(filePath, Buffer.from(base64, "base64"));
+  return filePath;
 }

@@ -56,3 +56,6 @@ src-tauri/binaries/rumble-sidecar-*
 test-results/
 screenshots/
 playwright-report/
+
+# Selenium E2E screenshots
+e2e-screenshots/
