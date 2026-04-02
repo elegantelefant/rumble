@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { createDraftJob, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 
 const toasts = useToast();
@@ -37,6 +38,8 @@ const selectedTemplate = ref("employment");
 const formState = reactive<Record<string, string>>({});
 const errors = reactive<Record<string, string>>({});
 const isGenerating = ref(false);
+const draftResult = ref("");
+const draftWarnings = ref<string[]>([]);
 
 const activeFields = computed(() => templateFields[selectedTemplate.value] ?? []);
 const activeTemplateName = computed(
@@ -71,13 +74,43 @@ function validateForm() {
 async function generateDraft() {
   if (!validateForm()) return;
   isGenerating.value = true;
+  draftResult.value = "";
+  draftWarnings.value = [];
   try {
-    // TODO: invoke("draft_generate", { template: selectedTemplate.value, params: formState })
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    toasts.addToast("Draft prepared. Review before sharing with clients.", "success");
+    const fieldSummary = activeFields.value
+      .map((f) => `${f.label}: ${formState[f.key] ?? ""}`)
+      .filter((line) => !line.endsWith(": "))
+      .join("\n");
+
+    const prompt = [
+      `Draft a ${activeTemplateName.value} with the following details:`,
+      fieldSummary,
+      formState.terms?.trim() ? `\nAdditional terms: ${formState.terms.trim()}` : "",
+    ].filter(Boolean).join("\n");
+
+    const jobResponse = await createDraftJob({
+      prompt,
+      document_type: selectedTemplate.value,
+    });
+
+    const result = await waitForJob("draft", jobResponse.job_id);
+
+    if (result.status === "failed") {
+      throw new Error("Draft generation failed — the AI could not produce a draft.");
+    }
+
+    const payload = result.result as { draft?: string; warnings?: string[] } | undefined;
+    draftResult.value = payload?.draft ?? "";
+    draftWarnings.value = payload?.warnings ?? [];
+
+    if (draftResult.value) {
+      toasts.addToast("Draft prepared. Review before sharing with clients.", "success");
+    } else {
+      toasts.addToast("Draft completed but returned no content.", "warning");
+    }
   } catch (error) {
-    console.error(error);
-    toasts.addToast("Failed to generate draft. Please try again.", "error");
+    const message = error instanceof Error ? error.message : "Failed to generate draft.";
+    toasts.addToast(message, "error");
   } finally {
     isGenerating.value = false;
   }
@@ -154,6 +187,18 @@ function exportDraft(format: "word" | "pdf") {
           </button>
           <button class="btn-secondary" @click="exportDraft('word')">Export to Word</button>
           <button class="btn-secondary" @click="exportDraft('pdf')">Export to PDF</button>
+        </div>
+
+        <div v-if="draftWarnings.length" class="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <p class="font-medium">Warnings:</p>
+          <ul class="mt-1 list-inside list-disc">
+            <li v-for="(w, i) in draftWarnings" :key="i">{{ w }}</li>
+          </ul>
+        </div>
+
+        <div v-if="draftResult" class="space-y-2">
+          <h3 class="caption-uppercase">Generated Draft</h3>
+          <pre class="whitespace-pre-wrap rounded-md border border-[var(--primary-200)] bg-[var(--primary-50)] p-4 text-sm leading-relaxed">{{ draftResult }}</pre>
         </div>
       </section>
     </div>

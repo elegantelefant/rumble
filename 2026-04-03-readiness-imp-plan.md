@@ -148,10 +148,10 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3D. Wire Document Draft (spec 3.13–3.17)
 
-- [ ] **P3.9** In `src/views/DocumentDraftView.vue`:
+- [x] **P3.9** In `src/views/DocumentDraftView.vue`:
   - Replace mock setTimeout (~line 76) with `createDraftJob()` + poll.
   - `isGenerating` already exists — ensure it resets on error path too.
-- [ ] **P3.10** Add error handling: wrap in try/catch, show toast, reset `isGenerating`.
+- [x] **P3.10** Add error handling: wrap in try/catch, show toast, reset `isGenerating`.
 - [ ] **P3.11** Test: select template, fill fields, generate → verify draft appears → verify errors.
 
 ### 3E. Wire Translation (spec 3.18–3.22)

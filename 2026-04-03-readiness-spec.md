@@ -87,11 +87,11 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 
 ### 3C. Document Draft (`/draft`)
 
-- [ ] 3.13 "Generate Draft" calls sidecar `/draft` endpoint (not mock setTimeout)
-- [ ] 3.14 Draft result appears in the editor area
-- [ ] 3.15 Button is disabled while generating
-- [ ] 3.16 Validation errors shown for empty required fields before API call
-- [ ] 3.17 Network/LLM error shows toast, re-enables the button
+- [x] 3.13 "Generate Draft" calls sidecar `/draft` endpoint (not mock setTimeout)
+- [x] 3.14 Draft result appears in the editor area
+- [x] 3.15 Button is disabled while generating
+- [x] 3.16 Validation errors shown for empty required fields before API call
+- [x] 3.17 Network/LLM error shows toast, re-enables the button
 
 ### 3D. Translation (`/translation`)
 
