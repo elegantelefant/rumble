@@ -72,7 +72,7 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 - [x] 3.1 Uploading a file calls sidecar `/review` endpoint (not `mockRegisterReview`)
 - [x] 3.2 Initial review result appears in the chat (summary + messages)
 - [x] 3.3 Follow-up questions call sidecar `/chats/{id}/message` and display response
-- [ ] 3.4 Streaming responses show text appearing incrementally (SSE via `/chats/{id}/stream`)
+- [x] 3.4 Streaming responses show text appearing incrementally (SSE via `/chats/{id}/stream`)
 - [x] 3.5 Send button is disabled while a request is in flight
 - [x] 3.6 Network/LLM error shows toast — does not leave UI in broken state
 - [x] 3.7 Failed initial review resets session to allow retry

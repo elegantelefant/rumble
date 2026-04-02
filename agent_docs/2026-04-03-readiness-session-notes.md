@@ -93,3 +93,13 @@
 **Binary size is 63MB.** Single-file onedir EXE. Acceptable for a desktop app sidecar but would be worth investigating `--exclude-module` for unused deps (e.g. boto3, grpc, pygments pulled in transitively) if size becomes a concern.
 
 **Port reuse causes false negatives.** The first test attempt on port 9999 failed silently — likely TIME_WAIT from a prior failed run. Switching to 9998 succeeded immediately. Health check returns `{"status":"ok","mode":"ollama"}` and DB is created at the specified `--data-dir`.
+
+### Spec 3.4 — SSE streaming for follow-up questions — 2026-04-03
+
+**Tauri IPC can't handle SSE.** The `api_call` Rust command uses `reqwest` and reads the full response body as text, then parses as JSON. SSE is a long-lived chunked connection — fundamentally incompatible. Solution: bypass Tauri IPC for streaming and use `fetch()` directly from the Vue frontend to `http://127.0.0.1:{port}/chats/{id}/stream`.
+
+**Sidecar port already exposed.** The `sidecar_status` command returns `{ running, port, health }` — no new Rust code needed. The `streamMessage()` TS function calls `invoke("sidecar_status")` to get the port, then opens a direct fetch.
+
+**SSE parsing with ReadableStream.** The sidecar uses `sse-starlette` which emits `data:` lines with JSON payloads. The frontend reads the response body as a `ReadableStream`, splits on newlines, and parses each `data:` line. Events: `status` (ignored), `delta` (appended to placeholder message), `done` (final text), `error` (thrown).
+
+**Placeholder message pattern.** An empty assistant message is pushed to `session.messages` before streaming starts. Each `delta` chunk mutates `assistantMsg.content += chunk`, which Vue's reactivity picks up. On error, both the placeholder and user message are popped.

@@ -2,7 +2,7 @@
 defineOptions({ name: "DocumentReviewView" });
 import { computed, ref } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
-import { createChat, createReviewJob, sendMessage, waitForJob } from "../api/sidecar";
+import { createChat, createReviewJob, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
@@ -236,18 +236,26 @@ async function askQuestion() {
     timestamp: now,
   });
 
+  // Add a placeholder assistant message that fills incrementally via SSE
+  const assistantMsg: ChatMessage = {
+    id: generateId(),
+    role: "assistant",
+    content: "",
+    timestamp: formatTimestamp(),
+  };
+  session.messages.push(assistantMsg);
+
   try {
-    const response = await sendMessage(session.chatId, content);
-    session.messages.push({
-      id: response.id,
-      role: "assistant",
-      content: response.content,
-      timestamp: formatTimestamp(),
+    const fullText = await streamMessage(session.chatId, content, (chunk) => {
+      assistantMsg.content += chunk;
     });
+    // Ensure final text matches in case the "done" event corrected it
+    assistantMsg.content = fullText;
     session.file.lastReviewedAt = new Date().toISOString();
   } catch (error) {
     console.error(error);
-    // Remove the dangling user message on failure
+    // Remove the dangling assistant placeholder and user message
+    session.messages.pop();
     session.messages.pop();
     toasts.addToast("Failed to get a response. Please try again.", "error");
   } finally {

@@ -1,6 +1,8 @@
 // ABOUTME: Typed wrappers around sidecar HTTP endpoints routed through Tauri IPC.
 // ABOUTME: Each function calls apiClient() which invokes the Rust api_call command.
 
+import { invoke } from "@tauri-apps/api/core";
+
 import apiClient from "./client";
 import type { ClarifyRequest } from "./models/clarifyRequest";
 import type { ClarifyResponse } from "./models/clarifyResponse";
@@ -54,6 +56,77 @@ export async function sendMessage(
     method: "POST",
     body: JSON.stringify({ text, ...(model ? { model } : {}) }),
   });
+}
+
+/**
+ * Stream a chat message via SSE, calling onDelta for each text chunk.
+ * Connects directly to the sidecar (bypassing Tauri IPC) because
+ * api_call reads the full response as JSON and can't handle SSE.
+ */
+export async function streamMessage(
+  chatId: string,
+  text: string,
+  onDelta: (chunk: string) => void,
+  model?: string,
+): Promise<string> {
+  const status = await invoke<{ port: number | null }>("sidecar_status");
+  if (!status.port) throw new Error("Sidecar is not running");
+
+  const url = `http://127.0.0.1:${status.port}/chats/${chatId}/stream`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, ...(model ? { model } : {}) }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "unknown error");
+    throw new Error(`Stream request failed (${response.status}): ${detail}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body for SSE stream");
+
+  const decoder = new TextDecoder();
+  let fullText = "";
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE lines from buffer
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+
+      try {
+        const event = JSON.parse(payload) as {
+          type: string;
+          value: string;
+        };
+        if (event.type === "delta") {
+          fullText += event.value;
+          onDelta(event.value);
+        } else if (event.type === "done") {
+          fullText = event.value;
+        } else if (event.type === "error") {
+          throw new Error(event.value);
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue; // skip non-JSON lines
+        throw e;
+      }
+    }
+  }
+
+  return fullText;
 }
 
 // ---------------------------------------------------------------------------
