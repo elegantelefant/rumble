@@ -95,11 +95,11 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 
 ### 3D. Translation (`/translation`)
 
-- [ ] 3.18 "Translate" calls sidecar `/translate` endpoint (not `mockTranslationRun`)
-- [ ] 3.19 Translation result appears in the output area
-- [ ] 3.20 Button is disabled while translating (already done via `isTranslating`)
-- [ ] 3.21 New translation job is prepended to history
-- [ ] 3.22 Error shows toast with clear message
+- [x] 3.18 "Translate" calls sidecar `/translate` endpoint (not `mockTranslationRun`)
+- [x] 3.19 Translation result appears in the output area
+- [x] 3.20 Button is disabled while translating (already done via `isTranslating`)
+- [x] 3.21 New translation job is prepended to history
+- [x] 3.22 Error shows toast with clear message
 
 ### 3E. Settings (`/settings`)
 

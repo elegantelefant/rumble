@@ -1,7 +1,8 @@
 <script setup lang="ts">
 defineOptions({ name: "TranslationView" });
 import { computed, ref, watch } from "vue";
-import { backendRegistry, mockTranslationRun } from "../modules/backend/backendClient";
+import { backendRegistry } from "../modules/backend/backendClient";
+import { translate } from "../api/sidecar";
 import { useModels } from "../composables/models";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
@@ -85,13 +86,11 @@ async function runTranslation() {
   }
   isTranslating.value = true;
   try {
-    const response = await mockTranslationRun({
-      sourceLanguage: sourceLanguage.value,
-      targetLanguage: targetLanguage.value,
+    const response = await translate({
       text: input,
-      model: selectedModel.value,
+      target_lang: targetLanguage.value,
     });
-    const output = response.translatedText;
+    const output = response.translated_text;
 
     const newJob: TranslationJob = {
       id: generateId(),
@@ -108,10 +107,11 @@ async function runTranslation() {
     jobs.value.unshift(newJob);
     activeJobId.value = newJob.id;
     translatedText.value = output;
-    toast.addToast("Translation generated via mock backend.", "success");
+    toast.addToast("Translation complete.", "success");
   } catch (error) {
-    console.error(error);
-    toast.addToast("Mock backend failed to translate text.", "error");
+    const message = error instanceof Error ? error.message : "Translation failed. Check sidecar logs.";
+    console.error("Translation error:", error);
+    toast.addToast(message, "error");
   } finally {
     isTranslating.value = false;
   }

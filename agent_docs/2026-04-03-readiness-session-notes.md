@@ -71,3 +71,9 @@
 **Can't add `error` field to response models.** `JobResultResponse` and `ResearchResultResponse` both have `extra='forbid'` (auto-generated, immutable). Fix: stuff the error into the `result` field — `{"error": "..."}` for `JobResultResponse` (dict type) and the raw error string for `ResearchResultResponse` (str type). The client checks `status === "failed"` and reads `result.error` or `result` accordingly.
 
 **Existing tests asserted the broken behavior.** `test_error_paths.py` had two tests asserting `data["result"] is None` for failed jobs — that was the old (incorrect) behavior. Updated to assert the error message is present.
+
+### Phase 3E — Wire Translation View — 2026-04-03
+
+**Minimal change needed.** The sidecar `translate()` endpoint takes `{ text, target_lang }` and returns `{ translated_text }`. The mock used `{ sourceLanguage, targetLanguage, text, model }` and returned `{ translatedText }`. Only the API call and field names changed — all UI state (isTranslating, jobs history, activeJob) worked as-is.
+
+**Source language not sent to sidecar.** The `TranslateRequest` schema only has `text` and `target_lang` — no source language field. The view's source language selector still works for the UI (history display) but auto-detect vs explicit source isn't forwarded to the LLM. The sidecar prompt handles language detection implicitly.

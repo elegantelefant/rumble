@@ -156,10 +156,10 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3E. Wire Translation (spec 3.18–3.22)
 
-- [ ] **P3.12** In `src/views/TranslationView.vue`:
+- [x] **P3.12** In `src/views/TranslationView.vue`:
   - Replace `mockTranslationRun()` call (~line 88) with `translate()` from sidecar API.
   - `isTranslating` already exists and disables the button.
-- [ ] **P3.13** Add error handling: wrap in try/catch, show toast with message.
+- [x] **P3.13** Add error handling: wrap in try/catch, show toast with message.
 - [ ] **P3.14** Test: enter text, select languages, translate → verify result → verify errors.
 
 ### 3F. Wire Settings (spec 3.23–3.25)
