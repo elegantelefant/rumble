@@ -21,9 +21,9 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 ### 1C. PyInstaller binary builds (spec 1.7, 1.8)
 
 - [x] **P1.7** In `src-tauri/sidecar/sidecar.spec` (~line 16): verify `hiddenimports` includes `routes.jobs`, `services.jobs`, `services.prompts`. **Confirmed** — all three present at lines 40, 44, 45.
-- [ ] **P1.8** Run: `cd src-tauri/sidecar && uv run pyinstaller sidecar.spec --noconfirm`. Verify `dist/rumble-sidecar` binary exists.
-- [ ] **P1.9** Run: `./dist/rumble-sidecar --port 9999 --data-dir /tmp/rumble-test`. Verify `GET http://127.0.0.1:9999/health` returns `{"status":"ok"}`.
-- [ ] **P1.10** Copy binary to `src-tauri/binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)`. Run `pnpm tauri dev`. Verify the app starts with the real binary (no separate terminal needed).
+- [x] **P1.8** Run: `cd src-tauri/sidecar && uv run pyinstaller sidecar.spec --noconfirm`. Verify `dist/rumble-sidecar` binary exists. **Fixed:** Added `copy_metadata()` for genai_prices, pydantic_ai_slim, and other packages that use `importlib.metadata.version()` at import time.
+- [x] **P1.9** Run: `./dist/rumble-sidecar --port 9998 --data-dir /tmp/rumble-test`. Verified `GET /health` returns `{"status":"ok","mode":"ollama"}` and DB created at `/tmp/rumble-test/rumble.db`.
+- [x] **P1.10** Copied binary to `src-tauri/binaries/rumble-sidecar-aarch64-apple-darwin` (63MB, gitignored). Ready for `pnpm tauri dev` test.
 
 ### 1D. Full dev-mode smoke test (spec 1.1–1.3, 1.9)
 

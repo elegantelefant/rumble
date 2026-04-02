@@ -19,8 +19,8 @@ The sidecar must start automatically, find its database, and respond to health c
 - [x] 1.4 Sidecar writes `rumble.db` to the Tauri app data directory, not CWD
 - [x] 1.5 App defaults to Ollama backend mode (not Premium)
 - [x] 1.6 `api_call` routes non-cloud paths to `http://127.0.0.1:{sidecar_port}`
-- [ ] 1.7 PyInstaller binary builds successfully on macOS (`uv run pyinstaller sidecar.spec`)
-- [ ] 1.8 Built binary starts and passes health check
+- [x] 1.7 PyInstaller binary builds successfully on macOS (`uv run pyinstaller sidecar.spec`)
+- [x] 1.8 Built binary starts and passes health check
 - [ ] 1.9 `pnpm tauri dev` (with sidecar running) opens the app window with no white screen
 
 ---

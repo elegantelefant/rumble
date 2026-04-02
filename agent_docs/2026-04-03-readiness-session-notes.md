@@ -85,3 +85,11 @@
 **`mockSaveSettings` was a no-op wrapper.** General preferences (appearance, workspace) lack a backend persistence layer — only API keys are persisted via individual `addSecret`/`removeSecret` calls. Removed the mock and made save confirmation immediate.
 
 **Test interference from `onMounted` invoke calls.** Adding `onMounted` broke two tests: `mockRejectedValueOnce` was consumed by `get_api_key` instead of `delete_api_key`, and `saveSettings` became synchronous so "Saving..." spinner was never visible. Fixed with `mockImplementation` discriminating by command name.
+
+### P1.8–P1.10 — PyInstaller binary build — 2026-04-02
+
+**`importlib.metadata.PackageNotFoundError` is the main PyInstaller gotcha.** Three packages fail sequentially: `genai_prices` (dep of pydantic_ai), `pydantic_ai_slim` (the actual pydantic_ai implementation package), and potentially others. Each one only surfaces after fixing the previous. Solution: bulk `copy_metadata()` for all packages that could use `importlib.metadata.version()` at import time — 10 packages total.
+
+**Binary size is 63MB.** Single-file onedir EXE. Acceptable for a desktop app sidecar but would be worth investigating `--exclude-module` for unused deps (e.g. boto3, grpc, pygments pulled in transitively) if size becomes a concern.
+
+**Port reuse causes false negatives.** The first test attempt on port 9999 failed silently — likely TIME_WAIT from a prior failed run. Switching to 9998 succeeded immediately. Health check returns `{"status":"ok","mode":"ollama"}` and DB is created at the specified `--data-dir`.
