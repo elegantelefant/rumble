@@ -27,3 +27,11 @@
 **Research sources schema mismatch.** The LLM returns sources as strings or partial dicts, but `ResearchResultResponse.sources` expects `list[SearchResult]` with required `id` and `title` fields and `extra='forbid'`. Since we can't modify `generated.py`, added `_normalize_sources()` to bridge the gap.
 
 **All AI endpoints verified.** Clarify, translate, summarise/document, summarise/chat, summarise/search, chat_title, draft, review, and research all return valid responses with the auto-resolved model.
+
+### Phase 3A — shared API helper — 2026-04-02
+
+**P3.1 complete.** Created `src/api/sidecar.ts` with typed wrappers for all sidecar endpoints. Reuses generated Orval types (ClarifyRequest, TranslateResponse, etc.) directly — no type duplication. Chat-related types (SidecarMessage, SidecarChat) defined locally since the chat endpoints use untyped dicts in Python.
+
+**Polling helpers included.** `waitForJob()` and `waitForResearch()` poll at 1.5s intervals with a 3-minute timeout. These abstract the create-then-poll pattern that draft/review/research views all need.
+
+**No lint config in this project.** Unlike the Nuxt monorepo, Rumble doesn't have ESLint or perfectionist configured. Verified with `vue-tsc --noEmit` (type-checks clean) and `pnpm vitest run` (129/129 pass).

@@ -113,7 +113,7 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3A. Create shared API helper (foundation for all views)
 
-- [ ] **P3.1** Create `src/api/sidecar.ts` — thin wrappers around `invoke("api_call", ...)` for each sidecar endpoint:
+- [x] **P3.1** Create `src/api/sidecar.ts` — thin wrappers around `invoke("api_call", ...)` for each sidecar endpoint:
   ```typescript
   // All calls go through Tauri IPC → Rust api_call → sidecar HTTP
   export async function createChat(title?: string) { ... }
