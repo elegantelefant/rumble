@@ -115,3 +115,84 @@ async def test_research_result_preserves_sources(client):
     result = await client.get(f"/research/{report_id}/result")
     data = result.json()
     assert "sources" in data
+
+
+# --- Failed jobs ---
+
+async def test_failed_draft_returns_error_in_result(client):
+    """A draft job that fails should have status=failed and error in result."""
+    from unittest.mock import AsyncMock, patch
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("Ollama unreachable")
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=_boom)):
+        resp = await client.post("/draft", json={"prompt": "NDA"})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.2)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["result"] is not None
+    assert "Ollama unreachable" in data["result"]["error"]
+
+
+async def test_failed_research_returns_error_in_result(client):
+    """A research job that fails should have status=failed and error in result."""
+    from unittest.mock import AsyncMock, patch
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("model not found")
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=_boom)):
+        resp = await client.post("/research", json={"question": "What is tort?"})
+        report_id = resp.json()["report_id"]
+        await asyncio.sleep(0.2)
+        result = await client.get(f"/research/{report_id}/result")
+
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["result"] is not None
+    assert "model not found" in data["result"]
+
+
+async def test_failed_review_returns_error_in_result(client):
+    """A review job that fails should have status=failed and error in result."""
+    from unittest.mock import AsyncMock, patch
+
+    async def _boom(*args, **kwargs):
+        raise ValueError("LLM returned unparseable output")
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=_boom)):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.2)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["result"] is not None
+    assert "unparseable" in data["result"]["error"]
+
+
+async def test_failed_research_status_includes_error(client):
+    """The research status endpoint should include the error field for failed jobs."""
+    from unittest.mock import AsyncMock, patch
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("connection refused")
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=_boom)):
+        resp = await client.post("/research", json={"question": "What is negligence?"})
+        report_id = resp.json()["report_id"]
+        await asyncio.sleep(0.2)
+        status = await client.get(f"/research/{report_id}")
+
+    assert status.status_code == 200
+    data = status.json()
+    assert data["status"] == "failed"
+    assert "connection refused" in data["error"]

@@ -98,7 +98,8 @@ async def test_draft_job_llm_failure_stores_error(client):
     resp = await client.get(f"/draft/{job_id}/result")
     data = resp.json()
     assert data["status"] == "failed"
-    assert data["result"] is None
+    assert data["result"] is not None
+    assert "draft failed" in data["result"]["error"]
 
 
 async def test_review_job_llm_failure_stores_error(client):
@@ -109,7 +110,8 @@ async def test_review_job_llm_failure_stores_error(client):
     resp = await client.get(f"/review/{job_id}/result")
     data = resp.json()
     assert data["status"] == "failed"
-    assert data["result"] is None
+    assert data["result"] is not None
+    assert "review failed" in data["result"]["error"]
 
 
 async def test_research_job_llm_failure_stores_error(client):
