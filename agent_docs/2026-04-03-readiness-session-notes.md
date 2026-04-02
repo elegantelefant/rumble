@@ -53,3 +53,13 @@
 **Straightforward wiring.** `isResearching` already existed as a per-thread field (not a standalone ref), and the `:disabled` binding was already on the button. Only needed to swap `mockResearchRun` → `createResearchJob` + `waitForResearch` and map the `ResearchResultResponse` fields to the view's expected shape.
 
 **Citations mapping.** The sidecar returns `sources: SearchResult[]` with structured objects (id, title, url, snippet). The view expects `citations: string[]`. Mapped via `s.title || s.url || s.id` to get the most human-readable identifier.
+
+### Phase 3D — Wire Document Draft — 2026-04-02
+
+**Simple wiring — no mock function to remove.** Unlike Review and Research which had `mock*` functions in `backendClient.ts`, Draft used an inline `setTimeout`. Replaced directly with `createDraftJob` + `waitForJob`.
+
+**Prompt construction from template fields.** Built a natural-language prompt from the template name + field values + additional terms. Passes `document_type` as the template ID. The sidecar's `_run_draft` handler already knows how to incorporate `document_type` and `document_terms`.
+
+**Added draft result display.** The original view had no output area — only the form and buttons. Added a `<pre>` block for the draft text and a yellow warning box for any `warnings` from the result payload. Used `whitespace-pre-wrap` for readable multi-paragraph output.
+
+**Validation already worked.** The existing `validateForm()` checks all required fields and shows inline errors. Spec item 3.16 was already satisfied before this change.
