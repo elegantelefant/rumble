@@ -6,13 +6,23 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import copy_metadata
+
 block_cipher = None
+
+# Several packages use importlib.metadata.version() at import time.
+_meta_pkgs = [
+    "genai_prices", "pydantic_ai", "pydantic_ai_slim",
+    "pydantic", "httpx", "fastapi", "starlette", "uvicorn",
+    "sse_starlette", "aiosqlite",
+]
+datas = [item for pkg in _meta_pkgs for item in copy_metadata(pkg)]
 
 a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=[
         # Uvicorn internals not auto-detected
         "uvicorn.lifespan.on",
