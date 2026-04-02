@@ -103,9 +103,9 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 
 ### 3E. Settings (`/settings`)
 
-- [ ] 3.23 Saving an API key calls `invoke("store_api_key", {provider, key})`
-- [ ] 3.24 Deleting an API key calls `invoke("delete_api_key", {provider})`
-- [ ] 3.25 Provider list loads stored keys on mount via `invoke("get_api_key", {provider})`
+- [x] 3.23 Saving an API key calls `invoke("store_api_key", {provider, key})`
+- [x] 3.24 Deleting an API key calls `invoke("delete_api_key", {provider})`
+- [x] 3.25 Provider list loads stored keys on mount via `invoke("get_api_key", {provider})`
 
 ---
 

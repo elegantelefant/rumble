@@ -77,3 +77,11 @@
 **Minimal change needed.** The sidecar `translate()` endpoint takes `{ text, target_lang }` and returns `{ translated_text }`. The mock used `{ sourceLanguage, targetLanguage, text, model }` and returned `{ translatedText }`. Only the API call and field names changed — all UI state (isTranslating, jobs history, activeJob) worked as-is.
 
 **Source language not sent to sidecar.** The `TranslateRequest` schema only has `text` and `target_lang` — no source language field. The view's source language selector still works for the UI (history display) but auto-detect vs explicit source isn't forwarded to the LLM. The sidecar prompt handles language detection implicitly.
+
+### Phase 3F — Wire Settings (spec 3.23–3.25) — 2026-04-03
+
+**Most work was already done.** `addSecret()` already called `invoke("store_api_key", ...)` and `removeSecret()` already called `invoke("delete_api_key", ...)`. Only missing piece was `onMounted` to load existing keys from system keychain.
+
+**`mockSaveSettings` was a no-op wrapper.** General preferences (appearance, workspace) lack a backend persistence layer — only API keys are persisted via individual `addSecret`/`removeSecret` calls. Removed the mock and made save confirmation immediate.
+
+**Test interference from `onMounted` invoke calls.** Adding `onMounted` broke two tests: `mockRejectedValueOnce` was consumed by `get_api_key` instead of `delete_api_key`, and `saveSettings` became synchronous so "Saving..." spinner was never visible. Fixed with `mockImplementation` discriminating by command name.

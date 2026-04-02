@@ -164,10 +164,10 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3F. Wire Settings (spec 3.23–3.25)
 
-- [ ] **P3.15** In `src/views/SettingsView.vue`:
-  - Replace mock save with `invoke("store_api_key", {provider, key})` for each secret.
-  - Add `onMounted` hook that loads existing keys via `invoke("get_api_key", {provider})` for each provider.
-  - Wire delete button to `invoke("delete_api_key", {provider})`.
+- [x] **P3.15** In `src/views/SettingsView.vue`:
+  - Replace mock save with `invoke("store_api_key", {provider, key})` for each secret. **Already wired in addSecret().**
+  - Add `onMounted` hook that loads existing keys via `invoke("get_api_key", {provider})` for each provider. **Done.**
+  - Wire delete button to `invoke("delete_api_key", {provider})`. **Already wired in removeSecret().** Removed `mockSaveSettings` import.
 - [ ] **P3.16** Test: add an OpenAI key → reload page → key still there → delete → gone.
 
 ---
