@@ -210,7 +210,7 @@ def test_parse_llm_json_invalid_raises_502():
     with pytest.raises(HTTPException) as exc_info:
         _parse_llm_json("not valid json at all")
     assert exc_info.value.status_code == 502
-    assert "invalid JSON" in exc_info.value.detail
+    assert "unparseable" in exc_info.value.detail
 
 
 def test_parse_llm_json_whitespace():

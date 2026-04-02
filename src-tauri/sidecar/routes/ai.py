@@ -28,15 +28,21 @@ router = APIRouter(tags=["ai"])
 def _parse_llm_json(raw: str) -> dict:
     """Parse LLM output as JSON, stripping markdown fences if present."""
     text = raw.strip()
-    if text.startswith("```"):
-        # Strip opening fence (e.g. ```json)
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.rstrip().endswith("```"):
-            text = text.rstrip()[:-3].strip()
+    # Strip markdown fence if present (handles preamble text before fence)
+    if "```" in text:
+        parts = text.split("```")
+        for part in parts:
+            candidate = part.strip()
+            # Remove optional language tag (e.g. "json\n")
+            if candidate.lower().startswith("json"):
+                candidate = candidate.split("\n", 1)[-1].strip()
+            if candidate.startswith("{"):
+                text = candidate
+                break
     try:
         return json.loads(text)
     except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
 
 def _safe_construct(model_class, data: dict):

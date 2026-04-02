@@ -20,12 +20,11 @@ from services import db, jobs, llm, prompts
 
 def _parse_job_json(raw: str) -> dict:
     """Parse LLM output as JSON for background jobs. Raises ValueError, not HTTPException."""
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.rstrip().endswith("```"):
-            text = text.rstrip()[:-3].strip()
-    return json.loads(text)
+    from fastapi import HTTPException
+    try:
+        return _parse_llm_json(raw)
+    except HTTPException as exc:
+        raise ValueError(exc.detail) from exc
 
 router = APIRouter(tags=["jobs"])
 
