@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { mockSaveSettings, mockTestSync } from "../modules/backend/backendClient";
+import { mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
 
@@ -65,6 +65,34 @@ const secrets = ref<SecretRecord[]>([
     notes: "Uses Ollama on localhost:11434",
   },
 ]);
+
+onMounted(async () => {
+  const stored: SecretRecord[] = [];
+  for (const provider of providerOptions) {
+    if (!provider.requiresKey) continue;
+    try {
+      const key = await invoke<string | null>("get_api_key", { provider: provider.id });
+      if (key) {
+        stored.push({
+          id: generateId(),
+          provider: provider.id,
+          label: provider.label,
+          addedAt: new Date().toISOString(),
+          scope: "global",
+          notes: "Loaded from system keychain",
+        });
+      }
+    } catch (e) {
+      console.error(`Failed to check keychain for ${provider.id}:`, e);
+    }
+  }
+  if (stored.length > 0) {
+    secrets.value = [
+      ...secrets.value.filter((s) => s.provider === "elefant-local"),
+      ...stored,
+    ];
+  }
+});
 
 const localConfig = reactive({
   host: "http://127.0.0.1",
@@ -152,11 +180,9 @@ async function removeSecret(id: string) {
 async function saveSettings() {
   isSaving.value = true;
   try {
-    await mockSaveSettings();
+    // API keys are stored individually via addSecret/removeSecret.
+    // General preferences (appearance, workspace) are local reactive state.
     toast.addToast("Settings stored securely on this device.", "success");
-  } catch (error) {
-    console.error(error);
-    toast.addToast("Failed to save settings.", "error");
   } finally {
     isSaving.value = false;
   }

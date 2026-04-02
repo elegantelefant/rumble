@@ -86,8 +86,12 @@ describe("SettingsView", () => {
   })
 
   it("does not remove secret from UI when keychain delete fails", async () => {
-    vi.mocked(invoke).mockRejectedValueOnce(new Error("keychain locked"))
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "delete_api_key") throw new Error("keychain locked")
+      return undefined
+    })
     const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
     const removeBtn = wrapper.findAll("button").find((b) => b.text() === "Remove")
     await removeBtn!.trigger("click")
     await vi.advanceTimersByTimeAsync(0)
@@ -137,19 +141,10 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Save settings")
   })
 
-  it("shows saving state on form submit", async () => {
+  it("shows toast on form submit", async () => {
     const wrapper = mountSettings()
     await wrapper.find("form").trigger("submit")
-    expect(wrapper.text()).toContain("Saving...")
-  })
-
-  it("completes save and shows toast", async () => {
-    const wrapper = mountSettings()
-    await wrapper.find("form").trigger("submit")
-
-    // Advance past the 1000ms save delay
-    await vi.advanceTimersByTimeAsync(1100)
-
+    await vi.advanceTimersByTimeAsync(0)
     expect(mockAddToast).toHaveBeenCalledWith(
       "Settings stored securely on this device.",
       "success",
@@ -204,6 +199,18 @@ describe("SettingsView", () => {
       expect.stringContaining("Secret saved"),
       "success",
     )
+  })
+
+  it("loads stored keys from keychain on mount", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "get_api_key" && args?.provider === "openai") return "sk-stored"
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(invoke).toHaveBeenCalledWith("get_api_key", { provider: "openai" })
+    expect(invoke).toHaveBeenCalledWith("get_api_key", { provider: "anthropic" })
+    expect(wrapper.text()).toContain("OpenAI")
   })
 
   it("shows error toast when keychain invoke fails", async () => {
