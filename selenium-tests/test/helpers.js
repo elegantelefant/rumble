@@ -107,13 +107,23 @@ export async function stopDriver() {
   }
   if (previewServer) {
     previewServer.kill("SIGTERM");
-    // Also kill the child process tree (pnpm spawns node)
+    // Kill the child process tree (pnpm spawns node which spawns esbuild)
     try {
       process.kill(-previewServer.pid, "SIGTERM");
     } catch {
-      // process group may not exist
+      // process group may not exist on all platforms
     }
+    // Force kill after 2s if still alive
+    await new Promise((resolve) => {
+      const forceKill = setTimeout(() => {
+        try { previewServer.kill("SIGKILL"); } catch { /* already dead */ }
+        resolve();
+      }, 2000);
+      previewServer.on("exit", () => { clearTimeout(forceKill); resolve(); });
+    });
   }
+  // Ensure mocha can exit
+  process.exit(0);
 }
 
 /**
