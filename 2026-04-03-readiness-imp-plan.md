@@ -140,11 +140,10 @@ How to implement each item from `2026-04-03-readiness-spec.md`. Ordered by depen
 
 ### 3C. Wire Research (spec 3.8–3.12)
 
-- [ ] **P3.6** In `src/views/ResearchView.vue`:
+- [x] **P3.6** In `src/views/ResearchView.vue`:
   - Replace `mockResearchRun()` call (~line 130) with `createResearchJob()` + poll.
-  - Add `isResearching` ref. Set true before request, false in finally.
-  - Bind `:disabled="isResearching"` on "Start Research" button.
-- [ ] **P3.7** Add error handling: on failure, reset thread status to "draft", show toast.
+  - `isResearching` already existed on the thread object. Bind `:disabled="isResearching"` already present.
+- [x] **P3.7** Add error handling: on failure, reset thread status to "draft", show toast.
 - [ ] **P3.8** Test: submit a research prompt → verify result with citations → verify error handling.
 
 ### 3D. Wire Document Draft (spec 3.13–3.17)

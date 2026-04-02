@@ -79,11 +79,11 @@ Every view must call the real sidecar endpoints instead of mock functions, and h
 
 ### 3B. Research (`/research`)
 
-- [ ] 3.8 Submitting a prompt calls sidecar `/research` endpoint (not `mockResearchRun`)
-- [ ] 3.9 Research result with citations displays in the thread
-- [ ] 3.10 "Start Research" button is disabled while request is in flight
-- [ ] 3.11 Error during research shows toast, resets thread status to "draft"
-- [ ] 3.12 Thread status transitions: draft → in_progress → complete
+- [x] 3.8 Submitting a prompt calls sidecar `/research` endpoint (not `mockResearchRun`)
+- [x] 3.9 Research result with citations displays in the thread
+- [x] 3.10 "Start Research" button is disabled while request is in flight
+- [x] 3.11 Error during research shows toast, resets thread status to "draft"
+- [x] 3.12 Thread status transitions: draft → in_progress → complete
 
 ### 3C. Document Draft (`/draft`)
 

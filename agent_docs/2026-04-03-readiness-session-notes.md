@@ -47,3 +47,9 @@
 **Removed demo seed session.** The initial Contract_2024.pdf demo session was hardcoded mock data. Replaced with an empty sessions dict so the view starts clean.
 
 **Spec items 2.1–2.4 checked off retroactively.** These were verified in the previous session (P2.4–P2.7 in imp plan) but never marked in the spec.
+
+### Phase 3C — Wire Research View — 2026-04-02
+
+**Straightforward wiring.** `isResearching` already existed as a per-thread field (not a standalone ref), and the `:disabled` binding was already on the button. Only needed to swap `mockResearchRun` → `createResearchJob` + `waitForResearch` and map the `ResearchResultResponse` fields to the view's expected shape.
+
+**Citations mapping.** The sidecar returns `sources: SearchResult[]` with structured objects (id, title, url, snippet). The view expects `citations: string[]`. Mapped via `s.title || s.url || s.id` to get the most human-readable identifier.
