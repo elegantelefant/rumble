@@ -106,7 +106,7 @@ async function generateDraft() {
     if (draftResult.value) {
       toasts.addToast("Draft prepared. Review before sharing with clients.", "success");
     } else {
-      toasts.addToast("Draft completed but returned no content.", "warning");
+      toasts.addToast("Draft completed but returned no content.", "info");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate draft.";
