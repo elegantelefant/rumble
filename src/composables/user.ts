@@ -3,7 +3,7 @@
 import { ref } from "vue";
 
 export const currentUser = ref({
-  name: "CoastalTower238",
-  team: "SilverEcho951",
+  name: "Local User",
+  team: "",
   version: "Rumble v0.1.0a",
 });

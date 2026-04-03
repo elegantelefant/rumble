@@ -13,6 +13,15 @@ const confidentialityMessage = computed(() =>
     ? "Local & Confidential"
     : "Chats retained locally; remote agents may assist on request.",
 );
+
+const initials = computed(() =>
+  currentUser.value.name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2),
+);
 </script>
 
 <template>
@@ -46,11 +55,11 @@ const confidentialityMessage = computed(() =>
         aria-label="Current user"
       >
         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-200)] text-[var(--primary-700)]">
-          CT
+          {{ initials }}
         </div>
         <div class="text-left leading-tight">
           <div class="font-medium text-[var(--primary-700)]">{{ currentUser.name }}</div>
-          <div class="text-xs text-[var(--primary-500)]">Team · {{ currentUser.team }}</div>
+          <div v-if="currentUser.team" class="text-xs text-[var(--primary-500)]">Team · {{ currentUser.team }}</div>
         </div>
       </div>
     </div>
