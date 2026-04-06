@@ -447,7 +447,10 @@ const selectedProviderDetails = computed(() =>
         </div>
       </section>
 
-      <div class="flex justify-end gap-3">
+      <div class="flex items-center justify-between gap-3">
+        <router-link to="/setup" class="text-sm text-[var(--primary-500)] underline hover:text-[var(--accent-600)]">
+          Ollama setup guide
+        </router-link>
         <button class="btn-primary" type="submit" :disabled="isSaving">
           <span v-if="!isSaving">Save settings</span>
           <span v-else class="flex items-center gap-2">

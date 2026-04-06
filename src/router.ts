@@ -1,9 +1,14 @@
 import { createRouter, createWebHashHistory } from "vue-router";
+import { ref } from "vue";
+
+/** Tracks whether Ollama setup has been verified this session. */
+export const setupVerified = ref(false);
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: "/login", component: () => import("./views/LoginView.vue") },
+    { path: "/setup", component: () => import("./views/SetupView.vue") },
     {
       path: "/",
       component: () => import("./layouts/AppShell.vue"),
@@ -24,16 +29,34 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => {
-  const publicPaths = ["/login"];
+router.beforeEach(async (to) => {
+  const publicPaths = ["/login", "/setup"];
   const isPublic = publicPaths.includes(to.path);
   const isAuthenticated = true; // TODO: replace with BetterAuth session check
+
   if (!isPublic && !isAuthenticated) {
     return "/login";
   }
   if (isPublic && isAuthenticated && to.path === "/login") {
     return "/review";
   }
+
+  // On first navigation to an app page, check Ollama readiness
+  if (!isPublic && !setupVerified.value) {
+    try {
+      const { ready } = await import("./api/sidecar");
+      const res = await ready();
+      if (res.status === "ready") {
+        setupVerified.value = true;
+        return true;
+      }
+    } catch {
+      // Sidecar or Ollama not reachable
+    }
+    // Redirect to setup if check failed
+    return "/setup";
+  }
+
   return true;
 });
 
