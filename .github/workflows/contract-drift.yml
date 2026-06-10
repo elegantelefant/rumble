@@ -1,0 +1,52 @@
+# ABOUTME: Fails CI when the committed generated API clients drift from openapi.json.
+# ABOUTME: Regenerates the orval TS client and the Pydantic sidecar models, then diffs.
+
+name: Contract Drift
+
+# This gate catches "the vendored openapi.json changed but the generated clients
+# weren't regenerated/committed". It does NOT catch "the backend contract moved
+# but ivory's vendored openapi.json is stale" — refreshing openapi.json from the
+# backend repo (birepo backend/openapi.json) is a manual/Renovate step.
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  drift:
+    name: Generated clients match openapi.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - run: pnpm install
+
+      - run: uv sync
+        working-directory: src-tauri/sidecar
+
+      - name: Regenerate orval TS client
+        run: pnpm generate:api
+
+      - name: Regenerate Pydantic sidecar models
+        run: pnpm generate:models
+
+      - name: Fail on uncommitted regeneration drift
+        run: git diff --exit-code -- src/api/generated src/api/models src-tauri/sidecar/models/generated.py
