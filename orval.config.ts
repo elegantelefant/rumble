@@ -10,6 +10,10 @@ export default defineConfig({
       schemas: "src/api/models",
       client: "vue-query",
       mode: "tags-split",
+      // Wipe the output dirs before generating so schemas dropped from the spec
+      // don't linger as orphaned files (and dead index.ts re-exports). Cleans
+      // only inside target/schemas dirs, leaving sibling client.ts untouched.
+      clean: true,
       override: {
         mutator: {
           path: "./src/api/client.ts",
