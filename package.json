@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "generate:api": "orval",
     "dev:sidecar": "cd src-tauri/sidecar && uv run python main.py --port 11435",
-    "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --type-mappings string+ulid=string",
+    "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --type-mappings string+ulid=string --snake-case-field --no-alias",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

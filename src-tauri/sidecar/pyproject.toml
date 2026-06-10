@@ -39,3 +39,8 @@ target-python-version = "3.12"
 # emits `from ulid import ULID`, a non-Pydantic type that breaks schema build.
 # Map it to a pattern-constrained str instead.
 type-mappings = ["string+ulid=string"]
+# 0.4.0 flipped wire fields to camelCase. The sidecar (and its FE client) speak
+# snake_case on their own local routes, so emit pure snake_case Python models with
+# no camelCase aliases (FastAPI would otherwise serialize responses by alias).
+snake-case-field = true
+no-alias = true
