@@ -4,17 +4,19 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import apiClient from "./client";
-import type { ClarifyRequest } from "./models/clarifyRequest";
-import type { ClarifyResponse } from "./models/clarifyResponse";
-import type { DraftRequest } from "./models/draftRequest";
-import type { JobCreatedResponse } from "./models/jobCreatedResponse";
-import type { JobResultResponse } from "./models/jobResultResponse";
-import type { ResearchRequest } from "./models/researchRequest";
-import type { ResearchResponse } from "./models/researchResponse";
-import type { ResearchResultResponse } from "./models/researchResultResponse";
-import type { ReviewRequest } from "./models/reviewRequest";
-import type { TranslateRequest } from "./models/translateRequest";
-import type { TranslateResponse } from "./models/translateResponse";
+import type {
+  ClarifyRequest,
+  ClarifyResponse,
+  DraftRequest,
+  JobCreatedResponse,
+  JobResultResponse,
+  ResearchRequest,
+  ResearchResponse,
+  ResearchResultResponse,
+  ReviewRequest,
+  TranslateRequest,
+  TranslateResponse,
+} from "./sidecar-types";
 
 // ---------------------------------------------------------------------------
 // Chat CRUD & messaging
