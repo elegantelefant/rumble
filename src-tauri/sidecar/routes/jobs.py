@@ -5,13 +5,12 @@ import json
 
 from fastapi import APIRouter, HTTPException
 
+from models import JobResultResponse, ResearchResultResponse
 from models.generated import (
     DraftRequest,
     JobCreatedResponse,
-    JobResultResponse,
     ResearchRequest,
     ResearchResponse,
-    ResearchResultResponse,
     ReviewRequest,
 )
 from routes.ai import _parse_llm_json, _safe_construct

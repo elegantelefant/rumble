@@ -6,8 +6,12 @@ import json
 
 import pytest
 
-from models.generated import (
+from models import (
     ChatCreateResponse,
+    JobResultResponse,
+    ResearchResultResponse,
+)
+from models.generated import (
     ChatDetailResponse,
     ChatListResponse,
     ChatMessagesResponse,
@@ -15,10 +19,8 @@ from models.generated import (
     ClarifyResponse,
     HealthResponse,
     JobCreatedResponse,
-    JobResultResponse,
     ReadyResponse,
     ResearchResponse,
-    ResearchResultResponse,
     SummariseChatResponse,
     SummariseDocumentResponse,
     SummariseSearchResponse,
