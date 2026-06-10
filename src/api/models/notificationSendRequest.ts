@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { NotificationSendRequestMetadata } from './notificationSendRequestMetadata';
 
@@ -12,7 +12,7 @@ export interface NotificationSendRequest {
    * Target user ID (must be in same org)
    * @minLength 1
    */
-  recipient_id: string;
+  recipientId: string;
   /**
    * Notification type
    * @minLength 1

@@ -3,32 +3,45 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { LegalRequestResponseInput } from './legalRequestResponseInput';
+import type { AnalysisInput } from './analysisInput';
+import type { DraftInput } from './draftInput';
+import type { ExtractionInput } from './extractionInput';
+import type { LegalRequestPriority } from './legalRequestPriority';
 import type { LegalRequestResponseResult } from './legalRequestResponseResult';
+import type { LegalRequestStatus } from './legalRequestStatus';
+import type { LegalRequestType } from './legalRequestType';
+import type { ResearchInput } from './researchInput';
+import type { ReviewInput } from './reviewInput';
+import type { UncertainInput } from './uncertainInput';
 
 /**
  * Full legal request representation.
  */
 export interface LegalRequestResponse {
+  /**
+   * ULID (26-char Crockford base-32).
+   * @pattern ^[0-9A-HJKMNP-TV-Z]{26}$
+   */
   id: string;
-  org_id: string;
-  briefcase_id?: string | null;
-  requestor_id: string;
-  assignee_id?: string | null;
-  request_type: string;
-  status: string;
-  priority: string;
+  orgId: string;
+  briefcaseId?: string | null;
+  requestorId: string;
+  assigneeId?: string | null;
+  requestType: LegalRequestType;
+  status: LegalRequestStatus;
+  priority: LegalRequestPriority;
   title: string;
   description?: string | null;
   category?: string | null;
-  input?: LegalRequestResponseInput;
+  input?: ResearchInput | DraftInput | ReviewInput | ExtractionInput | AnalysisInput | UncertainInput | null;
   result?: LegalRequestResponseResult;
   error?: string | null;
-  due_at?: string | null;
-  created_at: string;
-  started_at?: string | null;
-  completed_at?: string | null;
-  updated_at: string;
+  dueAt?: string | null;
+  restricted?: boolean;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
 }

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,15 +16,15 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   PracticeFeedbackResponse,
   PracticeSubmission
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -41,17 +41,17 @@ export type practiceWritingResponse200 = {
 }
 
 export type practiceWritingResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type practiceWritingResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type practiceWritingResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -69,7 +69,7 @@ export const getPracticeWritingUrl = () => {
 
   
 
-  return `/learn/practice/writing`
+  return `/api/v1/learn/practice/writing`
 }
 
 export const practiceWriting = async (practiceSubmission: PracticeSubmission, options?: RequestInit): Promise<practiceWritingResponse> => {
@@ -87,16 +87,16 @@ export const practiceWriting = async (practiceSubmission: PracticeSubmission, op
 
 
 
-export const getPracticeWritingMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceWriting>>, TError,{data: PracticeSubmission}, TContext>, }
+export const getPracticeWritingMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceWriting>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof practiceWriting>>, TError,{data: PracticeSubmission}, TContext> => {
 
 const mutationKey = ['practiceWriting'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -104,7 +104,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof practiceWriting>>, {data: PracticeSubmission}> = (props) => {
           const {data} = props ?? {};
 
-          return  practiceWriting(data,)
+          return  practiceWriting(data,requestOptions)
         }
 
 
@@ -116,13 +116,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PracticeWritingMutationResult = NonNullable<Awaited<ReturnType<typeof practiceWriting>>>
     export type PracticeWritingMutationBody = PracticeSubmission
-    export type PracticeWritingMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type PracticeWritingMutationError = ErrorEnvelope
 
     /**
  * @summary Practice Writing
  */
-export const usePracticeWriting = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceWriting>>, TError,{data: PracticeSubmission}, TContext>, }
+export const usePracticeWriting = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceWriting>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof practiceWriting>>,
         TError,
@@ -144,17 +144,17 @@ export type practiceStaffingResponse200 = {
 }
 
 export type practiceStaffingResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type practiceStaffingResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type practiceStaffingResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -172,7 +172,7 @@ export const getPracticeStaffingUrl = () => {
 
   
 
-  return `/learn/practice/staffing`
+  return `/api/v1/learn/practice/staffing`
 }
 
 export const practiceStaffing = async (practiceSubmission: PracticeSubmission, options?: RequestInit): Promise<practiceStaffingResponse> => {
@@ -190,16 +190,16 @@ export const practiceStaffing = async (practiceSubmission: PracticeSubmission, o
 
 
 
-export const getPracticeStaffingMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceStaffing>>, TError,{data: PracticeSubmission}, TContext>, }
+export const getPracticeStaffingMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceStaffing>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof practiceStaffing>>, TError,{data: PracticeSubmission}, TContext> => {
 
 const mutationKey = ['practiceStaffing'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -207,7 +207,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof practiceStaffing>>, {data: PracticeSubmission}> = (props) => {
           const {data} = props ?? {};
 
-          return  practiceStaffing(data,)
+          return  practiceStaffing(data,requestOptions)
         }
 
 
@@ -219,13 +219,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PracticeStaffingMutationResult = NonNullable<Awaited<ReturnType<typeof practiceStaffing>>>
     export type PracticeStaffingMutationBody = PracticeSubmission
-    export type PracticeStaffingMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type PracticeStaffingMutationError = ErrorEnvelope
 
     /**
  * @summary Practice Staffing
  */
-export const usePracticeStaffing = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceStaffing>>, TError,{data: PracticeSubmission}, TContext>, }
+export const usePracticeStaffing = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceStaffing>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof practiceStaffing>>,
         TError,
@@ -247,17 +247,17 @@ export type practiceHyposResponse200 = {
 }
 
 export type practiceHyposResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type practiceHyposResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type practiceHyposResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -275,7 +275,7 @@ export const getPracticeHyposUrl = () => {
 
   
 
-  return `/learn/practice/hypos`
+  return `/api/v1/learn/practice/hypos`
 }
 
 export const practiceHypos = async (practiceSubmission: PracticeSubmission, options?: RequestInit): Promise<practiceHyposResponse> => {
@@ -293,16 +293,16 @@ export const practiceHypos = async (practiceSubmission: PracticeSubmission, opti
 
 
 
-export const getPracticeHyposMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceHypos>>, TError,{data: PracticeSubmission}, TContext>, }
+export const getPracticeHyposMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceHypos>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof practiceHypos>>, TError,{data: PracticeSubmission}, TContext> => {
 
 const mutationKey = ['practiceHypos'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -310,7 +310,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof practiceHypos>>, {data: PracticeSubmission}> = (props) => {
           const {data} = props ?? {};
 
-          return  practiceHypos(data,)
+          return  practiceHypos(data,requestOptions)
         }
 
 
@@ -322,13 +322,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PracticeHyposMutationResult = NonNullable<Awaited<ReturnType<typeof practiceHypos>>>
     export type PracticeHyposMutationBody = PracticeSubmission
-    export type PracticeHyposMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type PracticeHyposMutationError = ErrorEnvelope
 
     /**
  * @summary Practice Hypos
  */
-export const usePracticeHypos = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceHypos>>, TError,{data: PracticeSubmission}, TContext>, }
+export const usePracticeHypos = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceHypos>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof practiceHypos>>,
         TError,
@@ -350,17 +350,17 @@ export type practiceEssaysResponse200 = {
 }
 
 export type practiceEssaysResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type practiceEssaysResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type practiceEssaysResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -378,7 +378,7 @@ export const getPracticeEssaysUrl = () => {
 
   
 
-  return `/learn/practice/essays`
+  return `/api/v1/learn/practice/essays`
 }
 
 export const practiceEssays = async (practiceSubmission: PracticeSubmission, options?: RequestInit): Promise<practiceEssaysResponse> => {
@@ -396,16 +396,16 @@ export const practiceEssays = async (practiceSubmission: PracticeSubmission, opt
 
 
 
-export const getPracticeEssaysMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceEssays>>, TError,{data: PracticeSubmission}, TContext>, }
+export const getPracticeEssaysMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceEssays>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof practiceEssays>>, TError,{data: PracticeSubmission}, TContext> => {
 
 const mutationKey = ['practiceEssays'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -413,7 +413,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof practiceEssays>>, {data: PracticeSubmission}> = (props) => {
           const {data} = props ?? {};
 
-          return  practiceEssays(data,)
+          return  practiceEssays(data,requestOptions)
         }
 
 
@@ -425,13 +425,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PracticeEssaysMutationResult = NonNullable<Awaited<ReturnType<typeof practiceEssays>>>
     export type PracticeEssaysMutationBody = PracticeSubmission
-    export type PracticeEssaysMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type PracticeEssaysMutationError = ErrorEnvelope
 
     /**
  * @summary Practice Essays
  */
-export const usePracticeEssays = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceEssays>>, TError,{data: PracticeSubmission}, TContext>, }
+export const usePracticeEssays = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceEssays>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof practiceEssays>>,
         TError,
@@ -454,17 +454,17 @@ export type practiceCrossExResponse200 = {
 }
 
 export type practiceCrossExResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type practiceCrossExResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type practiceCrossExResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -482,7 +482,7 @@ export const getPracticeCrossExUrl = () => {
 
   
 
-  return `/learn/practice/cross-ex`
+  return `/api/v1/learn/practice/cross-ex`
 }
 
 export const practiceCrossEx = async (practiceSubmission: PracticeSubmission, options?: RequestInit): Promise<practiceCrossExResponse> => {
@@ -500,16 +500,16 @@ export const practiceCrossEx = async (practiceSubmission: PracticeSubmission, op
 
 
 
-export const getPracticeCrossExMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceCrossEx>>, TError,{data: PracticeSubmission}, TContext>, }
+export const getPracticeCrossExMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceCrossEx>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof practiceCrossEx>>, TError,{data: PracticeSubmission}, TContext> => {
 
 const mutationKey = ['practiceCrossEx'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -517,7 +517,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof practiceCrossEx>>, {data: PracticeSubmission}> = (props) => {
           const {data} = props ?? {};
 
-          return  practiceCrossEx(data,)
+          return  practiceCrossEx(data,requestOptions)
         }
 
 
@@ -529,13 +529,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PracticeCrossExMutationResult = NonNullable<Awaited<ReturnType<typeof practiceCrossEx>>>
     export type PracticeCrossExMutationBody = PracticeSubmission
-    export type PracticeCrossExMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type PracticeCrossExMutationError = ErrorEnvelope
 
     /**
  * @summary Practice Cross Ex
  */
-export const usePracticeCrossEx = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceCrossEx>>, TError,{data: PracticeSubmission}, TContext>, }
+export const usePracticeCrossEx = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof practiceCrossEx>>, TError,{data: PracticeSubmission}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof practiceCrossEx>>,
         TError,

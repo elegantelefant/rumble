@@ -3,13 +3,17 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 /**
  * Response with presigned download URL.
  */
 export interface FileDownloadResponse {
+  /**
+   * ULID (26-char Crockford base-32).
+   * @pattern ^[0-9A-HJKMNP-TV-Z]{26}$
+   */
   id: string;
-  download_url: string;
+  downloadUrl: string;
 }

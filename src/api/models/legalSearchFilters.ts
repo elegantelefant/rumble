@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 /**
@@ -15,13 +15,13 @@ export interface LegalSearchFilters {
   /** Court names to filter by */
   court?: string[] | null;
   /** Start year (inclusive) */
-  year_from?: number | null;
+  yearFrom?: number | null;
   /** End year (inclusive) */
-  year_to?: number | null;
+  yearTo?: number | null;
   /** Legislation types (Act, Regulation, etc.) */
-  legis_type?: string[] | null;
+  legisType?: string[] | null;
   /** Legislation status (Current, Repealed, etc.) */
-  legis_status?: string[] | null;
+  legisStatus?: string[] | null;
   /** News source filter */
   source?: string[] | null;
   /** News author filter */
@@ -29,7 +29,7 @@ export interface LegalSearchFilters {
   /** Regulatory agency filter */
   agency?: string[] | null;
   /** Hansard speaker names */
-  mp_names?: string[] | null;
+  mpNames?: string[] | null;
   /** Hansard report type */
-  report_type?: string[] | null;
+  reportType?: string[] | null;
 }

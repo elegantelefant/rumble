@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,20 +30,20 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   ChatBriefcaseContextResponse,
   ChatCreateRequest,
-  ChatCreateResponse,
   ChatDetailResponse,
   ChatListResponse,
   ChatMessageRequest,
   ChatMessagesResponse,
+  ChatSummary,
   ChatTitleRequest,
   ChatTitleResponse,
   ChatUpdateRequest,
-  ErrorResponse,
+  ErrorEnvelope,
   FeedbackRequest,
-  HTTPValidationError,
+  FeedbackResponse,
+  GraphContextResponse,
   ListChatsParams,
   OkResponse,
   ReorderRequest,
@@ -58,6 +58,8 @@ interface TypedResponse<T> extends Response {
 
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
@@ -70,17 +72,17 @@ export type chatTitleGenerateResponse200 = {
 }
 
 export type chatTitleGenerateResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type chatTitleGenerateResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type chatTitleGenerateResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -98,7 +100,7 @@ export const getChatTitleGenerateUrl = () => {
 
   
 
-  return `/chat_title/generate`
+  return `/api/v1/chat_title/generate`
 }
 
 export const chatTitleGenerate = async (chatTitleRequest: ChatTitleRequest, options?: RequestInit): Promise<chatTitleGenerateResponse> => {
@@ -116,16 +118,16 @@ export const chatTitleGenerate = async (chatTitleRequest: ChatTitleRequest, opti
 
 
 
-export const getChatTitleGenerateMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof chatTitleGenerate>>, TError,{data: ChatTitleRequest}, TContext>, }
+export const getChatTitleGenerateMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof chatTitleGenerate>>, TError,{data: ChatTitleRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof chatTitleGenerate>>, TError,{data: ChatTitleRequest}, TContext> => {
 
 const mutationKey = ['chatTitleGenerate'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -133,7 +135,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof chatTitleGenerate>>, {data: ChatTitleRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  chatTitleGenerate(data,)
+          return  chatTitleGenerate(data,requestOptions)
         }
 
 
@@ -145,13 +147,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ChatTitleGenerateMutationResult = NonNullable<Awaited<ReturnType<typeof chatTitleGenerate>>>
     export type ChatTitleGenerateMutationBody = ChatTitleRequest
-    export type ChatTitleGenerateMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type ChatTitleGenerateMutationError = ErrorEnvelope
 
     /**
  * @summary Chat Title Generate
  */
-export const useChatTitleGenerate = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof chatTitleGenerate>>, TError,{data: ChatTitleRequest}, TContext>, }
+export const useChatTitleGenerate = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof chatTitleGenerate>>, TError,{data: ChatTitleRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof chatTitleGenerate>>,
         TError,
@@ -161,20 +163,21 @@ export const useChatTitleGenerate = <TError = AuthErrorResponse | HTTPValidation
       return useMutation(getChatTitleGenerateMutationOptions(options), queryClient);
     }
     /**
+ * Create a chat and return the full record (same shape as a list item).
  * @summary Create Chat
  */
 export type createChatResponse200 = {
-  data: ChatCreateResponse
+  data: ChatSummary
   status: 200
 }
 
 export type createChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -192,7 +195,7 @@ export const getCreateChatUrl = () => {
 
   
 
-  return `/chats`
+  return `/api/v1/chats`
 }
 
 export const createChat = async (chatCreateRequest: ChatCreateRequest, options?: RequestInit): Promise<createChatResponse> => {
@@ -210,16 +213,16 @@ export const createChat = async (chatCreateRequest: ChatCreateRequest, options?:
 
 
 
-export const getCreateChatMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChat>>, TError,{data: ChatCreateRequest}, TContext>, }
+export const getCreateChatMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChat>>, TError,{data: ChatCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createChat>>, TError,{data: ChatCreateRequest}, TContext> => {
 
 const mutationKey = ['createChat'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -227,7 +230,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createChat>>, {data: ChatCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createChat(data,)
+          return  createChat(data,requestOptions)
         }
 
 
@@ -239,13 +242,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateChatMutationResult = NonNullable<Awaited<ReturnType<typeof createChat>>>
     export type CreateChatMutationBody = ChatCreateRequest
-    export type CreateChatMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreateChatMutationError = ErrorEnvelope
 
     /**
  * @summary Create Chat
  */
-export const useCreateChat = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChat>>, TError,{data: ChatCreateRequest}, TContext>, }
+export const useCreateChat = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChat>>, TError,{data: ChatCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createChat>>,
         TError,
@@ -264,12 +267,12 @@ export type listChatsResponse200 = {
 }
 
 export type listChatsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listChatsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -294,7 +297,7 @@ export const getListChatsUrl = (params?: ListChatsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/chats?${stringifiedParams}` : `/chats`
+  return stringifiedParams.length > 0 ? `/api/v1/chats?${stringifiedParams}` : `/api/v1/chats`
 }
 
 export const listChats = async (params?: ListChatsParams, options?: RequestInit): Promise<listChatsResponse> => {
@@ -314,21 +317,21 @@ export const listChats = async (params?: ListChatsParams, options?: RequestInit)
 
 export const getListChatsQueryKey = (params?: MaybeRef<ListChatsParams>,) => {
     return [
-    'chats', ...(params ? [params] : [])
+    'api','v1','chats', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListChatsQueryOptions = <TData = Awaited<ReturnType<typeof listChats>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListChatsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChats>>, TError, TData>>, }
+export const getListChatsQueryOptions = <TData = Awaited<ReturnType<typeof listChats>>, TError = ErrorEnvelope>(params?: MaybeRef<ListChatsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChats>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListChatsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listChats>>> = ({ signal }) => listChats(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listChats>>> = ({ signal }) => listChats(unref(params), { signal, ...requestOptions });
 
       
 
@@ -338,15 +341,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListChatsQueryResult = NonNullable<Awaited<ReturnType<typeof listChats>>>
-export type ListChatsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListChatsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Chats
  */
 
-export function useListChats<TData = Awaited<ReturnType<typeof listChats>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListChatsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChats>>, TError, TData>>, }
+export function useListChats<TData = Awaited<ReturnType<typeof listChats>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListChatsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChats>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -372,17 +375,17 @@ export type getChatResponse200 = {
 }
 
 export type getChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getChatResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -400,7 +403,7 @@ export const getGetChatUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}`
+  return `/api/v1/chats/${id}`
 }
 
 export const getChat = async (id: string, options?: RequestInit): Promise<getChatResponse> => {
@@ -420,21 +423,21 @@ export const getChat = async (id: string, options?: RequestInit): Promise<getCha
 
 export const getGetChatQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'chats',id
+    'api','v1','chats',id
     ] as const;
     }
 
     
-export const getGetChatQueryOptions = <TData = Awaited<ReturnType<typeof getChat>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChat>>, TError, TData>>, }
+export const getGetChatQueryOptions = <TData = Awaited<ReturnType<typeof getChat>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChat>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetChatQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChat>>> = ({ signal }) => getChat(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChat>>> = ({ signal }) => getChat(unref(id), { signal, ...requestOptions });
 
       
 
@@ -444,15 +447,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetChatQueryResult = NonNullable<Awaited<ReturnType<typeof getChat>>>
-export type GetChatQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetChatQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Chat
  */
 
-export function useGetChat<TData = Awaited<ReturnType<typeof getChat>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChat>>, TError, TData>>, }
+export function useGetChat<TData = Awaited<ReturnType<typeof getChat>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChat>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -477,17 +480,17 @@ export type deleteChatResponse200 = {
 }
 
 export type deleteChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteChatResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -505,7 +508,7 @@ export const getDeleteChatUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}`
+  return `/api/v1/chats/${id}`
 }
 
 export const deleteChat = async (id: string, options?: RequestInit): Promise<deleteChatResponse> => {
@@ -522,16 +525,16 @@ export const deleteChat = async (id: string, options?: RequestInit): Promise<del
 
 
 
-export const getDeleteChatMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChat>>, TError,{id: string}, TContext>, }
+export const getDeleteChatMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChat>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteChat>>, TError,{id: string}, TContext> => {
 
 const mutationKey = ['deleteChat'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -539,7 +542,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteChat>>, {id: string}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteChat(id,)
+          return  deleteChat(id,requestOptions)
         }
 
 
@@ -551,13 +554,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteChatMutationResult = NonNullable<Awaited<ReturnType<typeof deleteChat>>>
     
-    export type DeleteChatMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteChatMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Chat
  */
-export const useDeleteChat = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChat>>, TError,{id: string}, TContext>, }
+export const useDeleteChat = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChat>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteChat>>,
         TError,
@@ -575,17 +578,17 @@ export type updateChatResponse200 = {
 }
 
 export type updateChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateChatResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -603,7 +606,7 @@ export const getUpdateChatUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}`
+  return `/api/v1/chats/${id}`
 }
 
 export const updateChat = async (id: string,
@@ -622,16 +625,16 @@ export const updateChat = async (id: string,
 
 
 
-export const getUpdateChatMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChat>>, TError,{id: string;data: ChatUpdateRequest}, TContext>, }
+export const getUpdateChatMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChat>>, TError,{id: string;data: ChatUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateChat>>, TError,{id: string;data: ChatUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateChat'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -639,7 +642,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateChat>>, {id: string;data: ChatUpdateRequest}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  updateChat(id,data,)
+          return  updateChat(id,data,requestOptions)
         }
 
 
@@ -651,13 +654,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateChatMutationResult = NonNullable<Awaited<ReturnType<typeof updateChat>>>
     export type UpdateChatMutationBody = ChatUpdateRequest
-    export type UpdateChatMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateChatMutationError = ErrorEnvelope
 
     /**
  * @summary Update Chat
  */
-export const useUpdateChat = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChat>>, TError,{id: string;data: ChatUpdateRequest}, TContext>, }
+export const useUpdateChat = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChat>>, TError,{id: string;data: ChatUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateChat>>,
         TError,
@@ -667,6 +670,125 @@ export const useUpdateChat = <TError = AuthErrorResponse | ErrorResponse | HTTPV
       return useMutation(getUpdateChatMutationOptions(options), queryClient);
     }
     /**
+ * Return structured graph data (nodes + edges) for a briefcase chat's documents.
+ * @summary Get Chat Graph Context
+ */
+export type getChatGraphContextResponse200 = {
+  data: GraphContextResponse
+  status: 200
+}
+
+export type getChatGraphContextResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type getChatGraphContextResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type getChatGraphContextResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type getChatGraphContextResponseSuccess = (getChatGraphContextResponse200) & {
+  headers: Headers;
+};
+export type getChatGraphContextResponseError = (getChatGraphContextResponse401 | getChatGraphContextResponse404 | getChatGraphContextResponse422) & {
+  headers: Headers;
+};
+
+export type getChatGraphContextResponse = (getChatGraphContextResponseSuccess | getChatGraphContextResponseError)
+
+export const getGetChatGraphContextUrl = (id: string,) => {
+
+
+  
+
+  return `/api/v1/chats/${id}/graph-context`
+}
+
+export const getChatGraphContext = async (id: string, options?: RequestInit): Promise<getChatGraphContextResponse> => {
+  
+  return apiClient<getChatGraphContextResponse>(getGetChatGraphContextUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getGetChatGraphContextQueryKey = (id: MaybeRef<string>,) => {
+    return [
+    'api','v1','chats',id,'graph-context'
+    ] as const;
+    }
+
+    
+export const getGetChatGraphContextQueryOptions = <TData = Awaited<ReturnType<typeof getChatGraphContext>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatGraphContext>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getGetChatGraphContextQueryKey(id);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChatGraphContext>>> = ({ signal }) => getChatGraphContext(unref(id), { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: computed(() => !!(unref(id))), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChatGraphContext>>, TError, TData> 
+}
+
+export type GetChatGraphContextQueryResult = NonNullable<Awaited<ReturnType<typeof getChatGraphContext>>>
+export type GetChatGraphContextQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Get Chat Graph Context
+ */
+
+export function useGetChatGraphContext<TData = Awaited<ReturnType<typeof getChatGraphContext>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatGraphContext>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetChatGraphContextQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * Persist a per-user x per-briefcase chat ordering.
+
+`id` is the briefcase_id that owns the bucket being reordered. The
+special value "_" denotes the "other chats" bucket (chats with no
+briefcase) — chosen because briefcase ids are uuid strings that
+never match a single underscore, so there is no ambiguity.
+
+Body is the full ordered list of chat ids in this bucket. Caller-side
+drag results in a complete list; the BE wipes and re-inserts the
+bucket in one transaction to keep positions contiguous.
+
+Rebase note: explicit session.commit() removed per PR-15 — the
+tenant-session dependency owns commit at request-end.
  * @summary Reorder Chats
  */
 export type reorderChatsResponse200 = {
@@ -675,19 +797,24 @@ export type reorderChatsResponse200 = {
 }
 
 export type reorderChatsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type reorderChatsResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
 export type reorderChatsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type reorderChatsResponseSuccess = (reorderChatsResponse200) & {
   headers: Headers;
 };
-export type reorderChatsResponseError = (reorderChatsResponse401 | reorderChatsResponse422) & {
+export type reorderChatsResponseError = (reorderChatsResponse401 | reorderChatsResponse404 | reorderChatsResponse422) & {
   headers: Headers;
 };
 
@@ -698,7 +825,7 @@ export const getReorderChatsUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/order`
+  return `/api/v1/chats/${id}/order`
 }
 
 export const reorderChats = async (id: string,
@@ -717,16 +844,16 @@ export const reorderChats = async (id: string,
 
 
 
-export const getReorderChatsMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChats>>, TError,{id: string;data: ReorderRequest}, TContext>, }
+export const getReorderChatsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChats>>, TError,{id: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof reorderChats>>, TError,{id: string;data: ReorderRequest}, TContext> => {
 
 const mutationKey = ['reorderChats'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -734,7 +861,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderChats>>, {id: string;data: ReorderRequest}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  reorderChats(id,data,)
+          return  reorderChats(id,data,requestOptions)
         }
 
 
@@ -746,13 +873,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ReorderChatsMutationResult = NonNullable<Awaited<ReturnType<typeof reorderChats>>>
     export type ReorderChatsMutationBody = ReorderRequest
-    export type ReorderChatsMutationError = AuthErrorResponse | HTTPValidationError
+    export type ReorderChatsMutationError = ErrorEnvelope
 
     /**
  * @summary Reorder Chats
  */
-export const useReorderChats = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChats>>, TError,{id: string;data: ReorderRequest}, TContext>, }
+export const useReorderChats = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChats>>, TError,{id: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof reorderChats>>,
         TError,
@@ -762,6 +889,17 @@ export const useReorderChats = <TError = AuthErrorResponse | HTTPValidationError
       return useMutation(getReorderChatsMutationOptions(options), queryClient);
     }
     /**
+ * Grant another user access to a chat.
+
+Authorisation:
+  - Caller must own the chat (chat.user_id == caller.id).
+  - Sharee must share at least one org with the caller (transitive
+    same-org check via org_members).
+  - Sharee != caller (no self-shares — they already own it).
+  - Permission validated against the literal CHECK in chat_shares.
+
+Rebase note: explicit session.commit() removed per PR-15 — the
+tenant-session dependency owns commit at request-end.
  * @summary Share Chat
  */
 export type shareChatResponse200 = {
@@ -769,20 +907,35 @@ export type shareChatResponse200 = {
   status: 200
 }
 
+export type shareChatResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type shareChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type shareChatResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type shareChatResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
 export type shareChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type shareChatResponseSuccess = (shareChatResponse200) & {
   headers: Headers;
 };
-export type shareChatResponseError = (shareChatResponse401 | shareChatResponse422) & {
+export type shareChatResponseError = (shareChatResponse400 | shareChatResponse401 | shareChatResponse403 | shareChatResponse404 | shareChatResponse422) & {
   headers: Headers;
 };
 
@@ -793,7 +946,7 @@ export const getShareChatUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/share`
+  return `/api/v1/chats/${id}/share`
 }
 
 export const shareChat = async (id: string,
@@ -812,16 +965,16 @@ export const shareChat = async (id: string,
 
 
 
-export const getShareChatMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareChat>>, TError,{id: string;data: ShareRequest}, TContext>, }
+export const getShareChatMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareChat>>, TError,{id: string;data: ShareRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof shareChat>>, TError,{id: string;data: ShareRequest}, TContext> => {
 
 const mutationKey = ['shareChat'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -829,7 +982,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof shareChat>>, {id: string;data: ShareRequest}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  shareChat(id,data,)
+          return  shareChat(id,data,requestOptions)
         }
 
 
@@ -841,13 +994,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ShareChatMutationResult = NonNullable<Awaited<ReturnType<typeof shareChat>>>
     export type ShareChatMutationBody = ShareRequest
-    export type ShareChatMutationError = AuthErrorResponse | HTTPValidationError
+    export type ShareChatMutationError = ErrorEnvelope
 
     /**
  * @summary Share Chat
  */
-export const useShareChat = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareChat>>, TError,{id: string;data: ShareRequest}, TContext>, }
+export const useShareChat = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareChat>>, TError,{id: string;data: ShareRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof shareChat>>,
         TError,
@@ -866,17 +1019,17 @@ export type getBriefcaseContextResponse200 = {
 }
 
 export type getBriefcaseContextResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getBriefcaseContextResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getBriefcaseContextResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -894,7 +1047,7 @@ export const getGetBriefcaseContextUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/briefcase-context`
+  return `/api/v1/chats/${id}/briefcase-context`
 }
 
 export const getBriefcaseContext = async (id: string, options?: RequestInit): Promise<getBriefcaseContextResponse> => {
@@ -914,21 +1067,21 @@ export const getBriefcaseContext = async (id: string, options?: RequestInit): Pr
 
 export const getGetBriefcaseContextQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'chats',id,'briefcase-context'
+    'api','v1','chats',id,'briefcase-context'
     ] as const;
     }
 
     
-export const getGetBriefcaseContextQueryOptions = <TData = Awaited<ReturnType<typeof getBriefcaseContext>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcaseContext>>, TError, TData>>, }
+export const getGetBriefcaseContextQueryOptions = <TData = Awaited<ReturnType<typeof getBriefcaseContext>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcaseContext>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetBriefcaseContextQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBriefcaseContext>>> = ({ signal }) => getBriefcaseContext(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBriefcaseContext>>> = ({ signal }) => getBriefcaseContext(unref(id), { signal, ...requestOptions });
 
       
 
@@ -938,15 +1091,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetBriefcaseContextQueryResult = NonNullable<Awaited<ReturnType<typeof getBriefcaseContext>>>
-export type GetBriefcaseContextQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetBriefcaseContextQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Briefcase Context
  */
 
-export function useGetBriefcaseContext<TData = Awaited<ReturnType<typeof getBriefcaseContext>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcaseContext>>, TError, TData>>, }
+export function useGetBriefcaseContext<TData = Awaited<ReturnType<typeof getBriefcaseContext>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcaseContext>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -963,6 +1116,11 @@ export function useGetBriefcaseContext<TData = Awaited<ReturnType<typeof getBrie
 
 
 /**
+ * Refresh the cached briefcase RAG context for a chat (NOT IMPLEMENTED).
+
+Returns 501 — the refresh hook isn't wired; callers should re-fetch
+`/chats/{id}/briefcase-context` directly until BE wires invalidation. See
+`agent_docs/api-deprecations.md` and BE.C195.
  * @summary Refresh Briefcase Context
  */
 export type refreshBriefcaseContextResponse200 = {
@@ -971,19 +1129,24 @@ export type refreshBriefcaseContextResponse200 = {
 }
 
 export type refreshBriefcaseContextResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type refreshBriefcaseContextResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type refreshBriefcaseContextResponse501 = {
+  data: void
+  status: 501
 }
 
 export type refreshBriefcaseContextResponseSuccess = (refreshBriefcaseContextResponse200) & {
   headers: Headers;
 };
-export type refreshBriefcaseContextResponseError = (refreshBriefcaseContextResponse401 | refreshBriefcaseContextResponse422) & {
+export type refreshBriefcaseContextResponseError = (refreshBriefcaseContextResponse401 | refreshBriefcaseContextResponse422 | refreshBriefcaseContextResponse501) & {
   headers: Headers;
 };
 
@@ -994,7 +1157,7 @@ export const getRefreshBriefcaseContextUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/briefcase-context/refresh`
+  return `/api/v1/chats/${id}/briefcase-context/refresh`
 }
 
 export const refreshBriefcaseContext = async (id: string, options?: RequestInit): Promise<refreshBriefcaseContextResponse> => {
@@ -1011,16 +1174,16 @@ export const refreshBriefcaseContext = async (id: string, options?: RequestInit)
 
 
 
-export const getRefreshBriefcaseContextMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshBriefcaseContext>>, TError,{id: string}, TContext>, }
+export const getRefreshBriefcaseContextMutationOptions = <TError = ErrorEnvelope | void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshBriefcaseContext>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof refreshBriefcaseContext>>, TError,{id: string}, TContext> => {
 
 const mutationKey = ['refreshBriefcaseContext'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1028,7 +1191,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshBriefcaseContext>>, {id: string}> = (props) => {
           const {id} = props ?? {};
 
-          return  refreshBriefcaseContext(id,)
+          return  refreshBriefcaseContext(id,requestOptions)
         }
 
 
@@ -1040,13 +1203,13 @@ const {mutation: mutationOptions} = options ?
 
     export type RefreshBriefcaseContextMutationResult = NonNullable<Awaited<ReturnType<typeof refreshBriefcaseContext>>>
     
-    export type RefreshBriefcaseContextMutationError = AuthErrorResponse | HTTPValidationError
+    export type RefreshBriefcaseContextMutationError = ErrorEnvelope | void
 
     /**
  * @summary Refresh Briefcase Context
  */
-export const useRefreshBriefcaseContext = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshBriefcaseContext>>, TError,{id: string}, TContext>, }
+export const useRefreshBriefcaseContext = <TError = ErrorEnvelope | void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshBriefcaseContext>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof refreshBriefcaseContext>>,
         TError,
@@ -1065,22 +1228,22 @@ export type sendMessageResponse200 = {
 }
 
 export type sendMessageResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type sendMessageResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type sendMessageResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type sendMessageResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -1098,7 +1261,7 @@ export const getSendMessageUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/message`
+  return `/api/v1/chats/${id}/message`
 }
 
 export const sendMessage = async (id: string,
@@ -1117,16 +1280,16 @@ export const sendMessage = async (id: string,
 
 
 
-export const getSendMessageMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessage>>, TError,{id: string;data: ChatMessageRequest}, TContext>, }
+export const getSendMessageMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessage>>, TError,{id: string;data: ChatMessageRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof sendMessage>>, TError,{id: string;data: ChatMessageRequest}, TContext> => {
 
 const mutationKey = ['sendMessage'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1134,7 +1297,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendMessage>>, {id: string;data: ChatMessageRequest}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  sendMessage(id,data,)
+          return  sendMessage(id,data,requestOptions)
         }
 
 
@@ -1146,13 +1309,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SendMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendMessage>>>
     export type SendMessageMutationBody = ChatMessageRequest
-    export type SendMessageMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type SendMessageMutationError = ErrorEnvelope
 
     /**
  * @summary Send Message
  */
-export const useSendMessage = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessage>>, TError,{id: string;data: ChatMessageRequest}, TContext>, }
+export const useSendMessage = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessage>>, TError,{id: string;data: ChatMessageRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof sendMessage>>,
         TError,
@@ -1170,17 +1333,17 @@ export type getMessagesResponse200 = {
 }
 
 export type getMessagesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getMessagesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getMessagesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1198,7 +1361,7 @@ export const getGetMessagesUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/messages`
+  return `/api/v1/chats/${id}/messages`
 }
 
 export const getMessages = async (id: string, options?: RequestInit): Promise<getMessagesResponse> => {
@@ -1218,21 +1381,21 @@ export const getMessages = async (id: string, options?: RequestInit): Promise<ge
 
 export const getGetMessagesQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'chats',id,'messages'
+    'api','v1','chats',id,'messages'
     ] as const;
     }
 
     
-export const getGetMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getMessages>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>>, }
+export const getGetMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getMessages>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetMessagesQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMessages>>> = ({ signal }) => getMessages(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMessages>>> = ({ signal }) => getMessages(unref(id), { signal, ...requestOptions });
 
       
 
@@ -1242,15 +1405,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getMessages>>>
-export type GetMessagesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetMessagesQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Messages
  */
 
-export function useGetMessages<TData = Awaited<ReturnType<typeof getMessages>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>>, }
+export function useGetMessages<TData = Awaited<ReturnType<typeof getMessages>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1274,12 +1437,18 @@ otherwise defaults to `application/x-ndjson`.
 
 **Chunk lifecycle:**
 
-| type     | value              | description                    |
-|----------|--------------------|--------------------------------|
-| `status` | status string      | Processing status updates      |
-| `delta`  | partial text       | Incremental assistant response |
-| `done`   | `"completed"`      | Stream finished                |
-| `error`  | error message      | Stream failed                  |
+| type       | value                  | description                    |
+|------------|------------------------|--------------------------------|
+| `status`   | status string          | Processing status updates      |
+| `delta`    | partial text           | Incremental assistant response |
+| `thinking` | partial thinking text  | Model reasoning tokens         |
+| `done`     | `"completed"`          | Stream finished                |
+| `error`    | `{code, message}`      | Structured failure (terminal)  |
+
+Every successful stream ends with exactly one `done`. On failure the
+terminal event is a structured `error` and `done` is NOT emitted.
+`code` is one of the stable `StreamErrorCode` values; `message` is
+user-safe (no exception repr or stack fragments).
  * @summary Stream Response
  */
 export type streamResponseResponse200ApplicationJson = {
@@ -1293,22 +1462,22 @@ export type streamResponseResponse200ApplicationXNdjson = {
 }
 
 export type streamResponseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type streamResponseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type streamResponseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type streamResponseResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -1326,7 +1495,7 @@ export const getStreamResponseUrl = (id: string,) => {
 
   
 
-  return `/chats/${id}/stream`
+  return `/api/v1/chats/${id}/stream`
 }
 
 export const streamResponse = async (id: string,
@@ -1345,16 +1514,16 @@ export const streamResponse = async (id: string,
 
 
 
-export const getStreamResponseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof streamResponse>>, TError,{id: string;data: ChatMessageRequest}, TContext>, }
+export const getStreamResponseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof streamResponse>>, TError,{id: string;data: ChatMessageRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof streamResponse>>, TError,{id: string;data: ChatMessageRequest}, TContext> => {
 
 const mutationKey = ['streamResponse'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1362,7 +1531,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof streamResponse>>, {id: string;data: ChatMessageRequest}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  streamResponse(id,data,)
+          return  streamResponse(id,data,requestOptions)
         }
 
 
@@ -1374,13 +1543,13 @@ const {mutation: mutationOptions} = options ?
 
     export type StreamResponseMutationResult = NonNullable<Awaited<ReturnType<typeof streamResponse>>>
     export type StreamResponseMutationBody = ChatMessageRequest
-    export type StreamResponseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type StreamResponseMutationError = ErrorEnvelope
 
     /**
  * @summary Stream Response
  */
-export const useStreamResponse = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof streamResponse>>, TError,{id: string;data: ChatMessageRequest}, TContext>, }
+export const useStreamResponse = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof streamResponse>>, TError,{id: string;data: ChatMessageRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof streamResponse>>,
         TError,
@@ -1391,25 +1560,30 @@ export const useStreamResponse = <TError = AuthErrorResponse | ErrorResponse | H
     }
     /**
  * Record thumbs up/down feedback for a message.
+
+Returns the persisted (message_id, thumbs_up) so the FE can confirm
+what landed without a follow-up GET. 404s when the message_id is
+unknown (previously the bare UPDATE silently no-opped, so a typo'd
+or stale message_id would look like success).
  * @summary Record Feedback
  */
 export type recordFeedbackResponse200 = {
-  data: OkResponse
+  data: FeedbackResponse
   status: 200
 }
 
 export type recordFeedbackResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type recordFeedbackResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type recordFeedbackResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1428,7 +1602,7 @@ export const getRecordFeedbackUrl = (chatId: string,
 
   
 
-  return `/chats/${chatId}/messages/${messageId}/feedback`
+  return `/api/v1/chats/${chatId}/messages/${messageId}/feedback`
 }
 
 export const recordFeedback = async (chatId: string,
@@ -1448,16 +1622,16 @@ export const recordFeedback = async (chatId: string,
 
 
 
-export const getRecordFeedbackMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordFeedback>>, TError,{chatId: string;messageId: string;data: FeedbackRequest}, TContext>, }
+export const getRecordFeedbackMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordFeedback>>, TError,{chatId: string;messageId: string;data: FeedbackRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof recordFeedback>>, TError,{chatId: string;messageId: string;data: FeedbackRequest}, TContext> => {
 
 const mutationKey = ['recordFeedback'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1465,7 +1639,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordFeedback>>, {chatId: string;messageId: string;data: FeedbackRequest}> = (props) => {
           const {chatId,messageId,data} = props ?? {};
 
-          return  recordFeedback(chatId,messageId,data,)
+          return  recordFeedback(chatId,messageId,data,requestOptions)
         }
 
 
@@ -1477,13 +1651,13 @@ const {mutation: mutationOptions} = options ?
 
     export type RecordFeedbackMutationResult = NonNullable<Awaited<ReturnType<typeof recordFeedback>>>
     export type RecordFeedbackMutationBody = FeedbackRequest
-    export type RecordFeedbackMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type RecordFeedbackMutationError = ErrorEnvelope
 
     /**
  * @summary Record Feedback
  */
-export const useRecordFeedback = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordFeedback>>, TError,{chatId: string;messageId: string;data: FeedbackRequest}, TContext>, }
+export const useRecordFeedback = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordFeedback>>, TError,{chatId: string;messageId: string;data: FeedbackRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof recordFeedback>>,
         TError,

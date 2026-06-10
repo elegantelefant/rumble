@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,16 +30,17 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   DraftRequest,
   DraftResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  DraftVersionListResponse,
+  ErrorEnvelope,
   JobCreatedResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -56,17 +57,17 @@ export type draftResponse200 = {
 }
 
 export type draftResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type draftResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type draftResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -84,7 +85,7 @@ export const getDraftUrl = () => {
 
   
 
-  return `/draft`
+  return `/api/v1/draft`
 }
 
 export const draft = async (draftRequest: DraftRequest, options?: RequestInit): Promise<draftResponse> => {
@@ -102,16 +103,16 @@ export const draft = async (draftRequest: DraftRequest, options?: RequestInit): 
 
 
 
-export const getDraftMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draft>>, TError,{data: DraftRequest}, TContext>, }
+export const getDraftMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draft>>, TError,{data: DraftRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof draft>>, TError,{data: DraftRequest}, TContext> => {
 
 const mutationKey = ['draft'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -119,7 +120,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof draft>>, {data: DraftRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  draft(data,)
+          return  draft(data,requestOptions)
         }
 
 
@@ -131,13 +132,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DraftMutationResult = NonNullable<Awaited<ReturnType<typeof draft>>>
     export type DraftMutationBody = DraftRequest
-    export type DraftMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type DraftMutationError = ErrorEnvelope
 
     /**
  * @summary Draft
  */
-export const useDraft = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draft>>, TError,{data: DraftRequest}, TContext>, }
+export const useDraft = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draft>>, TError,{data: DraftRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof draft>>,
         TError,
@@ -148,6 +149,7 @@ export const useDraft = <TError = AuthErrorResponse | HTTPValidationError | Erro
     }
     /**
  * Get draft result. Prefer using /jobs/{id}/result directly.
+ * @deprecated
  * @summary Draft Result
  */
 export type draftResultResponse200 = {
@@ -156,17 +158,17 @@ export type draftResultResponse200 = {
 }
 
 export type draftResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type draftResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type draftResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -184,7 +186,7 @@ export const getDraftResultUrl = (id: string,) => {
 
   
 
-  return `/draft/${id}/result`
+  return `/api/v1/draft/${id}/result`
 }
 
 export const draftResult = async (id: string, options?: RequestInit): Promise<draftResultResponse> => {
@@ -204,21 +206,21 @@ export const draftResult = async (id: string, options?: RequestInit): Promise<dr
 
 export const getDraftResultQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'draft',id,'result'
+    'api','v1','draft',id,'result'
     ] as const;
     }
 
     
-export const getDraftResultQueryOptions = <TData = Awaited<ReturnType<typeof draftResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftResult>>, TError, TData>>, }
+export const getDraftResultQueryOptions = <TData = Awaited<ReturnType<typeof draftResult>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getDraftResultQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof draftResult>>> = ({ signal }) => draftResult(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof draftResult>>> = ({ signal }) => draftResult(unref(id), { signal, ...requestOptions });
 
       
 
@@ -228,19 +230,126 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type DraftResultQueryResult = NonNullable<Awaited<ReturnType<typeof draftResult>>>
-export type DraftResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type DraftResultQueryError = ErrorEnvelope
 
 
 /**
+ * @deprecated
  * @summary Draft Result
  */
 
-export function useDraftResult<TData = Awaited<ReturnType<typeof draftResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftResult>>, TError, TData>>, }
+export function useDraftResult<TData = Awaited<ReturnType<typeof draftResult>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getDraftResultQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * List all versions of a draft, ordered by version number.
+ * @summary Draft Versions
+ */
+export type draftVersionsResponse200 = {
+  data: DraftVersionListResponse
+  status: 200
+}
+
+export type draftVersionsResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type draftVersionsResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type draftVersionsResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type draftVersionsResponseSuccess = (draftVersionsResponse200) & {
+  headers: Headers;
+};
+export type draftVersionsResponseError = (draftVersionsResponse401 | draftVersionsResponse404 | draftVersionsResponse422) & {
+  headers: Headers;
+};
+
+export type draftVersionsResponse = (draftVersionsResponseSuccess | draftVersionsResponseError)
+
+export const getDraftVersionsUrl = (id: string,) => {
+
+
+  
+
+  return `/api/v1/draft/${id}/versions`
+}
+
+export const draftVersions = async (id: string, options?: RequestInit): Promise<draftVersionsResponse> => {
+  
+  return apiClient<draftVersionsResponse>(getDraftVersionsUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getDraftVersionsQueryKey = (id: MaybeRef<string>,) => {
+    return [
+    'api','v1','draft',id,'versions'
+    ] as const;
+    }
+
+    
+export const getDraftVersionsQueryOptions = <TData = Awaited<ReturnType<typeof draftVersions>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftVersions>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getDraftVersionsQueryKey(id);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof draftVersions>>> = ({ signal }) => draftVersions(unref(id), { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: computed(() => !!(unref(id))), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof draftVersions>>, TError, TData> 
+}
+
+export type DraftVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof draftVersions>>>
+export type DraftVersionsQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Draft Versions
+ */
+
+export function useDraftVersions<TData = Awaited<ReturnType<typeof draftVersions>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof draftVersions>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDraftVersionsQueryOptions(id,options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

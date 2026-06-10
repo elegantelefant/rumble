@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useQuery
@@ -25,14 +25,15 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   ListModelsParams,
   ModelListResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -46,12 +47,12 @@ export type listModelsResponse200 = {
 }
 
 export type listModelsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listModelsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -76,7 +77,7 @@ export const getListModelsUrl = (params?: ListModelsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/models?${stringifiedParams}` : `/models`
+  return stringifiedParams.length > 0 ? `/api/v1/models?${stringifiedParams}` : `/api/v1/models`
 }
 
 export const listModels = async (params?: ListModelsParams, options?: RequestInit): Promise<listModelsResponse> => {
@@ -96,21 +97,21 @@ export const listModels = async (params?: ListModelsParams, options?: RequestIni
 
 export const getListModelsQueryKey = (params?: MaybeRef<ListModelsParams>,) => {
     return [
-    'models', ...(params ? [params] : [])
+    'api','v1','models', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListModelsQueryOptions = <TData = Awaited<ReturnType<typeof listModels>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListModelsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, }
+export const getListModelsQueryOptions = <TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorEnvelope>(params?: MaybeRef<ListModelsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListModelsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listModels>>> = ({ signal }) => listModels(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listModels>>> = ({ signal }) => listModels(unref(params), { signal, ...requestOptions });
 
       
 
@@ -120,15 +121,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listModels>>>
-export type ListModelsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListModelsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Models
  */
 
-export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListModelsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, }
+export function useListModels<TData = Awaited<ReturnType<typeof listModels>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListModelsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listModels>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

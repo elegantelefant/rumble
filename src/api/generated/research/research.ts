@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,17 +30,16 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   ResearchRequest,
-  ResearchResponse,
-  ResearchResultResponse
+  ResearchResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -57,17 +56,17 @@ export type researchResponse200 = {
 }
 
 export type researchResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type researchResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type researchResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -85,7 +84,7 @@ export const getResearchUrl = () => {
 
   
 
-  return `/research`
+  return `/api/v1/research`
 }
 
 export const research = async (researchRequest: ResearchRequest, options?: RequestInit): Promise<researchResponse> => {
@@ -103,16 +102,16 @@ export const research = async (researchRequest: ResearchRequest, options?: Reque
 
 
 
-export const getResearchMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof research>>, TError,{data: ResearchRequest}, TContext>, }
+export const getResearchMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof research>>, TError,{data: ResearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof research>>, TError,{data: ResearchRequest}, TContext> => {
 
 const mutationKey = ['research'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -120,7 +119,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof research>>, {data: ResearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  research(data,)
+          return  research(data,requestOptions)
         }
 
 
@@ -132,13 +131,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ResearchMutationResult = NonNullable<Awaited<ReturnType<typeof research>>>
     export type ResearchMutationBody = ResearchRequest
-    export type ResearchMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type ResearchMutationError = ErrorEnvelope
 
     /**
  * @summary Research
  */
-export const useResearch = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof research>>, TError,{data: ResearchRequest}, TContext>, }
+export const useResearch = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof research>>, TError,{data: ResearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof research>>,
         TError,
@@ -149,6 +148,7 @@ export const useResearch = <TError = AuthErrorResponse | HTTPValidationError | E
     }
     /**
  * Get research job status. Prefer using /jobs/{id} directly.
+ * @deprecated
  * @summary Research Status
  */
 export type researchStatusResponse200 = {
@@ -157,17 +157,17 @@ export type researchStatusResponse200 = {
 }
 
 export type researchStatusResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type researchStatusResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type researchStatusResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -185,7 +185,7 @@ export const getResearchStatusUrl = (id: string,) => {
 
   
 
-  return `/research/${id}`
+  return `/api/v1/research/${id}`
 }
 
 export const researchStatus = async (id: string, options?: RequestInit): Promise<researchStatusResponse> => {
@@ -205,21 +205,21 @@ export const researchStatus = async (id: string, options?: RequestInit): Promise
 
 export const getResearchStatusQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'research',id
+    'api','v1','research',id
     ] as const;
     }
 
     
-export const getResearchStatusQueryOptions = <TData = Awaited<ReturnType<typeof researchStatus>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchStatus>>, TError, TData>>, }
+export const getResearchStatusQueryOptions = <TData = Awaited<ReturnType<typeof researchStatus>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchStatus>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getResearchStatusQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof researchStatus>>> = ({ signal }) => researchStatus(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof researchStatus>>> = ({ signal }) => researchStatus(unref(id), { signal, ...requestOptions });
 
       
 
@@ -229,125 +229,20 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ResearchStatusQueryResult = NonNullable<Awaited<ReturnType<typeof researchStatus>>>
-export type ResearchStatusQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ResearchStatusQueryError = ErrorEnvelope
 
 
 /**
+ * @deprecated
  * @summary Research Status
  */
 
-export function useResearchStatus<TData = Awaited<ReturnType<typeof researchStatus>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchStatus>>, TError, TData>>, }
+export function useResearchStatus<TData = Awaited<ReturnType<typeof researchStatus>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchStatus>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getResearchStatusQueryOptions(id,options)
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
-
-  return query;
-}
-
-
-
-
-/**
- * Get research result. Prefer using /jobs/{id}/result directly.
- * @summary Research Result
- */
-export type researchResultResponse200 = {
-  data: ResearchResultResponse
-  status: 200
-}
-
-export type researchResultResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type researchResultResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
-
-export type researchResultResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type researchResultResponseSuccess = (researchResultResponse200) & {
-  headers: Headers;
-};
-export type researchResultResponseError = (researchResultResponse401 | researchResultResponse404 | researchResultResponse422) & {
-  headers: Headers;
-};
-
-export type researchResultResponse = (researchResultResponseSuccess | researchResultResponseError)
-
-export const getResearchResultUrl = (id: string,) => {
-
-
-  
-
-  return `/research/${id}/result`
-}
-
-export const researchResult = async (id: string, options?: RequestInit): Promise<researchResultResponse> => {
-  
-  return apiClient<researchResultResponse>(getResearchResultUrl(id),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-  
-
-
-
-
-export const getResearchResultQueryKey = (id: MaybeRef<string>,) => {
-    return [
-    'research',id,'result'
-    ] as const;
-    }
-
-    
-export const getResearchResultQueryOptions = <TData = Awaited<ReturnType<typeof researchResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchResult>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  getResearchResultQueryKey(id);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof researchResult>>> = ({ signal }) => researchResult(unref(id), { signal });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: computed(() => !!(unref(id))), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof researchResult>>, TError, TData> 
-}
-
-export type ResearchResultQueryResult = NonNullable<Awaited<ReturnType<typeof researchResult>>>
-export type ResearchResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
-
-
-/**
- * @summary Research Result
- */
-
-export function useResearchResult<TData = Awaited<ReturnType<typeof researchResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof researchResult>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getResearchResultQueryOptions(id,options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

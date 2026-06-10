@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 /**
@@ -19,7 +19,7 @@ export interface TranslateDocumentRequest {
    * BCP-47 source language code (e.g. 'id', 'zh', 'ms')
    * @minLength 2
    */
-  source_language: string;
+  sourceLanguage: string;
   /** Optional model override */
   model?: string;
 }

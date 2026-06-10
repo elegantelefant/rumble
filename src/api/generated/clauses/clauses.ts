@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,24 +30,25 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   ClauseCreateRequest,
   ClauseDatabaseListResponse,
   ClauseDatabaseResponse,
   ClauseListResponse,
+  ClauseProcessRequest,
+  ClauseProcessResponse,
   ClauseResponse,
+  ClauseSuggestRequest,
   ClauseSuggestResponse,
   ClauseUpdateRequest,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   ListClausesParams,
-  OkResponse,
-  ProcessClauseBody,
-  SuggestClauseBody
+  OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -63,7 +64,7 @@ export type listClauseDatabasesResponse200 = {
 }
 
 export type listClauseDatabasesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -81,7 +82,7 @@ export const getListClauseDatabasesUrl = () => {
 
   
 
-  return `/clause-databases`
+  return `/api/v1/clause-databases`
 }
 
 export const listClauseDatabases = async ( options?: RequestInit): Promise<listClauseDatabasesResponse> => {
@@ -101,21 +102,21 @@ export const listClauseDatabases = async ( options?: RequestInit): Promise<listC
 
 export const getListClauseDatabasesQueryKey = () => {
     return [
-    'clause-databases'
+    'api','v1','clause-databases'
     ] as const;
     }
 
     
-export const getListClauseDatabasesQueryOptions = <TData = Awaited<ReturnType<typeof listClauseDatabases>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauseDatabases>>, TError, TData>>, }
+export const getListClauseDatabasesQueryOptions = <TData = Awaited<ReturnType<typeof listClauseDatabases>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauseDatabases>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListClauseDatabasesQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listClauseDatabases>>> = ({ signal }) => listClauseDatabases({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listClauseDatabases>>> = ({ signal }) => listClauseDatabases({ signal, ...requestOptions });
 
       
 
@@ -125,15 +126,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListClauseDatabasesQueryResult = NonNullable<Awaited<ReturnType<typeof listClauseDatabases>>>
-export type ListClauseDatabasesQueryError = AuthErrorResponse
+export type ListClauseDatabasesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Clause Databases
  */
 
-export function useListClauseDatabases<TData = Awaited<ReturnType<typeof listClauseDatabases>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauseDatabases>>, TError, TData>>, }
+export function useListClauseDatabases<TData = Awaited<ReturnType<typeof listClauseDatabases>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauseDatabases>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -162,7 +163,7 @@ export type createClauseDatabaseResponse200 = {
 }
 
 export type createClauseDatabaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -180,7 +181,7 @@ export const getCreateClauseDatabaseUrl = () => {
 
   
 
-  return `/clause-databases`
+  return `/api/v1/clause-databases`
 }
 
 export const createClauseDatabase = async ( options?: RequestInit): Promise<createClauseDatabaseResponse> => {
@@ -197,16 +198,16 @@ export const createClauseDatabase = async ( options?: RequestInit): Promise<crea
 
 
 
-export const getCreateClauseDatabaseMutationOptions = <TError = AuthErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClauseDatabase>>, TError,void, TContext>, }
+export const getCreateClauseDatabaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClauseDatabase>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createClauseDatabase>>, TError,void, TContext> => {
 
 const mutationKey = ['createClauseDatabase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -214,7 +215,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createClauseDatabase>>, void> = () => {
           
 
-          return  createClauseDatabase()
+          return  createClauseDatabase(requestOptions)
         }
 
 
@@ -226,13 +227,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateClauseDatabaseMutationResult = NonNullable<Awaited<ReturnType<typeof createClauseDatabase>>>
     
-    export type CreateClauseDatabaseMutationError = AuthErrorResponse
+    export type CreateClauseDatabaseMutationError = ErrorEnvelope
 
     /**
  * @summary Create Clause Database
  */
-export const useCreateClauseDatabase = <TError = AuthErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClauseDatabase>>, TError,void, TContext>, }
+export const useCreateClauseDatabase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createClauseDatabase>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createClauseDatabase>>,
         TError,
@@ -253,17 +254,17 @@ export type deleteClauseDatabaseResponse200 = {
 }
 
 export type deleteClauseDatabaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteClauseDatabaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteClauseDatabaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -281,7 +282,7 @@ export const getDeleteClauseDatabaseUrl = (databaseId: string,) => {
 
   
 
-  return `/clause-databases/${databaseId}`
+  return `/api/v1/clause-databases/${databaseId}`
 }
 
 export const deleteClauseDatabase = async (databaseId: string, options?: RequestInit): Promise<deleteClauseDatabaseResponse> => {
@@ -298,16 +299,16 @@ export const deleteClauseDatabase = async (databaseId: string, options?: Request
 
 
 
-export const getDeleteClauseDatabaseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClauseDatabase>>, TError,{databaseId: string}, TContext>, }
+export const getDeleteClauseDatabaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClauseDatabase>>, TError,{databaseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteClauseDatabase>>, TError,{databaseId: string}, TContext> => {
 
 const mutationKey = ['deleteClauseDatabase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -315,7 +316,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteClauseDatabase>>, {databaseId: string}> = (props) => {
           const {databaseId} = props ?? {};
 
-          return  deleteClauseDatabase(databaseId,)
+          return  deleteClauseDatabase(databaseId,requestOptions)
         }
 
 
@@ -327,13 +328,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteClauseDatabaseMutationResult = NonNullable<Awaited<ReturnType<typeof deleteClauseDatabase>>>
     
-    export type DeleteClauseDatabaseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteClauseDatabaseMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Clause Database
  */
-export const useDeleteClauseDatabase = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClauseDatabase>>, TError,{databaseId: string}, TContext>, }
+export const useDeleteClauseDatabase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClauseDatabase>>, TError,{databaseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteClauseDatabase>>,
         TError,
@@ -352,17 +353,17 @@ export type listClausesResponse200 = {
 }
 
 export type listClausesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listClausesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listClausesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -388,7 +389,7 @@ export const getListClausesUrl = (databaseId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/clause-databases/${databaseId}/clauses?${stringifiedParams}` : `/clause-databases/${databaseId}/clauses`
+  return stringifiedParams.length > 0 ? `/api/v1/clause-databases/${databaseId}/clauses?${stringifiedParams}` : `/api/v1/clause-databases/${databaseId}/clauses`
 }
 
 export const listClauses = async (databaseId: string,
@@ -410,22 +411,22 @@ export const listClauses = async (databaseId: string,
 export const getListClausesQueryKey = (databaseId: MaybeRef<string>,
     params?: MaybeRef<ListClausesParams>,) => {
     return [
-    'clause-databases',databaseId,'clauses', ...(params ? [params] : [])
+    'api','v1','clause-databases',databaseId,'clauses', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListClausesQueryOptions = <TData = Awaited<ReturnType<typeof listClauses>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(databaseId: MaybeRef<string>,
-    params?: MaybeRef<ListClausesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauses>>, TError, TData>>, }
+export const getListClausesQueryOptions = <TData = Awaited<ReturnType<typeof listClauses>>, TError = ErrorEnvelope>(databaseId: MaybeRef<string>,
+    params?: MaybeRef<ListClausesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauses>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListClausesQueryKey(databaseId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listClauses>>> = ({ signal }) => listClauses(unref(databaseId),unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listClauses>>> = ({ signal }) => listClauses(unref(databaseId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -435,16 +436,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListClausesQueryResult = NonNullable<Awaited<ReturnType<typeof listClauses>>>
-export type ListClausesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListClausesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Clauses
  */
 
-export function useListClauses<TData = Awaited<ReturnType<typeof listClauses>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
+export function useListClauses<TData = Awaited<ReturnType<typeof listClauses>>, TError = ErrorEnvelope>(
  databaseId: MaybeRef<string>,
-    params?: MaybeRef<ListClausesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauses>>, TError, TData>>, }
+    params?: MaybeRef<ListClausesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listClauses>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -470,17 +471,17 @@ export type addClauseResponse200 = {
 }
 
 export type addClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type addClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type addClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -498,7 +499,7 @@ export const getAddClauseUrl = (databaseId: string,) => {
 
   
 
-  return `/clause-databases/${databaseId}/clauses`
+  return `/api/v1/clause-databases/${databaseId}/clauses`
 }
 
 export const addClause = async (databaseId: string,
@@ -517,16 +518,16 @@ export const addClause = async (databaseId: string,
 
 
 
-export const getAddClauseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addClause>>, TError,{databaseId: string;data: ClauseCreateRequest}, TContext>, }
+export const getAddClauseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addClause>>, TError,{databaseId: string;data: ClauseCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof addClause>>, TError,{databaseId: string;data: ClauseCreateRequest}, TContext> => {
 
 const mutationKey = ['addClause'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -534,7 +535,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof addClause>>, {databaseId: string;data: ClauseCreateRequest}> = (props) => {
           const {databaseId,data} = props ?? {};
 
-          return  addClause(databaseId,data,)
+          return  addClause(databaseId,data,requestOptions)
         }
 
 
@@ -546,13 +547,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AddClauseMutationResult = NonNullable<Awaited<ReturnType<typeof addClause>>>
     export type AddClauseMutationBody = ClauseCreateRequest
-    export type AddClauseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AddClauseMutationError = ErrorEnvelope
 
     /**
  * @summary Add Clause
  */
-export const useAddClause = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addClause>>, TError,{databaseId: string;data: ClauseCreateRequest}, TContext>, }
+export const useAddClause = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addClause>>, TError,{databaseId: string;data: ClauseCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof addClause>>,
         TError,
@@ -571,17 +572,17 @@ export type getClauseResponse200 = {
 }
 
 export type getClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -600,7 +601,7 @@ export const getGetClauseUrl = (databaseId: string,
 
   
 
-  return `/clause-databases/${databaseId}/clauses/${clauseId}`
+  return `/api/v1/clause-databases/${databaseId}/clauses/${clauseId}`
 }
 
 export const getClause = async (databaseId: string,
@@ -622,22 +623,22 @@ export const getClause = async (databaseId: string,
 export const getGetClauseQueryKey = (databaseId: MaybeRef<string>,
     clauseId: MaybeRef<string>,) => {
     return [
-    'clause-databases',databaseId,'clauses',clauseId
+    'api','v1','clause-databases',databaseId,'clauses',clauseId
     ] as const;
     }
 
     
-export const getGetClauseQueryOptions = <TData = Awaited<ReturnType<typeof getClause>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(databaseId: MaybeRef<string>,
-    clauseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getClause>>, TError, TData>>, }
+export const getGetClauseQueryOptions = <TData = Awaited<ReturnType<typeof getClause>>, TError = ErrorEnvelope>(databaseId: MaybeRef<string>,
+    clauseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getClause>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetClauseQueryKey(databaseId,clauseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getClause>>> = ({ signal }) => getClause(unref(databaseId),unref(clauseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getClause>>> = ({ signal }) => getClause(unref(databaseId),unref(clauseId), { signal, ...requestOptions });
 
       
 
@@ -647,16 +648,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetClauseQueryResult = NonNullable<Awaited<ReturnType<typeof getClause>>>
-export type GetClauseQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetClauseQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Clause
  */
 
-export function useGetClause<TData = Awaited<ReturnType<typeof getClause>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
+export function useGetClause<TData = Awaited<ReturnType<typeof getClause>>, TError = ErrorEnvelope>(
  databaseId: MaybeRef<string>,
-    clauseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getClause>>, TError, TData>>, }
+    clauseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getClause>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -682,17 +683,17 @@ export type updateClauseResponse200 = {
 }
 
 export type updateClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -711,7 +712,7 @@ export const getUpdateClauseUrl = (databaseId: string,
 
   
 
-  return `/clause-databases/${databaseId}/clauses/${clauseId}`
+  return `/api/v1/clause-databases/${databaseId}/clauses/${clauseId}`
 }
 
 export const updateClause = async (databaseId: string,
@@ -731,16 +732,16 @@ export const updateClause = async (databaseId: string,
 
 
 
-export const getUpdateClauseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateClause>>, TError,{databaseId: string;clauseId: string;data: ClauseUpdateRequest}, TContext>, }
+export const getUpdateClauseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateClause>>, TError,{databaseId: string;clauseId: string;data: ClauseUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateClause>>, TError,{databaseId: string;clauseId: string;data: ClauseUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateClause'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -748,7 +749,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateClause>>, {databaseId: string;clauseId: string;data: ClauseUpdateRequest}> = (props) => {
           const {databaseId,clauseId,data} = props ?? {};
 
-          return  updateClause(databaseId,clauseId,data,)
+          return  updateClause(databaseId,clauseId,data,requestOptions)
         }
 
 
@@ -760,13 +761,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateClauseMutationResult = NonNullable<Awaited<ReturnType<typeof updateClause>>>
     export type UpdateClauseMutationBody = ClauseUpdateRequest
-    export type UpdateClauseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateClauseMutationError = ErrorEnvelope
 
     /**
  * @summary Update Clause
  */
-export const useUpdateClause = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateClause>>, TError,{databaseId: string;clauseId: string;data: ClauseUpdateRequest}, TContext>, }
+export const useUpdateClause = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateClause>>, TError,{databaseId: string;clauseId: string;data: ClauseUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateClause>>,
         TError,
@@ -785,17 +786,17 @@ export type deleteClauseResponse200 = {
 }
 
 export type deleteClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -814,7 +815,7 @@ export const getDeleteClauseUrl = (databaseId: string,
 
   
 
-  return `/clause-databases/${databaseId}/clauses/${clauseId}`
+  return `/api/v1/clause-databases/${databaseId}/clauses/${clauseId}`
 }
 
 export const deleteClause = async (databaseId: string,
@@ -832,16 +833,16 @@ export const deleteClause = async (databaseId: string,
 
 
 
-export const getDeleteClauseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClause>>, TError,{databaseId: string;clauseId: string}, TContext>, }
+export const getDeleteClauseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClause>>, TError,{databaseId: string;clauseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteClause>>, TError,{databaseId: string;clauseId: string}, TContext> => {
 
 const mutationKey = ['deleteClause'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -849,7 +850,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteClause>>, {databaseId: string;clauseId: string}> = (props) => {
           const {databaseId,clauseId} = props ?? {};
 
-          return  deleteClause(databaseId,clauseId,)
+          return  deleteClause(databaseId,clauseId,requestOptions)
         }
 
 
@@ -861,13 +862,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteClauseMutationResult = NonNullable<Awaited<ReturnType<typeof deleteClause>>>
     
-    export type DeleteClauseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteClauseMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Clause
  */
-export const useDeleteClause = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClause>>, TError,{databaseId: string;clauseId: string}, TContext>, }
+export const useDeleteClause = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteClause>>, TError,{databaseId: string;clauseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteClause>>,
         TError,
@@ -877,33 +878,38 @@ export const useDeleteClause = <TError = AuthErrorResponse | ErrorResponse | HTT
       return useMutation(getDeleteClauseMutationOptions(options), queryClient);
     }
     /**
- * Process a clause. (Placeholder for future AI implementation)
+ * Generate and store an embedding for a clause, enabling semantic search.
  * @summary Process Clause
  */
 export type processClauseResponse200 = {
-  data: OkResponse
+  data: ClauseProcessResponse
   status: 200
 }
 
 export type processClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type processClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type processClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type processClauseResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type processClauseResponseSuccess = (processClauseResponse200) & {
   headers: Headers;
 };
-export type processClauseResponseError = (processClauseResponse401 | processClauseResponse404 | processClauseResponse422) & {
+export type processClauseResponseError = (processClauseResponse401 | processClauseResponse404 | processClauseResponse422 | processClauseResponse429) & {
   headers: Headers;
 };
 
@@ -914,11 +920,11 @@ export const getProcessClauseUrl = (databaseId: string,) => {
 
   
 
-  return `/clause-databases/${databaseId}/process`
+  return `/api/v1/clause-databases/${databaseId}/process`
 }
 
 export const processClause = async (databaseId: string,
-    processClauseBody: ProcessClauseBody, options?: RequestInit): Promise<processClauseResponse> => {
+    clauseProcessRequest: ClauseProcessRequest, options?: RequestInit): Promise<processClauseResponse> => {
   
   return apiClient<processClauseResponse>(getProcessClauseUrl(databaseId),
   {      
@@ -926,31 +932,31 @@ export const processClause = async (databaseId: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      processClauseBody,)
+      clauseProcessRequest,)
   }
 );}
   
 
 
 
-export const getProcessClauseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ProcessClauseBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ProcessClauseBody}, TContext> => {
+export const getProcessClauseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ClauseProcessRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ClauseProcessRequest}, TContext> => {
 
 const mutationKey = ['processClause'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processClause>>, {databaseId: string;data: ProcessClauseBody}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processClause>>, {databaseId: string;data: ClauseProcessRequest}> = (props) => {
           const {databaseId,data} = props ?? {};
 
-          return  processClause(databaseId,data,)
+          return  processClause(databaseId,data,requestOptions)
         }
 
 
@@ -961,24 +967,27 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ProcessClauseMutationResult = NonNullable<Awaited<ReturnType<typeof processClause>>>
-    export type ProcessClauseMutationBody = ProcessClauseBody
-    export type ProcessClauseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ProcessClauseMutationBody = ClauseProcessRequest
+    export type ProcessClauseMutationError = ErrorEnvelope
 
     /**
  * @summary Process Clause
  */
-export const useProcessClause = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ProcessClauseBody}, TContext>, }
+export const useProcessClause = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processClause>>, TError,{databaseId: string;data: ClauseProcessRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof processClause>>,
         TError,
-        {databaseId: string;data: ProcessClauseBody},
+        {databaseId: string;data: ClauseProcessRequest},
         TContext
       > => {
       return useMutation(getProcessClauseMutationOptions(options), queryClient);
     }
     /**
- * Suggest clauses based on context. (Placeholder for future AI implementation)
+ * Suggest relevant clauses from the database based on context.
+
+Uses vector similarity retrieval followed by an LLM agent that evaluates
+which candidates actually fit the context.
  * @summary Suggest Clause
  */
 export type suggestClauseResponse200 = {
@@ -987,24 +996,29 @@ export type suggestClauseResponse200 = {
 }
 
 export type suggestClauseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type suggestClauseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type suggestClauseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type suggestClauseResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type suggestClauseResponseSuccess = (suggestClauseResponse200) & {
   headers: Headers;
 };
-export type suggestClauseResponseError = (suggestClauseResponse401 | suggestClauseResponse404 | suggestClauseResponse422) & {
+export type suggestClauseResponseError = (suggestClauseResponse401 | suggestClauseResponse404 | suggestClauseResponse422 | suggestClauseResponse429) & {
   headers: Headers;
 };
 
@@ -1015,11 +1029,11 @@ export const getSuggestClauseUrl = (databaseId: string,) => {
 
   
 
-  return `/clause-databases/${databaseId}/suggest`
+  return `/api/v1/clause-databases/${databaseId}/suggest`
 }
 
 export const suggestClause = async (databaseId: string,
-    suggestClauseBody: SuggestClauseBody, options?: RequestInit): Promise<suggestClauseResponse> => {
+    clauseSuggestRequest: ClauseSuggestRequest, options?: RequestInit): Promise<suggestClauseResponse> => {
   
   return apiClient<suggestClauseResponse>(getSuggestClauseUrl(databaseId),
   {      
@@ -1027,31 +1041,31 @@ export const suggestClause = async (databaseId: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      suggestClauseBody,)
+      clauseSuggestRequest,)
   }
 );}
   
 
 
 
-export const getSuggestClauseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: SuggestClauseBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: SuggestClauseBody}, TContext> => {
+export const getSuggestClauseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: ClauseSuggestRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: ClauseSuggestRequest}, TContext> => {
 
 const mutationKey = ['suggestClause'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestClause>>, {databaseId: string;data: SuggestClauseBody}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestClause>>, {databaseId: string;data: ClauseSuggestRequest}> = (props) => {
           const {databaseId,data} = props ?? {};
 
-          return  suggestClause(databaseId,data,)
+          return  suggestClause(databaseId,data,requestOptions)
         }
 
 
@@ -1062,18 +1076,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SuggestClauseMutationResult = NonNullable<Awaited<ReturnType<typeof suggestClause>>>
-    export type SuggestClauseMutationBody = SuggestClauseBody
-    export type SuggestClauseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type SuggestClauseMutationBody = ClauseSuggestRequest
+    export type SuggestClauseMutationError = ErrorEnvelope
 
     /**
  * @summary Suggest Clause
  */
-export const useSuggestClause = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: SuggestClauseBody}, TContext>, }
+export const useSuggestClause = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestClause>>, TError,{databaseId: string;data: ClauseSuggestRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof suggestClause>>,
         TError,
-        {databaseId: string;data: SuggestClauseBody},
+        {databaseId: string;data: ClauseSuggestRequest},
         TContext
       > => {
       return useMutation(getSuggestClauseMutationOptions(options), queryClient);

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -26,16 +26,125 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   OkResponse,
   OrgInvitationListResponse,
   OrgInvitationResponse,
-  OrgInviteRequest
+  OrgInviteRequest,
+  UserListResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
+
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+/**
+ * List members of the caller's active org. Any member of the org may read.
+
+Distinct from the platform-admin `GET /users` (which spans every org): this
+is org-scoped to `user.org_id` (the active org from the JWT). The caller
+must belong to that org — service principals are already rejected by
+`get_current_user`, and a human whose JWT org they are not a member of gets
+a 403. The owner-only invitation endpoints below are stricter; reading the
+roster is open to all members so non-owners can see who they work with.
+ * @summary List Org Members
+ */
+export type listOrgMembersResponse200 = {
+  data: UserListResponse
+  status: 200
+}
+
+export type listOrgMembersResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type listOrgMembersResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type listOrgMembersResponseSuccess = (listOrgMembersResponse200) & {
+  headers: Headers;
+};
+export type listOrgMembersResponseError = (listOrgMembersResponse401 | listOrgMembersResponse403) & {
+  headers: Headers;
+};
+
+export type listOrgMembersResponse = (listOrgMembersResponseSuccess | listOrgMembersResponseError)
+
+export const getListOrgMembersUrl = () => {
+
+
+  
+
+  return `/api/v1/organizations/members`
+}
+
+export const listOrgMembers = async ( options?: RequestInit): Promise<listOrgMembersResponse> => {
+  
+  return apiClient<listOrgMembersResponse>(getListOrgMembersUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getListOrgMembersQueryKey = () => {
+    return [
+    'api','v1','organizations','members'
+    ] as const;
+    }
+
+    
+export const getListOrgMembersQueryOptions = <TData = Awaited<ReturnType<typeof listOrgMembers>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgMembers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getListOrgMembersQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrgMembers>>> = ({ signal }) => listOrgMembers({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOrgMembers>>, TError, TData> 
+}
+
+export type ListOrgMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listOrgMembers>>>
+export type ListOrgMembersQueryError = ErrorEnvelope
+
+
+/**
+ * @summary List Org Members
+ */
+
+export function useListOrgMembers<TData = Awaited<ReturnType<typeof listOrgMembers>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgMembers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListOrgMembersQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
 
 
 
@@ -50,12 +159,12 @@ export type listOrgInvitationsResponse200 = {
 }
 
 export type listOrgInvitationsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listOrgInvitationsResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
@@ -73,7 +182,7 @@ export const getListOrgInvitationsUrl = () => {
 
   
 
-  return `/organizations/invitations`
+  return `/api/v1/organizations/invitations`
 }
 
 export const listOrgInvitations = async ( options?: RequestInit): Promise<listOrgInvitationsResponse> => {
@@ -93,21 +202,21 @@ export const listOrgInvitations = async ( options?: RequestInit): Promise<listOr
 
 export const getListOrgInvitationsQueryKey = () => {
     return [
-    'organizations','invitations'
+    'api','v1','organizations','invitations'
     ] as const;
     }
 
     
-export const getListOrgInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof listOrgInvitations>>, TError = AuthErrorResponse | ErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgInvitations>>, TError, TData>>, }
+export const getListOrgInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof listOrgInvitations>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgInvitations>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListOrgInvitationsQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrgInvitations>>> = ({ signal }) => listOrgInvitations({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrgInvitations>>> = ({ signal }) => listOrgInvitations({ signal, ...requestOptions });
 
       
 
@@ -117,15 +226,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListOrgInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof listOrgInvitations>>>
-export type ListOrgInvitationsQueryError = AuthErrorResponse | ErrorResponse
+export type ListOrgInvitationsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Org Invitations
  */
 
-export function useListOrgInvitations<TData = Awaited<ReturnType<typeof listOrgInvitations>>, TError = AuthErrorResponse | ErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgInvitations>>, TError, TData>>, }
+export function useListOrgInvitations<TData = Awaited<ReturnType<typeof listOrgInvitations>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOrgInvitations>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -151,17 +260,17 @@ export type createInvitationResponse200 = {
 }
 
 export type createInvitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createInvitationResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
 export type createInvitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -179,7 +288,7 @@ export const getCreateInvitationUrl = () => {
 
   
 
-  return `/organizations/invitations`
+  return `/api/v1/organizations/invitations`
 }
 
 export const createInvitation = async (orgInviteRequest: OrgInviteRequest, options?: RequestInit): Promise<createInvitationResponse> => {
@@ -197,16 +306,16 @@ export const createInvitation = async (orgInviteRequest: OrgInviteRequest, optio
 
 
 
-export const getCreateInvitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError,{data: OrgInviteRequest}, TContext>, }
+export const getCreateInvitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError,{data: OrgInviteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError,{data: OrgInviteRequest}, TContext> => {
 
 const mutationKey = ['createInvitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -214,7 +323,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInvitation>>, {data: OrgInviteRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createInvitation(data,)
+          return  createInvitation(data,requestOptions)
         }
 
 
@@ -226,13 +335,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof createInvitation>>>
     export type CreateInvitationMutationBody = OrgInviteRequest
-    export type CreateInvitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CreateInvitationMutationError = ErrorEnvelope
 
     /**
  * @summary Create Invitation
  */
-export const useCreateInvitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError,{data: OrgInviteRequest}, TContext>, }
+export const useCreateInvitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError,{data: OrgInviteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createInvitation>>,
         TError,
@@ -251,22 +360,22 @@ export type revokeInvitationResponse200 = {
 }
 
 export type revokeInvitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type revokeInvitationResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
 export type revokeInvitationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type revokeInvitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -284,7 +393,7 @@ export const getRevokeInvitationUrl = (invitationId: string,) => {
 
   
 
-  return `/organizations/invitations/${invitationId}`
+  return `/api/v1/organizations/invitations/${invitationId}`
 }
 
 export const revokeInvitation = async (invitationId: string, options?: RequestInit): Promise<revokeInvitationResponse> => {
@@ -301,16 +410,16 @@ export const revokeInvitation = async (invitationId: string, options?: RequestIn
 
 
 
-export const getRevokeInvitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError,{invitationId: string}, TContext>, }
+export const getRevokeInvitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError,{invitationId: string}, TContext> => {
 
 const mutationKey = ['revokeInvitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -318,7 +427,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeInvitation>>, {invitationId: string}> = (props) => {
           const {invitationId} = props ?? {};
 
-          return  revokeInvitation(invitationId,)
+          return  revokeInvitation(invitationId,requestOptions)
         }
 
 
@@ -330,13 +439,13 @@ const {mutation: mutationOptions} = options ?
 
     export type RevokeInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeInvitation>>>
     
-    export type RevokeInvitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type RevokeInvitationMutationError = ErrorEnvelope
 
     /**
  * @summary Revoke Invitation
  */
-export const useRevokeInvitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError,{invitationId: string}, TContext>, }
+export const useRevokeInvitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof revokeInvitation>>,
         TError,
@@ -355,7 +464,7 @@ export type pendingInvitationsResponse200 = {
 }
 
 export type pendingInvitationsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -373,7 +482,7 @@ export const getPendingInvitationsUrl = () => {
 
   
 
-  return `/invitations/pending`
+  return `/api/v1/invitations/pending`
 }
 
 export const pendingInvitations = async ( options?: RequestInit): Promise<pendingInvitationsResponse> => {
@@ -393,21 +502,21 @@ export const pendingInvitations = async ( options?: RequestInit): Promise<pendin
 
 export const getPendingInvitationsQueryKey = () => {
     return [
-    'invitations','pending'
+    'api','v1','invitations','pending'
     ] as const;
     }
 
     
-export const getPendingInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof pendingInvitations>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof pendingInvitations>>, TError, TData>>, }
+export const getPendingInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof pendingInvitations>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof pendingInvitations>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getPendingInvitationsQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof pendingInvitations>>> = ({ signal }) => pendingInvitations({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof pendingInvitations>>> = ({ signal }) => pendingInvitations({ signal, ...requestOptions });
 
       
 
@@ -417,15 +526,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type PendingInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof pendingInvitations>>>
-export type PendingInvitationsQueryError = AuthErrorResponse
+export type PendingInvitationsQueryError = ErrorEnvelope
 
 
 /**
  * @summary Pending Invitations
  */
 
-export function usePendingInvitations<TData = Awaited<ReturnType<typeof pendingInvitations>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof pendingInvitations>>, TError, TData>>, }
+export function usePendingInvitations<TData = Awaited<ReturnType<typeof pendingInvitations>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof pendingInvitations>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -451,22 +560,22 @@ export type acceptInvitationResponse200 = {
 }
 
 export type acceptInvitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type acceptInvitationResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
 export type acceptInvitationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type acceptInvitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -484,7 +593,7 @@ export const getAcceptInvitationUrl = (invitationId: string,) => {
 
   
 
-  return `/invitations/${invitationId}/accept`
+  return `/api/v1/invitations/${invitationId}/accept`
 }
 
 export const acceptInvitation = async (invitationId: string, options?: RequestInit): Promise<acceptInvitationResponse> => {
@@ -501,16 +610,16 @@ export const acceptInvitation = async (invitationId: string, options?: RequestIn
 
 
 
-export const getAcceptInvitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,{invitationId: string}, TContext>, }
+export const getAcceptInvitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,{invitationId: string}, TContext> => {
 
 const mutationKey = ['acceptInvitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -518,7 +627,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptInvitation>>, {invitationId: string}> = (props) => {
           const {invitationId} = props ?? {};
 
-          return  acceptInvitation(invitationId,)
+          return  acceptInvitation(invitationId,requestOptions)
         }
 
 
@@ -530,13 +639,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AcceptInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptInvitation>>>
     
-    export type AcceptInvitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AcceptInvitationMutationError = ErrorEnvelope
 
     /**
  * @summary Accept Invitation
  */
-export const useAcceptInvitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,{invitationId: string}, TContext>, }
+export const useAcceptInvitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof acceptInvitation>>,
         TError,
@@ -555,22 +664,22 @@ export type declineInvitationResponse200 = {
 }
 
 export type declineInvitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type declineInvitationResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
 export type declineInvitationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type declineInvitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -588,7 +697,7 @@ export const getDeclineInvitationUrl = (invitationId: string,) => {
 
   
 
-  return `/invitations/${invitationId}/decline`
+  return `/api/v1/invitations/${invitationId}/decline`
 }
 
 export const declineInvitation = async (invitationId: string, options?: RequestInit): Promise<declineInvitationResponse> => {
@@ -605,16 +714,16 @@ export const declineInvitation = async (invitationId: string, options?: RequestI
 
 
 
-export const getDeclineInvitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineInvitation>>, TError,{invitationId: string}, TContext>, }
+export const getDeclineInvitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof declineInvitation>>, TError,{invitationId: string}, TContext> => {
 
 const mutationKey = ['declineInvitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -622,7 +731,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof declineInvitation>>, {invitationId: string}> = (props) => {
           const {invitationId} = props ?? {};
 
-          return  declineInvitation(invitationId,)
+          return  declineInvitation(invitationId,requestOptions)
         }
 
 
@@ -634,13 +743,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeclineInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof declineInvitation>>>
     
-    export type DeclineInvitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeclineInvitationMutationError = ErrorEnvelope
 
     /**
  * @summary Decline Invitation
  */
-export const useDeclineInvitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineInvitation>>, TError,{invitationId: string}, TContext>, }
+export const useDeclineInvitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineInvitation>>, TError,{invitationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof declineInvitation>>,
         TError,

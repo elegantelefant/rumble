@@ -3,10 +3,21 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { JobResultResponseResult } from './jobResultResponseResult';
+import type { CitationCheckResult } from './citationCheckResult';
+import type { DraftResult } from './draftResult';
+import type { IngestUploadResult } from './ingestUploadResult';
 import type { JobResultResponseStatus } from './jobResultResponseStatus';
+import type { LegalRequestResult } from './legalRequestResult';
+import type { MammothResult } from './mammothResult';
+import type { PlaybookGenerateResult } from './playbookGenerateResult';
+import type { PlaybookResynthesiseResult } from './playbookResynthesiseResult';
+import type { PlaybookRulesResult } from './playbookRulesResult';
+import type { ProcessResult } from './processResult';
+import type { ResearchResult } from './researchResult';
+import type { ReviewResult } from './reviewResult';
+import type { TranslateResult } from './translateResult';
 
 /**
  * Job result response (includes result payload).
@@ -14,6 +25,6 @@ import type { JobResultResponseStatus } from './jobResultResponseStatus';
 export interface JobResultResponse {
   id: string;
   status: JobResultResponseStatus;
-  /** Shape depends on job type. draft: {draft: str, warnings: list[str]}. review: {summary: str, issues: list[ReviewIssue]}. research: {report: str, sources: list}. process: {process_map: str, bottlenecks: list, recommendations: list}. mammoth: {result: str, steps_taken: list[str]}. translate: {translated_text: str}. citation_check: {results: list, total: int, verified: int, hallucinated: int, uncertain: int}. */
-  result?: JobResultResponseResult;
+  /** Typed result payload; shape discriminated by job_type. */
+  result?: ResearchResult | DraftResult | ReviewResult | ProcessResult | MammothResult | LegalRequestResult | TranslateResult | PlaybookGenerateResult | PlaybookRulesResult | PlaybookResynthesiseResult | IngestUploadResult | CitationCheckResult | null;
 }

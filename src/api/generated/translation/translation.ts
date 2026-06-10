@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,9 +16,7 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   TranslateDocumentRequest,
   TranslateRequest,
@@ -28,9 +26,12 @@ import type {
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
+ * Translate a short text using a lightweight model call.
  * @summary Translate
  */
 export type translateResponse200 = {
@@ -39,24 +40,29 @@ export type translateResponse200 = {
 }
 
 export type translateResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type translateResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type translateResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
+}
+
+export type translateResponse503 = {
+  data: ErrorEnvelope
+  status: 503
 }
 
 export type translateResponseSuccess = (translateResponse200) & {
   headers: Headers;
 };
-export type translateResponseError = (translateResponse401 | translateResponse422 | translateResponse429) & {
+export type translateResponseError = (translateResponse401 | translateResponse422 | translateResponse429 | translateResponse503) & {
   headers: Headers;
 };
 
@@ -67,7 +73,7 @@ export const getTranslateUrl = () => {
 
   
 
-  return `/translate`
+  return `/api/v1/translate`
 }
 
 export const translate = async (translateRequest: TranslateRequest, options?: RequestInit): Promise<translateResponse> => {
@@ -85,16 +91,16 @@ export const translate = async (translateRequest: TranslateRequest, options?: Re
 
 
 
-export const getTranslateMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translate>>, TError,{data: TranslateRequest}, TContext>, }
+export const getTranslateMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translate>>, TError,{data: TranslateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof translate>>, TError,{data: TranslateRequest}, TContext> => {
 
 const mutationKey = ['translate'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -102,7 +108,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof translate>>, {data: TranslateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  translate(data,)
+          return  translate(data,requestOptions)
         }
 
 
@@ -114,13 +120,13 @@ const {mutation: mutationOptions} = options ?
 
     export type TranslateMutationResult = NonNullable<Awaited<ReturnType<typeof translate>>>
     export type TranslateMutationBody = TranslateRequest
-    export type TranslateMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type TranslateMutationError = ErrorEnvelope
 
     /**
  * @summary Translate
  */
-export const useTranslate = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translate>>, TError,{data: TranslateRequest}, TContext>, }
+export const useTranslate = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translate>>, TError,{data: TranslateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof translate>>,
         TError,
@@ -142,17 +148,17 @@ export type translateDocumentResponse200 = {
 }
 
 export type translateDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type translateDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type translateDocumentResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -170,7 +176,7 @@ export const getTranslateDocumentUrl = () => {
 
   
 
-  return `/translate/document`
+  return `/api/v1/translate/document`
 }
 
 export const translateDocument = async (translateDocumentRequest: TranslateDocumentRequest, options?: RequestInit): Promise<translateDocumentResponse> => {
@@ -188,16 +194,16 @@ export const translateDocument = async (translateDocumentRequest: TranslateDocum
 
 
 
-export const getTranslateDocumentMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateDocument>>, TError,{data: TranslateDocumentRequest}, TContext>, }
+export const getTranslateDocumentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateDocument>>, TError,{data: TranslateDocumentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof translateDocument>>, TError,{data: TranslateDocumentRequest}, TContext> => {
 
 const mutationKey = ['translateDocument'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -205,7 +211,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof translateDocument>>, {data: TranslateDocumentRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  translateDocument(data,)
+          return  translateDocument(data,requestOptions)
         }
 
 
@@ -217,13 +223,13 @@ const {mutation: mutationOptions} = options ?
 
     export type TranslateDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof translateDocument>>>
     export type TranslateDocumentMutationBody = TranslateDocumentRequest
-    export type TranslateDocumentMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type TranslateDocumentMutationError = ErrorEnvelope
 
     /**
  * @summary Translate Document
  */
-export const useTranslateDocument = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateDocument>>, TError,{data: TranslateDocumentRequest}, TContext>, }
+export const useTranslateDocument = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateDocument>>, TError,{data: TranslateDocumentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof translateDocument>>,
         TError,

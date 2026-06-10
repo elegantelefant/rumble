@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 export type ResearchResponseStatus = typeof ResearchResponseStatus[keyof typeof ResearchResponseStatus];
@@ -14,4 +14,5 @@ export const ResearchResponseStatus = {
   running: 'running',
   completed: 'completed',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;

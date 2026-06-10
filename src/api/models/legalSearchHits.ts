@@ -3,13 +3,31 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { LegalSearchHit } from './legalSearchHit';
+import type { AuCasesHit } from './auCasesHit';
+import type { AuLegisHit } from './auLegisHit';
+import type { CaLegisHit } from './caLegisHit';
+import type { HkCasesHit } from './hkCasesHit';
+import type { HkLegisHit } from './hkLegisHit';
+import type { IdLegisHit } from './idLegisHit';
 import type { LegalSearchHitsTotal } from './legalSearchHitsTotal';
+import type { MyLegisHit } from './myLegisHit';
+import type { SgCasesHit } from './sgCasesHit';
+import type { SgHansardHit } from './sgHansardHit';
+import type { SgLegisHit } from './sgLegisHit';
+import type { SgNewsHit } from './sgNewsHit';
+import type { SgRegHit } from './sgRegHit';
+import type { UkCasesHit } from './ukCasesHit';
+import type { UkLegisHit } from './ukLegisHit';
+import type { UsCaLegisHit } from './usCaLegisHit';
+import type { UsDeLegisHit } from './usDeLegisHit';
+import type { UsLegisHit } from './usLegisHit';
+import type { UsMaLegisHit } from './usMaLegisHit';
+import type { UsNyLegisHit } from './usNyLegisHit';
 
 export interface LegalSearchHits {
   total?: LegalSearchHitsTotal;
-  hits?: LegalSearchHit[];
+  hits?: (SgCasesHit | UkCasesHit | AuCasesHit | HkCasesHit | SgNewsHit | SgLegisHit | UkLegisHit | AuLegisHit | MyLegisHit | IdLegisHit | HkLegisHit | CaLegisHit | UsLegisHit | UsCaLegisHit | UsDeLegisHit | UsMaLegisHit | UsNyLegisHit | SgRegHit | SgHansardHit)[];
   [key: string]: unknown;
  }

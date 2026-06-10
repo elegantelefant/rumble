@@ -3,16 +3,20 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/vue-query';
 import type {
   DataTag,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationReturnType,
   UseQueryOptions,
   UseQueryReturnType
 } from '@tanstack/vue-query';
@@ -26,22 +30,24 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
+  GetJobStatusParams,
   JobListResponse,
   JobResponse,
   JobResultResponse,
-  ListJobsParams
+  ListJobsParams,
+  OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
- * Poll job status.
+ * Poll job status, optionally long-polling until the job finishes.
  * @summary Get Job Status
  */
 export type getJobStatusResponse200 = {
@@ -50,17 +56,17 @@ export type getJobStatusResponse200 = {
 }
 
 export type getJobStatusResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getJobStatusResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getJobStatusResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -73,17 +79,26 @@ export type getJobStatusResponseError = (getJobStatusResponse401 | getJobStatusR
 
 export type getJobStatusResponse = (getJobStatusResponseSuccess | getJobStatusResponseError)
 
-export const getGetJobStatusUrl = (jobId: string,) => {
+export const getGetJobStatusUrl = (jobId: string,
+    params?: GetJobStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/jobs/${jobId}`
+  return stringifiedParams.length > 0 ? `/api/v1/jobs/${jobId}?${stringifiedParams}` : `/api/v1/jobs/${jobId}`
 }
 
-export const getJobStatus = async (jobId: string, options?: RequestInit): Promise<getJobStatusResponse> => {
+export const getJobStatus = async (jobId: string,
+    params?: GetJobStatusParams, options?: RequestInit): Promise<getJobStatusResponse> => {
   
-  return apiClient<getJobStatusResponse>(getGetJobStatusUrl(jobId),
+  return apiClient<getJobStatusResponse>(getGetJobStatusUrl(jobId,params),
   {      
     ...options,
     method: 'GET'
@@ -96,23 +111,25 @@ export const getJobStatus = async (jobId: string, options?: RequestInit): Promis
 
 
 
-export const getGetJobStatusQueryKey = (jobId: MaybeRef<string>,) => {
+export const getGetJobStatusQueryKey = (jobId: MaybeRef<string>,
+    params?: MaybeRef<GetJobStatusParams>,) => {
     return [
-    'jobs',jobId
+    'api','v1','jobs',jobId, ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getGetJobStatusQueryOptions = <TData = Awaited<ReturnType<typeof getJobStatus>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobStatus>>, TError, TData>>, }
+export const getGetJobStatusQueryOptions = <TData = Awaited<ReturnType<typeof getJobStatus>>, TError = ErrorEnvelope>(jobId: MaybeRef<string>,
+    params?: MaybeRef<GetJobStatusParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobStatus>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  getGetJobStatusQueryKey(jobId);
+  const queryKey =  getGetJobStatusQueryKey(jobId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobStatus>>> = ({ signal }) => getJobStatus(unref(jobId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobStatus>>> = ({ signal }) => getJobStatus(unref(jobId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -122,19 +139,20 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetJobStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getJobStatus>>>
-export type GetJobStatusQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetJobStatusQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Job Status
  */
 
-export function useGetJobStatus<TData = Awaited<ReturnType<typeof getJobStatus>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobStatus>>, TError, TData>>, }
+export function useGetJobStatus<TData = Awaited<ReturnType<typeof getJobStatus>>, TError = ErrorEnvelope>(
+ jobId: MaybeRef<string>,
+    params?: MaybeRef<GetJobStatusParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobStatus>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetJobStatusQueryOptions(jobId,options)
+  const queryOptions = getGetJobStatusQueryOptions(jobId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -147,7 +165,12 @@ export function useGetJobStatus<TData = Awaited<ReturnType<typeof getJobStatus>>
 
 
 /**
- * Get job result (only available when status is completed).
+ * Get job result.
+
+- 200 when completed.
+- 202 with Retry-After while queued or running — keep polling.
+- 409 when the job failed or was cancelled.
+- 404 when the job does not exist or belongs to another org.
  * @summary Get Job Result
  */
 export type getJobResultResponse200 = {
@@ -155,25 +178,35 @@ export type getJobResultResponse200 = {
   status: 200
 }
 
+export type getJobResultResponse202 = {
+  data: void
+  status: 202
+}
+
 export type getJobResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getJobResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
+export type getJobResultResponse409 = {
+  data: ErrorEnvelope
+  status: 409
+}
+
 export type getJobResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
-export type getJobResultResponseSuccess = (getJobResultResponse200) & {
+export type getJobResultResponseSuccess = (getJobResultResponse200 | getJobResultResponse202) & {
   headers: Headers;
 };
-export type getJobResultResponseError = (getJobResultResponse401 | getJobResultResponse404 | getJobResultResponse422) & {
+export type getJobResultResponseError = (getJobResultResponse401 | getJobResultResponse404 | getJobResultResponse409 | getJobResultResponse422) & {
   headers: Headers;
 };
 
@@ -184,7 +217,7 @@ export const getGetJobResultUrl = (jobId: string,) => {
 
   
 
-  return `/jobs/${jobId}/result`
+  return `/api/v1/jobs/${jobId}/result`
 }
 
 export const getJobResult = async (jobId: string, options?: RequestInit): Promise<getJobResultResponse> => {
@@ -204,21 +237,21 @@ export const getJobResult = async (jobId: string, options?: RequestInit): Promis
 
 export const getGetJobResultQueryKey = (jobId: MaybeRef<string>,) => {
     return [
-    'jobs',jobId,'result'
+    'api','v1','jobs',jobId,'result'
     ] as const;
     }
 
     
-export const getGetJobResultQueryOptions = <TData = Awaited<ReturnType<typeof getJobResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobResult>>, TError, TData>>, }
+export const getGetJobResultQueryOptions = <TData = Awaited<ReturnType<typeof getJobResult>>, TError = ErrorEnvelope>(jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetJobResultQueryKey(jobId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobResult>>> = ({ signal }) => getJobResult(unref(jobId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobResult>>> = ({ signal }) => getJobResult(unref(jobId), { signal, ...requestOptions });
 
       
 
@@ -228,15 +261,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetJobResultQueryResult = NonNullable<Awaited<ReturnType<typeof getJobResult>>>
-export type GetJobResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetJobResultQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Job Result
  */
 
-export function useGetJobResult<TData = Awaited<ReturnType<typeof getJobResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobResult>>, TError, TData>>, }
+export function useGetJobResult<TData = Awaited<ReturnType<typeof getJobResult>>, TError = ErrorEnvelope>(
+ jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getJobResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -253,7 +286,106 @@ export function useGetJobResult<TData = Awaited<ReturnType<typeof getJobResult>>
 
 
 /**
- * List jobs for current user, optionally filtered by status and/or type.
+ * Request cancellation of a running or queued job.
+ * @summary Cancel Job
+ */
+export type cancelJobResponse200 = {
+  data: OkResponse
+  status: 200
+}
+
+export type cancelJobResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type cancelJobResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type cancelJobResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type cancelJobResponseSuccess = (cancelJobResponse200) & {
+  headers: Headers;
+};
+export type cancelJobResponseError = (cancelJobResponse401 | cancelJobResponse404 | cancelJobResponse422) & {
+  headers: Headers;
+};
+
+export type cancelJobResponse = (cancelJobResponseSuccess | cancelJobResponseError)
+
+export const getCancelJobUrl = (jobId: string,) => {
+
+
+  
+
+  return `/api/v1/jobs/${jobId}/cancel`
+}
+
+export const cancelJob = async (jobId: string, options?: RequestInit): Promise<cancelJobResponse> => {
+  
+  return apiClient<cancelJobResponse>(getCancelJobUrl(jobId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+  
+
+
+
+export const getCancelJobMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelJob>>, TError,{jobId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelJob>>, TError,{jobId: string}, TContext> => {
+
+const mutationKey = ['cancelJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelJob>>, {jobId: string}> = (props) => {
+          const {jobId} = props ?? {};
+
+          return  cancelJob(jobId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelJobMutationResult = NonNullable<Awaited<ReturnType<typeof cancelJob>>>
+    
+    export type CancelJobMutationError = ErrorEnvelope
+
+    /**
+ * @summary Cancel Job
+ */
+export const useCancelJob = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelJob>>, TError,{jobId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof cancelJob>>,
+        TError,
+        {jobId: string},
+        TContext
+      > => {
+      return useMutation(getCancelJobMutationOptions(options), queryClient);
+    }
+    /**
+ * List jobs for current user with cursor pagination.
  * @summary List Jobs
  */
 export type listJobsResponse200 = {
@@ -262,12 +394,12 @@ export type listJobsResponse200 = {
 }
 
 export type listJobsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listJobsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -292,7 +424,7 @@ export const getListJobsUrl = (params?: ListJobsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/jobs?${stringifiedParams}` : `/jobs`
+  return stringifiedParams.length > 0 ? `/api/v1/jobs?${stringifiedParams}` : `/api/v1/jobs`
 }
 
 export const listJobs = async (params?: ListJobsParams, options?: RequestInit): Promise<listJobsResponse> => {
@@ -312,21 +444,21 @@ export const listJobs = async (params?: ListJobsParams, options?: RequestInit): 
 
 export const getListJobsQueryKey = (params?: MaybeRef<ListJobsParams>,) => {
     return [
-    'jobs', ...(params ? [params] : [])
+    'api','v1','jobs', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListJobsQueryOptions = <TData = Awaited<ReturnType<typeof listJobs>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListJobsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listJobs>>, TError, TData>>, }
+export const getListJobsQueryOptions = <TData = Awaited<ReturnType<typeof listJobs>>, TError = ErrorEnvelope>(params?: MaybeRef<ListJobsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listJobs>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListJobsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobs>>> = ({ signal }) => listJobs(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobs>>> = ({ signal }) => listJobs(unref(params), { signal, ...requestOptions });
 
       
 
@@ -336,15 +468,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobs>>>
-export type ListJobsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListJobsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Jobs
  */
 
-export function useListJobs<TData = Awaited<ReturnType<typeof listJobs>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListJobsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listJobs>>, TError, TData>>, }
+export function useListJobs<TData = Awaited<ReturnType<typeof listJobs>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListJobsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listJobs>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

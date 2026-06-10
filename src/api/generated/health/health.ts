@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useQuery
@@ -22,13 +22,15 @@ import {
 } from 'vue';
 
 import type {
-  ErrorResponse,
+  ErrorEnvelope,
   HealthResponse,
   ReadyResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -77,16 +79,16 @@ export const getHealthQueryKey = () => {
     }
 
     
-export const getHealthQueryOptions = <TData = Awaited<ReturnType<typeof health>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>, }
+export const getHealthQueryOptions = <TData = Awaited<ReturnType<typeof health>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getHealthQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof health>>> = ({ signal }) => health({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof health>>> = ({ signal }) => health({ signal, ...requestOptions });
 
       
 
@@ -104,7 +106,7 @@ export type HealthQueryError = unknown
  */
 
 export function useHealth<TData = Awaited<ReturnType<typeof health>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>, }
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -129,7 +131,7 @@ export type readyResponse200 = {
 }
 
 export type readyResponse503 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 503
 }
 
@@ -172,16 +174,16 @@ export const getReadyQueryKey = () => {
     }
 
     
-export const getReadyQueryOptions = <TData = Awaited<ReturnType<typeof ready>>, TError = ErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ready>>, TError, TData>>, }
+export const getReadyQueryOptions = <TData = Awaited<ReturnType<typeof ready>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ready>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getReadyQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof ready>>> = ({ signal }) => ready({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof ready>>> = ({ signal }) => ready({ signal, ...requestOptions });
 
       
 
@@ -191,15 +193,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ReadyQueryResult = NonNullable<Awaited<ReturnType<typeof ready>>>
-export type ReadyQueryError = ErrorResponse
+export type ReadyQueryError = ErrorEnvelope
 
 
 /**
  * @summary Ready
  */
 
-export function useReady<TData = Awaited<ReturnType<typeof ready>>, TError = ErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ready>>, TError, TData>>, }
+export function useReady<TData = Awaited<ReturnType<typeof ready>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof ready>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

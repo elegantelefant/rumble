@@ -3,13 +3,17 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { LegalRequestActivityEntry } from './legalRequestActivityEntry';
+import type { AssignedEntry } from './assignedEntry';
+import type { PickedUpEntry } from './pickedUpEntry';
+import type { ReassignedEntry } from './reassignedEntry';
+import type { RoutingAutoAssignedEntry } from './routingAutoAssignedEntry';
+import type { UnassignedEntry } from './unassignedEntry';
 
 /**
  * Activity feed for a legal request (audit + assignments).
  */
 export interface LegalRequestActivityResponse {
-  activity?: LegalRequestActivityEntry[];
+  activity?: (AssignedEntry | ReassignedEntry | UnassignedEntry | PickedUpEntry | RoutingAutoAssignedEntry)[];
 }

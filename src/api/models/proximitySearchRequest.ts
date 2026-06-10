@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { LegalSearchFilters } from './legalSearchFilters';
 
@@ -30,7 +30,7 @@ export interface ProximitySearchRequest {
    */
   slop?: number;
   /** If true, terms must appear in specified order */
-  in_order?: boolean;
+  inOrder?: boolean;
   /** ISO country code: SG, UK, AU, MY, ID */
   country?: string | null;
   /** Specific ES indices (overrides country) */
@@ -50,5 +50,5 @@ export interface ProximitySearchRequest {
    * @minimum 1
    * @maximum 50
    */
-  rerank_top_n?: number;
+  rerankTopN?: number;
 }

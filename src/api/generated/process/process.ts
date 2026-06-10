@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,9 +30,7 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   ProcessRequest,
   ProcessResponse
@@ -40,6 +38,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -56,17 +56,17 @@ export type processResponse200 = {
 }
 
 export type processResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type processResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type processResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -84,7 +84,7 @@ export const getProcessUrl = () => {
 
   
 
-  return `/process`
+  return `/api/v1/process`
 }
 
 export const process = async (processRequest: ProcessRequest, options?: RequestInit): Promise<processResponse> => {
@@ -102,16 +102,16 @@ export const process = async (processRequest: ProcessRequest, options?: RequestI
 
 
 
-export const getProcessMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof process>>, TError,{data: ProcessRequest}, TContext>, }
+export const getProcessMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof process>>, TError,{data: ProcessRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof process>>, TError,{data: ProcessRequest}, TContext> => {
 
 const mutationKey = ['process'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -119,7 +119,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof process>>, {data: ProcessRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  process(data,)
+          return  process(data,requestOptions)
         }
 
 
@@ -131,13 +131,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ProcessMutationResult = NonNullable<Awaited<ReturnType<typeof process>>>
     export type ProcessMutationBody = ProcessRequest
-    export type ProcessMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type ProcessMutationError = ErrorEnvelope
 
     /**
  * @summary Process
  */
-export const useProcess = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof process>>, TError,{data: ProcessRequest}, TContext>, }
+export const useProcess = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof process>>, TError,{data: ProcessRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof process>>,
         TError,
@@ -148,6 +148,7 @@ export const useProcess = <TError = AuthErrorResponse | HTTPValidationError | Er
     }
     /**
  * Get process design result. Prefer using /jobs/{id}/result directly.
+ * @deprecated
  * @summary Process Result
  */
 export type processResultResponse200 = {
@@ -156,17 +157,17 @@ export type processResultResponse200 = {
 }
 
 export type processResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type processResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type processResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -184,7 +185,7 @@ export const getProcessResultUrl = (id: string,) => {
 
   
 
-  return `/process/${id}/result`
+  return `/api/v1/process/${id}/result`
 }
 
 export const processResult = async (id: string, options?: RequestInit): Promise<processResultResponse> => {
@@ -204,21 +205,21 @@ export const processResult = async (id: string, options?: RequestInit): Promise<
 
 export const getProcessResultQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'process',id,'result'
+    'api','v1','process',id,'result'
     ] as const;
     }
 
     
-export const getProcessResultQueryOptions = <TData = Awaited<ReturnType<typeof processResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof processResult>>, TError, TData>>, }
+export const getProcessResultQueryOptions = <TData = Awaited<ReturnType<typeof processResult>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof processResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getProcessResultQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof processResult>>> = ({ signal }) => processResult(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof processResult>>> = ({ signal }) => processResult(unref(id), { signal, ...requestOptions });
 
       
 
@@ -228,15 +229,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ProcessResultQueryResult = NonNullable<Awaited<ReturnType<typeof processResult>>>
-export type ProcessResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ProcessResultQueryError = ErrorEnvelope
 
 
 /**
+ * @deprecated
  * @summary Process Result
  */
 
-export function useProcessResult<TData = Awaited<ReturnType<typeof processResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof processResult>>, TError, TData>>, }
+export function useProcessResult<TData = Awaited<ReturnType<typeof processResult>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof processResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,15 +30,17 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
+  ErrorEnvelope,
+  GraphAllParams,
   GraphBatchBody,
   GraphBatchResponse,
-  GraphReferencesResponse,
-  HTTPValidationError
+  GraphReferencesResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -51,12 +53,12 @@ export type graphInboundResponse200 = {
 }
 
 export type graphInboundResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type graphInboundResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -74,7 +76,7 @@ export const getGraphInboundUrl = (legisId: string,) => {
 
   
 
-  return `/graph/${legisId}/references/inbound`
+  return `/api/v1/graph/${legisId}/references/inbound`
 }
 
 export const graphInbound = async (legisId: string, options?: RequestInit): Promise<graphInboundResponse> => {
@@ -94,21 +96,21 @@ export const graphInbound = async (legisId: string, options?: RequestInit): Prom
 
 export const getGraphInboundQueryKey = (legisId: MaybeRef<string>,) => {
     return [
-    'graph',legisId,'references','inbound'
+    'api','v1','graph',legisId,'references','inbound'
     ] as const;
     }
 
     
-export const getGraphInboundQueryOptions = <TData = Awaited<ReturnType<typeof graphInbound>>, TError = AuthErrorResponse | HTTPValidationError>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphInbound>>, TError, TData>>, }
+export const getGraphInboundQueryOptions = <TData = Awaited<ReturnType<typeof graphInbound>>, TError = ErrorEnvelope>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphInbound>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGraphInboundQueryKey(legisId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphInbound>>> = ({ signal }) => graphInbound(unref(legisId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphInbound>>> = ({ signal }) => graphInbound(unref(legisId), { signal, ...requestOptions });
 
       
 
@@ -118,15 +120,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GraphInboundQueryResult = NonNullable<Awaited<ReturnType<typeof graphInbound>>>
-export type GraphInboundQueryError = AuthErrorResponse | HTTPValidationError
+export type GraphInboundQueryError = ErrorEnvelope
 
 
 /**
  * @summary Graph Inbound
  */
 
-export function useGraphInbound<TData = Awaited<ReturnType<typeof graphInbound>>, TError = AuthErrorResponse | HTTPValidationError>(
- legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphInbound>>, TError, TData>>, }
+export function useGraphInbound<TData = Awaited<ReturnType<typeof graphInbound>>, TError = ErrorEnvelope>(
+ legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphInbound>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -151,12 +153,12 @@ export type graphOutboundResponse200 = {
 }
 
 export type graphOutboundResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type graphOutboundResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -174,7 +176,7 @@ export const getGraphOutboundUrl = (legisId: string,) => {
 
   
 
-  return `/graph/${legisId}/references/outbound`
+  return `/api/v1/graph/${legisId}/references/outbound`
 }
 
 export const graphOutbound = async (legisId: string, options?: RequestInit): Promise<graphOutboundResponse> => {
@@ -194,21 +196,21 @@ export const graphOutbound = async (legisId: string, options?: RequestInit): Pro
 
 export const getGraphOutboundQueryKey = (legisId: MaybeRef<string>,) => {
     return [
-    'graph',legisId,'references','outbound'
+    'api','v1','graph',legisId,'references','outbound'
     ] as const;
     }
 
     
-export const getGraphOutboundQueryOptions = <TData = Awaited<ReturnType<typeof graphOutbound>>, TError = AuthErrorResponse | HTTPValidationError>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphOutbound>>, TError, TData>>, }
+export const getGraphOutboundQueryOptions = <TData = Awaited<ReturnType<typeof graphOutbound>>, TError = ErrorEnvelope>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphOutbound>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGraphOutboundQueryKey(legisId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphOutbound>>> = ({ signal }) => graphOutbound(unref(legisId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphOutbound>>> = ({ signal }) => graphOutbound(unref(legisId), { signal, ...requestOptions });
 
       
 
@@ -218,15 +220,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GraphOutboundQueryResult = NonNullable<Awaited<ReturnType<typeof graphOutbound>>>
-export type GraphOutboundQueryError = AuthErrorResponse | HTTPValidationError
+export type GraphOutboundQueryError = ErrorEnvelope
 
 
 /**
  * @summary Graph Outbound
  */
 
-export function useGraphOutbound<TData = Awaited<ReturnType<typeof graphOutbound>>, TError = AuthErrorResponse | HTTPValidationError>(
- legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphOutbound>>, TError, TData>>, }
+export function useGraphOutbound<TData = Awaited<ReturnType<typeof graphOutbound>>, TError = ErrorEnvelope>(
+ legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphOutbound>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -251,12 +253,12 @@ export type graphAllResponse200 = {
 }
 
 export type graphAllResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type graphAllResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -269,17 +271,26 @@ export type graphAllResponseError = (graphAllResponse401 | graphAllResponse422) 
 
 export type graphAllResponse = (graphAllResponseSuccess | graphAllResponseError)
 
-export const getGraphAllUrl = (legisId: string,) => {
+export const getGraphAllUrl = (legisId: string,
+    params?: GraphAllParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/graph/${legisId}/references`
+  return stringifiedParams.length > 0 ? `/api/v1/graph/${legisId}/references?${stringifiedParams}` : `/api/v1/graph/${legisId}/references`
 }
 
-export const graphAll = async (legisId: string, options?: RequestInit): Promise<graphAllResponse> => {
+export const graphAll = async (legisId: string,
+    params?: GraphAllParams, options?: RequestInit): Promise<graphAllResponse> => {
   
-  return apiClient<graphAllResponse>(getGraphAllUrl(legisId),
+  return apiClient<graphAllResponse>(getGraphAllUrl(legisId,params),
   {      
     ...options,
     method: 'GET'
@@ -292,23 +303,25 @@ export const graphAll = async (legisId: string, options?: RequestInit): Promise<
 
 
 
-export const getGraphAllQueryKey = (legisId: MaybeRef<string>,) => {
+export const getGraphAllQueryKey = (legisId: MaybeRef<string>,
+    params?: MaybeRef<GraphAllParams>,) => {
     return [
-    'graph',legisId,'references'
+    'api','v1','graph',legisId,'references', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getGraphAllQueryOptions = <TData = Awaited<ReturnType<typeof graphAll>>, TError = AuthErrorResponse | HTTPValidationError>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphAll>>, TError, TData>>, }
+export const getGraphAllQueryOptions = <TData = Awaited<ReturnType<typeof graphAll>>, TError = ErrorEnvelope>(legisId: MaybeRef<string>,
+    params?: MaybeRef<GraphAllParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphAll>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  getGraphAllQueryKey(legisId);
+  const queryKey =  getGraphAllQueryKey(legisId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphAll>>> = ({ signal }) => graphAll(unref(legisId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof graphAll>>> = ({ signal }) => graphAll(unref(legisId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -318,19 +331,20 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GraphAllQueryResult = NonNullable<Awaited<ReturnType<typeof graphAll>>>
-export type GraphAllQueryError = AuthErrorResponse | HTTPValidationError
+export type GraphAllQueryError = ErrorEnvelope
 
 
 /**
  * @summary Graph All
  */
 
-export function useGraphAll<TData = Awaited<ReturnType<typeof graphAll>>, TError = AuthErrorResponse | HTTPValidationError>(
- legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphAll>>, TError, TData>>, }
+export function useGraphAll<TData = Awaited<ReturnType<typeof graphAll>>, TError = ErrorEnvelope>(
+ legisId: MaybeRef<string>,
+    params?: MaybeRef<GraphAllParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof graphAll>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGraphAllQueryOptions(legisId,options)
+  const queryOptions = getGraphAllQueryOptions(legisId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -351,12 +365,12 @@ export type graphBatchResponse200 = {
 }
 
 export type graphBatchResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type graphBatchResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -374,7 +388,7 @@ export const getGraphBatchUrl = () => {
 
   
 
-  return `/graph/batch`
+  return `/api/v1/graph/batch`
 }
 
 export const graphBatch = async (graphBatchBody: GraphBatchBody, options?: RequestInit): Promise<graphBatchResponse> => {
@@ -392,16 +406,16 @@ export const graphBatch = async (graphBatchBody: GraphBatchBody, options?: Reque
 
 
 
-export const getGraphBatchMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof graphBatch>>, TError,{data: GraphBatchBody}, TContext>, }
+export const getGraphBatchMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof graphBatch>>, TError,{data: GraphBatchBody}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof graphBatch>>, TError,{data: GraphBatchBody}, TContext> => {
 
 const mutationKey = ['graphBatch'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -409,7 +423,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof graphBatch>>, {data: GraphBatchBody}> = (props) => {
           const {data} = props ?? {};
 
-          return  graphBatch(data,)
+          return  graphBatch(data,requestOptions)
         }
 
 
@@ -421,13 +435,13 @@ const {mutation: mutationOptions} = options ?
 
     export type GraphBatchMutationResult = NonNullable<Awaited<ReturnType<typeof graphBatch>>>
     export type GraphBatchMutationBody = GraphBatchBody
-    export type GraphBatchMutationError = AuthErrorResponse | HTTPValidationError
+    export type GraphBatchMutationError = ErrorEnvelope
 
     /**
  * @summary Graph Batch
  */
-export const useGraphBatch = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof graphBatch>>, TError,{data: GraphBatchBody}, TContext>, }
+export const useGraphBatch = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof graphBatch>>, TError,{data: GraphBatchBody}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof graphBatch>>,
         TError,

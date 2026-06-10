@@ -3,14 +3,14 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 /**
  * Response when a job is created and enqueued.
  */
 export interface JobCreatedResponse {
-  job_id: string;
+  jobId: string;
   status?: 'queued';
-  poll_url: string;
+  pollUrl: string;
 }

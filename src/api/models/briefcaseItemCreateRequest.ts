@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 export interface BriefcaseItemCreateRequest {
@@ -11,7 +11,7 @@ export interface BriefcaseItemCreateRequest {
    * Legal resource ID to add
    * @minLength 1
    */
-  legis_id: string;
+  legisId: string;
   /** Optional display title */
   title?: string | null;
   /** Optional URL */

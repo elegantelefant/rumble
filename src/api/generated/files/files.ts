@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,20 +30,20 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
+  ErrorEnvelope,
   FileConfirmRequest,
   FileDownloadResponse,
   FileListResponse,
   FileMetadataResponse,
   FilePresignRequest,
   FilePresignResponse,
-  HTTPValidationError,
   OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -60,12 +60,12 @@ export type presignResponse200 = {
 }
 
 export type presignResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type presignResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -83,7 +83,7 @@ export const getPresignUrl = () => {
 
   
 
-  return `/files/presign`
+  return `/api/v1/files/presign`
 }
 
 export const presign = async (filePresignRequest: FilePresignRequest, options?: RequestInit): Promise<presignResponse> => {
@@ -101,16 +101,16 @@ export const presign = async (filePresignRequest: FilePresignRequest, options?: 
 
 
 
-export const getPresignMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presign>>, TError,{data: FilePresignRequest}, TContext>, }
+export const getPresignMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presign>>, TError,{data: FilePresignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof presign>>, TError,{data: FilePresignRequest}, TContext> => {
 
 const mutationKey = ['presign'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -118,7 +118,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof presign>>, {data: FilePresignRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  presign(data,)
+          return  presign(data,requestOptions)
         }
 
 
@@ -130,13 +130,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PresignMutationResult = NonNullable<Awaited<ReturnType<typeof presign>>>
     export type PresignMutationBody = FilePresignRequest
-    export type PresignMutationError = AuthErrorResponse | HTTPValidationError
+    export type PresignMutationError = ErrorEnvelope
 
     /**
  * @summary Presign
  */
-export const usePresign = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presign>>, TError,{data: FilePresignRequest}, TContext>, }
+export const usePresign = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presign>>, TError,{data: FilePresignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof presign>>,
         TError,
@@ -155,7 +155,7 @@ export type listFilesResponse200 = {
 }
 
 export type listFilesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -173,7 +173,7 @@ export const getListFilesUrl = () => {
 
   
 
-  return `/files`
+  return `/api/v1/files`
 }
 
 export const listFiles = async ( options?: RequestInit): Promise<listFilesResponse> => {
@@ -193,21 +193,21 @@ export const listFiles = async ( options?: RequestInit): Promise<listFilesRespon
 
 export const getListFilesQueryKey = () => {
     return [
-    'files'
+    'api','v1','files'
     ] as const;
     }
 
     
-export const getListFilesQueryOptions = <TData = Awaited<ReturnType<typeof listFiles>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFiles>>, TError, TData>>, }
+export const getListFilesQueryOptions = <TData = Awaited<ReturnType<typeof listFiles>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFiles>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListFilesQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFiles>>> = ({ signal }) => listFiles({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFiles>>> = ({ signal }) => listFiles({ signal, ...requestOptions });
 
       
 
@@ -217,15 +217,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListFilesQueryResult = NonNullable<Awaited<ReturnType<typeof listFiles>>>
-export type ListFilesQueryError = AuthErrorResponse
+export type ListFilesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Files
  */
 
-export function useListFiles<TData = Awaited<ReturnType<typeof listFiles>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFiles>>, TError, TData>>, }
+export function useListFiles<TData = Awaited<ReturnType<typeof listFiles>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFiles>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -253,12 +253,12 @@ export type confirmUploadResponse200 = {
 }
 
 export type confirmUploadResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type confirmUploadResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -276,7 +276,7 @@ export const getConfirmUploadUrl = () => {
 
   
 
-  return `/files`
+  return `/api/v1/files`
 }
 
 export const confirmUpload = async (fileConfirmRequest: FileConfirmRequest, options?: RequestInit): Promise<confirmUploadResponse> => {
@@ -294,16 +294,16 @@ export const confirmUpload = async (fileConfirmRequest: FileConfirmRequest, opti
 
 
 
-export const getConfirmUploadMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: FileConfirmRequest}, TContext>, }
+export const getConfirmUploadMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: FileConfirmRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: FileConfirmRequest}, TContext> => {
 
 const mutationKey = ['confirmUpload'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -311,7 +311,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmUpload>>, {data: FileConfirmRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  confirmUpload(data,)
+          return  confirmUpload(data,requestOptions)
         }
 
 
@@ -323,13 +323,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ConfirmUploadMutationResult = NonNullable<Awaited<ReturnType<typeof confirmUpload>>>
     export type ConfirmUploadMutationBody = FileConfirmRequest
-    export type ConfirmUploadMutationError = AuthErrorResponse | HTTPValidationError
+    export type ConfirmUploadMutationError = ErrorEnvelope
 
     /**
  * @summary Confirm Upload
  */
-export const useConfirmUpload = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: FileConfirmRequest}, TContext>, }
+export const useConfirmUpload = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: FileConfirmRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof confirmUpload>>,
         TError,
@@ -348,17 +348,17 @@ export type getFileResponse200 = {
 }
 
 export type getFileResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getFileResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getFileResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -376,7 +376,7 @@ export const getGetFileUrl = (fileId: string,) => {
 
   
 
-  return `/files/${fileId}`
+  return `/api/v1/files/${fileId}`
 }
 
 export const getFile = async (fileId: string, options?: RequestInit): Promise<getFileResponse> => {
@@ -396,21 +396,21 @@ export const getFile = async (fileId: string, options?: RequestInit): Promise<ge
 
 export const getGetFileQueryKey = (fileId: MaybeRef<string>,) => {
     return [
-    'files',fileId
+    'api','v1','files',fileId
     ] as const;
     }
 
     
-export const getGetFileQueryOptions = <TData = Awaited<ReturnType<typeof getFile>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, }
+export const getGetFileQueryOptions = <TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorEnvelope>(fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetFileQueryKey(fileId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFile>>> = ({ signal }) => getFile(unref(fileId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFile>>> = ({ signal }) => getFile(unref(fileId), { signal, ...requestOptions });
 
       
 
@@ -420,15 +420,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetFileQueryResult = NonNullable<Awaited<ReturnType<typeof getFile>>>
-export type GetFileQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetFileQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get File
  */
 
-export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, }
+export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorEnvelope>(
+ fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -454,17 +454,17 @@ export type deleteFileResponse200 = {
 }
 
 export type deleteFileResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteFileResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteFileResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -482,7 +482,7 @@ export const getDeleteFileUrl = (fileId: string,) => {
 
   
 
-  return `/files/${fileId}`
+  return `/api/v1/files/${fileId}`
 }
 
 export const deleteFile = async (fileId: string, options?: RequestInit): Promise<deleteFileResponse> => {
@@ -499,16 +499,16 @@ export const deleteFile = async (fileId: string, options?: RequestInit): Promise
 
 
 
-export const getDeleteFileMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFile>>, TError,{fileId: string}, TContext>, }
+export const getDeleteFileMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFile>>, TError,{fileId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteFile>>, TError,{fileId: string}, TContext> => {
 
 const mutationKey = ['deleteFile'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -516,7 +516,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFile>>, {fileId: string}> = (props) => {
           const {fileId} = props ?? {};
 
-          return  deleteFile(fileId,)
+          return  deleteFile(fileId,requestOptions)
         }
 
 
@@ -528,13 +528,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteFileMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFile>>>
     
-    export type DeleteFileMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteFileMutationError = ErrorEnvelope
 
     /**
  * @summary Delete File
  */
-export const useDeleteFile = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFile>>, TError,{fileId: string}, TContext>, }
+export const useDeleteFile = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFile>>, TError,{fileId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteFile>>,
         TError,
@@ -553,17 +553,17 @@ export type downloadFileResponse200 = {
 }
 
 export type downloadFileResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type downloadFileResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type downloadFileResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -581,7 +581,7 @@ export const getDownloadFileUrl = (fileId: string,) => {
 
   
 
-  return `/files/${fileId}/download`
+  return `/api/v1/files/${fileId}/download`
 }
 
 export const downloadFile = async (fileId: string, options?: RequestInit): Promise<downloadFileResponse> => {
@@ -601,21 +601,21 @@ export const downloadFile = async (fileId: string, options?: RequestInit): Promi
 
 export const getDownloadFileQueryKey = (fileId: MaybeRef<string>,) => {
     return [
-    'files',fileId,'download'
+    'api','v1','files',fileId,'download'
     ] as const;
     }
 
     
-export const getDownloadFileQueryOptions = <TData = Awaited<ReturnType<typeof downloadFile>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadFile>>, TError, TData>>, }
+export const getDownloadFileQueryOptions = <TData = Awaited<ReturnType<typeof downloadFile>>, TError = ErrorEnvelope>(fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadFile>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getDownloadFileQueryKey(fileId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadFile>>> = ({ signal }) => downloadFile(unref(fileId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadFile>>> = ({ signal }) => downloadFile(unref(fileId), { signal, ...requestOptions });
 
       
 
@@ -625,15 +625,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type DownloadFileQueryResult = NonNullable<Awaited<ReturnType<typeof downloadFile>>>
-export type DownloadFileQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type DownloadFileQueryError = ErrorEnvelope
 
 
 /**
  * @summary Download File
  */
 
-export function useDownloadFile<TData = Awaited<ReturnType<typeof downloadFile>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadFile>>, TError, TData>>, }
+export function useDownloadFile<TData = Awaited<ReturnType<typeof downloadFile>>, TError = ErrorEnvelope>(
+ fileId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadFile>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

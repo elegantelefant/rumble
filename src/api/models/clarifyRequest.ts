@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { ClarifyRequestContext } from './clarifyRequestContext';
 import type { ClarifyRequestDocumentTerms } from './clarifyRequestDocumentTerms';
@@ -24,13 +24,15 @@ export interface ClarifyRequest {
   /** Optional context to inform clarification. Common keys: 'jurisdiction' (str), 'document_type' (str), 'briefcase_id' (str), 'prior_messages' (list[str]). All keys are optional. */
   context?: ClarifyRequestContext;
   /** Type of document for context */
-  document_type?: string;
+  documentType?: string;
   /** Drafting style preference */
-  drafting_style?: string;
+  draftingStyle?: string;
   /** Party details for context */
   parties?: ClarifyRequestPartiesItem[];
   /** Key terms for context */
-  document_terms?: ClarifyRequestDocumentTerms;
+  documentTerms?: ClarifyRequestDocumentTerms;
   /** Compressed reference summaries for context */
-  compressed_references?: string[];
+  compressedReferences?: string[];
+  /** File IDs from /files/presign to use as reference context */
+  referenceFileIds?: string[];
 }

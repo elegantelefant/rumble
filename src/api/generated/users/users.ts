@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,9 +30,9 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
+  ImpersonationRequest,
+  ImpersonationResponse,
   ListUsersParams,
   OkResponse,
   UserCreateResponse,
@@ -45,6 +45,8 @@ import type {
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
@@ -52,7 +54,7 @@ import { apiClient } from '../../client';
  * @summary Create User
  */
 export type createUserResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -73,7 +75,7 @@ export const getCreateUserUrl = () => {
 
   
 
-  return `/users`
+  return `/api/v1/users`
 }
 
 export const createUser = async ( options?: RequestInit): Promise<createUserResponse> => {
@@ -90,16 +92,16 @@ export const createUser = async ( options?: RequestInit): Promise<createUserResp
 
 
 
-export const getCreateUserMutationOptions = <TError = AuthErrorResponse | UserCreateResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUser>>, TError,void, TContext>, }
+export const getCreateUserMutationOptions = <TError = ErrorEnvelope | UserCreateResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUser>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createUser>>, TError,void, TContext> => {
 
 const mutationKey = ['createUser'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -107,7 +109,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUser>>, void> = () => {
           
 
-          return  createUser()
+          return  createUser(requestOptions)
         }
 
 
@@ -119,13 +121,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateUserMutationResult = NonNullable<Awaited<ReturnType<typeof createUser>>>
     
-    export type CreateUserMutationError = AuthErrorResponse | UserCreateResponse
+    export type CreateUserMutationError = ErrorEnvelope | UserCreateResponse
 
     /**
  * @summary Create User
  */
-export const useCreateUser = <TError = AuthErrorResponse | UserCreateResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUser>>, TError,void, TContext>, }
+export const useCreateUser = <TError = ErrorEnvelope | UserCreateResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUser>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createUser>>,
         TError,
@@ -135,7 +137,7 @@ export const useCreateUser = <TError = AuthErrorResponse | UserCreateResponse,
       return useMutation(getCreateUserMutationOptions(options), queryClient);
     }
     /**
- * List or search users. Pass `q` to filter by email/name.
+ * List or search users. Pass `q` to filter by email/name. Admin only.
  * @summary List Users
  */
 export type listUsersResponse200 = {
@@ -144,19 +146,24 @@ export type listUsersResponse200 = {
 }
 
 export type listUsersResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type listUsersResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
 export type listUsersResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type listUsersResponseSuccess = (listUsersResponse200) & {
   headers: Headers;
 };
-export type listUsersResponseError = (listUsersResponse401 | listUsersResponse422) & {
+export type listUsersResponseError = (listUsersResponse401 | listUsersResponse403 | listUsersResponse422) & {
   headers: Headers;
 };
 
@@ -174,7 +181,7 @@ export const getListUsersUrl = (params?: ListUsersParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/users?${stringifiedParams}` : `/users`
+  return stringifiedParams.length > 0 ? `/api/v1/users?${stringifiedParams}` : `/api/v1/users`
 }
 
 export const listUsers = async (params?: ListUsersParams, options?: RequestInit): Promise<listUsersResponse> => {
@@ -194,21 +201,21 @@ export const listUsers = async (params?: ListUsersParams, options?: RequestInit)
 
 export const getListUsersQueryKey = (params?: MaybeRef<ListUsersParams>,) => {
     return [
-    'users', ...(params ? [params] : [])
+    'api','v1','users', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListUsersQueryOptions = <TData = Awaited<ReturnType<typeof listUsers>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListUsersParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUsers>>, TError, TData>>, }
+export const getListUsersQueryOptions = <TData = Awaited<ReturnType<typeof listUsers>>, TError = ErrorEnvelope>(params?: MaybeRef<ListUsersParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUsers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListUsersQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUsers>>> = ({ signal }) => listUsers(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUsers>>> = ({ signal }) => listUsers(unref(params), { signal, ...requestOptions });
 
       
 
@@ -218,15 +225,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listUsers>>>
-export type ListUsersQueryError = AuthErrorResponse | HTTPValidationError
+export type ListUsersQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Users
  */
 
-export function useListUsers<TData = Awaited<ReturnType<typeof listUsers>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListUsersParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUsers>>, TError, TData>>, }
+export function useListUsers<TData = Awaited<ReturnType<typeof listUsers>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListUsersParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUsers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -243,7 +250,7 @@ export function useListUsers<TData = Awaited<ReturnType<typeof listUsers>>, TErr
 
 
 /**
- * Get user by ID.
+ * Get user by ID. Admin only.
  * @summary Get User
  */
 export type getUserResponse200 = {
@@ -252,24 +259,29 @@ export type getUserResponse200 = {
 }
 
 export type getUserResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type getUserResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
 export type getUserResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getUserResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getUserResponseSuccess = (getUserResponse200) & {
   headers: Headers;
 };
-export type getUserResponseError = (getUserResponse401 | getUserResponse404 | getUserResponse422) & {
+export type getUserResponseError = (getUserResponse401 | getUserResponse403 | getUserResponse404 | getUserResponse422) & {
   headers: Headers;
 };
 
@@ -280,7 +292,7 @@ export const getGetUserUrl = (userId: string,) => {
 
   
 
-  return `/users/${userId}`
+  return `/api/v1/users/${userId}`
 }
 
 export const getUser = async (userId: string, options?: RequestInit): Promise<getUserResponse> => {
@@ -300,21 +312,21 @@ export const getUser = async (userId: string, options?: RequestInit): Promise<ge
 
 export const getGetUserQueryKey = (userId: MaybeRef<string>,) => {
     return [
-    'users',userId
+    'api','v1','users',userId
     ] as const;
     }
 
     
-export const getGetUserQueryOptions = <TData = Awaited<ReturnType<typeof getUser>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>>, }
+export const getGetUserQueryOptions = <TData = Awaited<ReturnType<typeof getUser>>, TError = ErrorEnvelope>(userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetUserQueryKey(userId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUser>>> = ({ signal }) => getUser(unref(userId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUser>>> = ({ signal }) => getUser(unref(userId), { signal, ...requestOptions });
 
       
 
@@ -324,15 +336,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetUserQueryResult = NonNullable<Awaited<ReturnType<typeof getUser>>>
-export type GetUserQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetUserQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get User
  */
 
-export function useGetUser<TData = Awaited<ReturnType<typeof getUser>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>>, }
+export function useGetUser<TData = Awaited<ReturnType<typeof getUser>>, TError = ErrorEnvelope>(
+ userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -349,7 +361,7 @@ export function useGetUser<TData = Awaited<ReturnType<typeof getUser>>, TError =
 
 
 /**
- * Update user fields (name, role, banned). Omitted fields are unchanged.
+ * Update user fields (name, role, org_role, banned). Omitted fields are unchanged. Admin only.
  * @summary Update User
  */
 export type updateUserResponse200 = {
@@ -358,24 +370,29 @@ export type updateUserResponse200 = {
 }
 
 export type updateUserResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type updateUserResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
 export type updateUserResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateUserResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type updateUserResponseSuccess = (updateUserResponse200) & {
   headers: Headers;
 };
-export type updateUserResponseError = (updateUserResponse401 | updateUserResponse404 | updateUserResponse422) & {
+export type updateUserResponseError = (updateUserResponse401 | updateUserResponse403 | updateUserResponse404 | updateUserResponse422) & {
   headers: Headers;
 };
 
@@ -386,7 +403,7 @@ export const getUpdateUserUrl = (userId: string,) => {
 
   
 
-  return `/users/${userId}`
+  return `/api/v1/users/${userId}`
 }
 
 export const updateUser = async (userId: string,
@@ -405,16 +422,16 @@ export const updateUser = async (userId: string,
 
 
 
-export const getUpdateUserMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{userId: string;data: UserUpdateRequest}, TContext>, }
+export const getUpdateUserMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{userId: string;data: UserUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{userId: string;data: UserUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateUser'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -422,7 +439,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUser>>, {userId: string;data: UserUpdateRequest}> = (props) => {
           const {userId,data} = props ?? {};
 
-          return  updateUser(userId,data,)
+          return  updateUser(userId,data,requestOptions)
         }
 
 
@@ -434,13 +451,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateUserMutationResult = NonNullable<Awaited<ReturnType<typeof updateUser>>>
     export type UpdateUserMutationBody = UserUpdateRequest
-    export type UpdateUserMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateUserMutationError = ErrorEnvelope
 
     /**
  * @summary Update User
  */
-export const useUpdateUser = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{userId: string;data: UserUpdateRequest}, TContext>, }
+export const useUpdateUser = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUser>>, TError,{userId: string;data: UserUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateUser>>,
         TError,
@@ -450,7 +467,13 @@ export const useUpdateUser = <TError = AuthErrorResponse | ErrorResponse | HTTPV
       return useMutation(getUpdateUserMutationOptions(options), queryClient);
     }
     /**
- * Soft-delete (ban) a user.
+ * Soft-ban a user platform-wide. Platform-admin only.
+
+Distinct from `DELETE /org/members/{user_id}` (org-level membership detach):
+this path sets `banned=True` on the user row and prevents all future logins
+across every org the user belongs to. Use the org/members path for "Remove
+member from this org" UX; use this only for the "Ban user globally" admin
+action.
  * @summary Delete User
  */
 export type deleteUserResponse200 = {
@@ -459,24 +482,29 @@ export type deleteUserResponse200 = {
 }
 
 export type deleteUserResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type deleteUserResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
 export type deleteUserResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteUserResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type deleteUserResponseSuccess = (deleteUserResponse200) & {
   headers: Headers;
 };
-export type deleteUserResponseError = (deleteUserResponse401 | deleteUserResponse404 | deleteUserResponse422) & {
+export type deleteUserResponseError = (deleteUserResponse401 | deleteUserResponse403 | deleteUserResponse404 | deleteUserResponse422) & {
   headers: Headers;
 };
 
@@ -487,7 +515,7 @@ export const getDeleteUserUrl = (userId: string,) => {
 
   
 
-  return `/users/${userId}`
+  return `/api/v1/users/${userId}`
 }
 
 export const deleteUser = async (userId: string, options?: RequestInit): Promise<deleteUserResponse> => {
@@ -504,16 +532,16 @@ export const deleteUser = async (userId: string, options?: RequestInit): Promise
 
 
 
-export const getDeleteUserMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: string}, TContext>, }
+export const getDeleteUserMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: string}, TContext> => {
 
 const mutationKey = ['deleteUser'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -521,7 +549,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUser>>, {userId: string}> = (props) => {
           const {userId} = props ?? {};
 
-          return  deleteUser(userId,)
+          return  deleteUser(userId,requestOptions)
         }
 
 
@@ -533,13 +561,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUser>>>
     
-    export type DeleteUserMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteUserMutationError = ErrorEnvelope
 
     /**
  * @summary Delete User
  */
-export const useDeleteUser = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: string}, TContext>, }
+export const useDeleteUser = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteUser>>,
         TError,
@@ -549,7 +577,127 @@ export const useDeleteUser = <TError = AuthErrorResponse | ErrorResponse | HTTPV
       return useMutation(getDeleteUserMutationOptions(options), queryClient);
     }
     /**
- * Compute privileges from user role + org role.
+ * Detach a member from the caller's active org. Does NOT touch the user row.
+
+The user retains login, retains memberships in other orgs, and can be
+re-added later via the invite flow. This is what "Remove member" in the
+settings UI maps to.
+
+Authorisation:
+  - Caller must be admin or owner of the active org (caller.org_id).
+  - Cannot remove the org owner — must transfer ownership first.
+  - Cannot remove self — there is no "leave my own org" via this path.
+
+For full platform-wide soft-ban use `DELETE /users/{user_id}` instead.
+ * @summary Remove Org Member
+ */
+export type removeOrgMemberResponse200 = {
+  data: OkResponse
+  status: 200
+}
+
+export type removeOrgMemberResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
+export type removeOrgMemberResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type removeOrgMemberResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type removeOrgMemberResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type removeOrgMemberResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type removeOrgMemberResponseSuccess = (removeOrgMemberResponse200) & {
+  headers: Headers;
+};
+export type removeOrgMemberResponseError = (removeOrgMemberResponse400 | removeOrgMemberResponse401 | removeOrgMemberResponse403 | removeOrgMemberResponse404 | removeOrgMemberResponse422) & {
+  headers: Headers;
+};
+
+export type removeOrgMemberResponse = (removeOrgMemberResponseSuccess | removeOrgMemberResponseError)
+
+export const getRemoveOrgMemberUrl = (userId: string,) => {
+
+
+  
+
+  return `/api/v1/org/members/${userId}`
+}
+
+export const removeOrgMember = async (userId: string, options?: RequestInit): Promise<removeOrgMemberResponse> => {
+  
+  return apiClient<removeOrgMemberResponse>(getRemoveOrgMemberUrl(userId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+  
+
+
+
+export const getRemoveOrgMemberMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOrgMember>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeOrgMember>>, TError,{userId: string}, TContext> => {
+
+const mutationKey = ['removeOrgMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeOrgMember>>, {userId: string}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  removeOrgMember(userId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveOrgMemberMutationResult = NonNullable<Awaited<ReturnType<typeof removeOrgMember>>>
+    
+    export type RemoveOrgMemberMutationError = ErrorEnvelope
+
+    /**
+ * @summary Remove Org Member
+ */
+export const useRemoveOrgMember = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOrgMember>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof removeOrgMember>>,
+        TError,
+        {userId: string},
+        TContext
+      > => {
+      return useMutation(getRemoveOrgMemberMutationOptions(options), queryClient);
+    }
+    /**
+ * Compute privileges from user role + org role. Admin only.
  * @summary Get Privileges
  */
 export type getPrivilegesResponse200 = {
@@ -558,24 +706,29 @@ export type getPrivilegesResponse200 = {
 }
 
 export type getPrivilegesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
+export type getPrivilegesResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
 export type getPrivilegesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getPrivilegesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getPrivilegesResponseSuccess = (getPrivilegesResponse200) & {
   headers: Headers;
 };
-export type getPrivilegesResponseError = (getPrivilegesResponse401 | getPrivilegesResponse404 | getPrivilegesResponse422) & {
+export type getPrivilegesResponseError = (getPrivilegesResponse401 | getPrivilegesResponse403 | getPrivilegesResponse404 | getPrivilegesResponse422) & {
   headers: Headers;
 };
 
@@ -586,7 +739,7 @@ export const getGetPrivilegesUrl = (userId: string,) => {
 
   
 
-  return `/users/${userId}/privileges`
+  return `/api/v1/users/${userId}/privileges`
 }
 
 export const getPrivileges = async (userId: string, options?: RequestInit): Promise<getPrivilegesResponse> => {
@@ -606,21 +759,21 @@ export const getPrivileges = async (userId: string, options?: RequestInit): Prom
 
 export const getGetPrivilegesQueryKey = (userId: MaybeRef<string>,) => {
     return [
-    'users',userId,'privileges'
+    'api','v1','users',userId,'privileges'
     ] as const;
     }
 
     
-export const getGetPrivilegesQueryOptions = <TData = Awaited<ReturnType<typeof getPrivileges>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivileges>>, TError, TData>>, }
+export const getGetPrivilegesQueryOptions = <TData = Awaited<ReturnType<typeof getPrivileges>>, TError = ErrorEnvelope>(userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivileges>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetPrivilegesQueryKey(userId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPrivileges>>> = ({ signal }) => getPrivileges(unref(userId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPrivileges>>> = ({ signal }) => getPrivileges(unref(userId), { signal, ...requestOptions });
 
       
 
@@ -630,15 +783,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetPrivilegesQueryResult = NonNullable<Awaited<ReturnType<typeof getPrivileges>>>
-export type GetPrivilegesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetPrivilegesQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Privileges
  */
 
-export function useGetPrivileges<TData = Awaited<ReturnType<typeof getPrivileges>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivileges>>, TError, TData>>, }
+export function useGetPrivileges<TData = Awaited<ReturnType<typeof getPrivileges>>, TError = ErrorEnvelope>(
+ userId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivileges>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -654,3 +807,114 @@ export function useGetPrivileges<TData = Awaited<ReturnType<typeof getPrivileges
 
 
 
+/**
+ * Issue a 30-min JWT impersonating the target user. Platform-admin only.
+
+Rate-limited to one active session per admin (Redis-tracked). Every
+issuance writes an `impersonation.started` audit event tagged with the
+impersonator_id for the trail.
+ * @summary Impersonate User
+ */
+export type impersonateUserResponse200 = {
+  data: ImpersonationResponse
+  status: 200
+}
+
+export type impersonateUserResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type impersonateUserResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type impersonateUserResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type impersonateUserResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type impersonateUserResponseSuccess = (impersonateUserResponse200) & {
+  headers: Headers;
+};
+export type impersonateUserResponseError = (impersonateUserResponse401 | impersonateUserResponse403 | impersonateUserResponse404 | impersonateUserResponse422) & {
+  headers: Headers;
+};
+
+export type impersonateUserResponse = (impersonateUserResponseSuccess | impersonateUserResponseError)
+
+export const getImpersonateUserUrl = (userId: string,) => {
+
+
+  
+
+  return `/api/v1/admin/impersonate/${userId}`
+}
+
+export const impersonateUser = async (userId: string,
+    impersonationRequest: ImpersonationRequest, options?: RequestInit): Promise<impersonateUserResponse> => {
+  
+  return apiClient<impersonateUserResponse>(getImpersonateUserUrl(userId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      impersonationRequest,)
+  }
+);}
+  
+
+
+
+export const getImpersonateUserMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof impersonateUser>>, TError,{userId: string;data: ImpersonationRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof impersonateUser>>, TError,{userId: string;data: ImpersonationRequest}, TContext> => {
+
+const mutationKey = ['impersonateUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof impersonateUser>>, {userId: string;data: ImpersonationRequest}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  impersonateUser(userId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImpersonateUserMutationResult = NonNullable<Awaited<ReturnType<typeof impersonateUser>>>
+    export type ImpersonateUserMutationBody = ImpersonationRequest
+    export type ImpersonateUserMutationError = ErrorEnvelope
+
+    /**
+ * @summary Impersonate User
+ */
+export const useImpersonateUser = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof impersonateUser>>, TError,{userId: string;data: ImpersonationRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof impersonateUser>>,
+        TError,
+        {userId: string;data: ImpersonationRequest},
+        TContext
+      > => {
+      return useMutation(getImpersonateUserMutationOptions(options), queryClient);
+    }
+    

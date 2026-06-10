@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,17 +30,11 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ElefantApiApiSchemasMemoryExtractResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
+  MemoryConsolidateResponse,
   MemoryCreateRequest,
-  MemoryExtractBody,
   MemoryListResponse,
   MemoryResponse,
-  MemorySummaryResponse,
-  MemorySynthesiseBody,
-  MemorySynthesiseResponse,
   MemoryUpdateRequest,
   OkResponse
 } from '../../models';
@@ -48,77 +42,77 @@ import type {
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
- * Extract memories from conversation/preferences. (Placeholder)
- * @summary Memory Extract
+ * Consolidate user memories — compress without losing information.
+
+Semantic: prune low-confidence noise, keep merged facets.
+Episodic: LLM-compress into fewer, denser event summaries.
+Procedural: deterministically merge workflows with similar triggers.
+ * @summary Memory Consolidate
  */
-export type memoryExtractResponse200 = {
-  data: ElefantApiApiSchemasMemoryExtractResponse
+export type memoryConsolidateResponse200 = {
+  data: MemoryConsolidateResponse
   status: 200
 }
 
-export type memoryExtractResponse401 = {
-  data: AuthErrorResponse
+export type memoryConsolidateResponse401 = {
+  data: ErrorEnvelope
   status: 401
 }
 
-export type memoryExtractResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type memoryExtractResponseSuccess = (memoryExtractResponse200) & {
+export type memoryConsolidateResponseSuccess = (memoryConsolidateResponse200) & {
   headers: Headers;
 };
-export type memoryExtractResponseError = (memoryExtractResponse401 | memoryExtractResponse422) & {
+export type memoryConsolidateResponseError = (memoryConsolidateResponse401) & {
   headers: Headers;
 };
 
-export type memoryExtractResponse = (memoryExtractResponseSuccess | memoryExtractResponseError)
+export type memoryConsolidateResponse = (memoryConsolidateResponseSuccess | memoryConsolidateResponseError)
 
-export const getMemoryExtractUrl = () => {
+export const getMemoryConsolidateUrl = () => {
 
 
   
 
-  return `/memory/extract`
+  return `/api/v1/memory/consolidate`
 }
 
-export const memoryExtract = async (memoryExtractBody: MemoryExtractBody, options?: RequestInit): Promise<memoryExtractResponse> => {
+export const memoryConsolidate = async ( options?: RequestInit): Promise<memoryConsolidateResponse> => {
   
-  return apiClient<memoryExtractResponse>(getMemoryExtractUrl(),
+  return apiClient<memoryConsolidateResponse>(getMemoryConsolidateUrl(),
   {      
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      memoryExtractBody,)
+    method: 'POST'
+    
+    
   }
 );}
   
 
 
 
-export const getMemoryExtractMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memoryExtract>>, TError,{data: MemoryExtractBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof memoryExtract>>, TError,{data: MemoryExtractBody}, TContext> => {
+export const getMemoryConsolidateMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memoryConsolidate>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof memoryConsolidate>>, TError,void, TContext> => {
 
-const mutationKey = ['memoryExtract'];
-const {mutation: mutationOptions} = options ?
+const mutationKey = ['memoryConsolidate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof memoryExtract>>, {data: MemoryExtractBody}> = (props) => {
-          const {data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof memoryConsolidate>>, void> = () => {
+          
 
-          return  memoryExtract(data,)
+          return  memoryConsolidate(requestOptions)
         }
 
 
@@ -128,215 +122,24 @@ const {mutation: mutationOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type MemoryExtractMutationResult = NonNullable<Awaited<ReturnType<typeof memoryExtract>>>
-    export type MemoryExtractMutationBody = MemoryExtractBody
-    export type MemoryExtractMutationError = AuthErrorResponse | HTTPValidationError
+    export type MemoryConsolidateMutationResult = NonNullable<Awaited<ReturnType<typeof memoryConsolidate>>>
+    
+    export type MemoryConsolidateMutationError = ErrorEnvelope
 
     /**
- * @summary Memory Extract
+ * @summary Memory Consolidate
  */
-export const useMemoryExtract = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memoryExtract>>, TError,{data: MemoryExtractBody}, TContext>, }
+export const useMemoryConsolidate = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memoryConsolidate>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof memoryExtract>>,
+        Awaited<ReturnType<typeof memoryConsolidate>>,
         TError,
-        {data: MemoryExtractBody},
+        void,
         TContext
       > => {
-      return useMutation(getMemoryExtractMutationOptions(options), queryClient);
+      return useMutation(getMemoryConsolidateMutationOptions(options), queryClient);
     }
     /**
- * Synthesise and summarise memories. (Placeholder)
- * @summary Memory Synthesise
- */
-export type memorySynthesiseResponse200 = {
-  data: MemorySynthesiseResponse
-  status: 200
-}
-
-export type memorySynthesiseResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type memorySynthesiseResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type memorySynthesiseResponseSuccess = (memorySynthesiseResponse200) & {
-  headers: Headers;
-};
-export type memorySynthesiseResponseError = (memorySynthesiseResponse401 | memorySynthesiseResponse422) & {
-  headers: Headers;
-};
-
-export type memorySynthesiseResponse = (memorySynthesiseResponseSuccess | memorySynthesiseResponseError)
-
-export const getMemorySynthesiseUrl = () => {
-
-
-  
-
-  return `/memory/synthesise`
-}
-
-export const memorySynthesise = async (memorySynthesiseBody: MemorySynthesiseBody, options?: RequestInit): Promise<memorySynthesiseResponse> => {
-  
-  return apiClient<memorySynthesiseResponse>(getMemorySynthesiseUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      memorySynthesiseBody,)
-  }
-);}
-  
-
-
-
-export const getMemorySynthesiseMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memorySynthesise>>, TError,{data: MemorySynthesiseBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof memorySynthesise>>, TError,{data: MemorySynthesiseBody}, TContext> => {
-
-const mutationKey = ['memorySynthesise'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof memorySynthesise>>, {data: MemorySynthesiseBody}> = (props) => {
-          const {data} = props ?? {};
-
-          return  memorySynthesise(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type MemorySynthesiseMutationResult = NonNullable<Awaited<ReturnType<typeof memorySynthesise>>>
-    export type MemorySynthesiseMutationBody = MemorySynthesiseBody
-    export type MemorySynthesiseMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Memory Synthesise
- */
-export const useMemorySynthesise = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof memorySynthesise>>, TError,{data: MemorySynthesiseBody}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof memorySynthesise>>,
-        TError,
-        {data: MemorySynthesiseBody},
-        TContext
-      > => {
-      return useMutation(getMemorySynthesiseMutationOptions(options), queryClient);
-    }
-    /**
- * Get current state summary of all memories. (Placeholder)
- * @summary Memory Summary
- */
-export type memorySummaryResponse200 = {
-  data: MemorySummaryResponse
-  status: 200
-}
-
-export type memorySummaryResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type memorySummaryResponseSuccess = (memorySummaryResponse200) & {
-  headers: Headers;
-};
-export type memorySummaryResponseError = (memorySummaryResponse401) & {
-  headers: Headers;
-};
-
-export type memorySummaryResponse = (memorySummaryResponseSuccess | memorySummaryResponseError)
-
-export const getMemorySummaryUrl = () => {
-
-
-  
-
-  return `/memory/summary`
-}
-
-export const memorySummary = async ( options?: RequestInit): Promise<memorySummaryResponse> => {
-  
-  return apiClient<memorySummaryResponse>(getMemorySummaryUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-  
-
-
-
-
-export const getMemorySummaryQueryKey = () => {
-    return [
-    'memory','summary'
-    ] as const;
-    }
-
-    
-export const getMemorySummaryQueryOptions = <TData = Awaited<ReturnType<typeof memorySummary>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof memorySummary>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  getMemorySummaryQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof memorySummary>>> = ({ signal }) => memorySummary({ signal });
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof memorySummary>>, TError, TData> 
-}
-
-export type MemorySummaryQueryResult = NonNullable<Awaited<ReturnType<typeof memorySummary>>>
-export type MemorySummaryQueryError = AuthErrorResponse
-
-
-/**
- * @summary Memory Summary
- */
-
-export function useMemorySummary<TData = Awaited<ReturnType<typeof memorySummary>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof memorySummary>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getMemorySummaryQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
-
-  return query;
-}
-
-
-
-
-/**
  * List all memories for the current user.
  * @summary List Memories
  */
@@ -346,7 +149,7 @@ export type listMemoriesResponse200 = {
 }
 
 export type listMemoriesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -364,7 +167,7 @@ export const getListMemoriesUrl = () => {
 
   
 
-  return `/memories`
+  return `/api/v1/memories`
 }
 
 export const listMemories = async ( options?: RequestInit): Promise<listMemoriesResponse> => {
@@ -384,21 +187,21 @@ export const listMemories = async ( options?: RequestInit): Promise<listMemories
 
 export const getListMemoriesQueryKey = () => {
     return [
-    'memories'
+    'api','v1','memories'
     ] as const;
     }
 
     
-export const getListMemoriesQueryOptions = <TData = Awaited<ReturnType<typeof listMemories>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemories>>, TError, TData>>, }
+export const getListMemoriesQueryOptions = <TData = Awaited<ReturnType<typeof listMemories>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemories>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListMemoriesQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMemories>>> = ({ signal }) => listMemories({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMemories>>> = ({ signal }) => listMemories({ signal, ...requestOptions });
 
       
 
@@ -408,15 +211,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListMemoriesQueryResult = NonNullable<Awaited<ReturnType<typeof listMemories>>>
-export type ListMemoriesQueryError = AuthErrorResponse
+export type ListMemoriesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Memories
  */
 
-export function useListMemories<TData = Awaited<ReturnType<typeof listMemories>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemories>>, TError, TData>>, }
+export function useListMemories<TData = Awaited<ReturnType<typeof listMemories>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemories>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -442,12 +245,12 @@ export type createMemoryResponse200 = {
 }
 
 export type createMemoryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createMemoryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -465,7 +268,7 @@ export const getCreateMemoryUrl = () => {
 
   
 
-  return `/memories`
+  return `/api/v1/memories`
 }
 
 export const createMemory = async (memoryCreateRequest: MemoryCreateRequest, options?: RequestInit): Promise<createMemoryResponse> => {
@@ -483,16 +286,16 @@ export const createMemory = async (memoryCreateRequest: MemoryCreateRequest, opt
 
 
 
-export const getCreateMemoryMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemory>>, TError,{data: MemoryCreateRequest}, TContext>, }
+export const getCreateMemoryMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemory>>, TError,{data: MemoryCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createMemory>>, TError,{data: MemoryCreateRequest}, TContext> => {
 
 const mutationKey = ['createMemory'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -500,7 +303,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMemory>>, {data: MemoryCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createMemory(data,)
+          return  createMemory(data,requestOptions)
         }
 
 
@@ -512,13 +315,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateMemoryMutationResult = NonNullable<Awaited<ReturnType<typeof createMemory>>>
     export type CreateMemoryMutationBody = MemoryCreateRequest
-    export type CreateMemoryMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreateMemoryMutationError = ErrorEnvelope
 
     /**
  * @summary Create Memory
  */
-export const useCreateMemory = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemory>>, TError,{data: MemoryCreateRequest}, TContext>, }
+export const useCreateMemory = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemory>>, TError,{data: MemoryCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createMemory>>,
         TError,
@@ -537,17 +340,17 @@ export type getMemoryResponse200 = {
 }
 
 export type getMemoryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getMemoryResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getMemoryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -565,7 +368,7 @@ export const getGetMemoryUrl = (memoryId: string,) => {
 
   
 
-  return `/memories/${memoryId}`
+  return `/api/v1/memories/${memoryId}`
 }
 
 export const getMemory = async (memoryId: string, options?: RequestInit): Promise<getMemoryResponse> => {
@@ -585,21 +388,21 @@ export const getMemory = async (memoryId: string, options?: RequestInit): Promis
 
 export const getGetMemoryQueryKey = (memoryId: MaybeRef<string>,) => {
     return [
-    'memories',memoryId
+    'api','v1','memories',memoryId
     ] as const;
     }
 
     
-export const getGetMemoryQueryOptions = <TData = Awaited<ReturnType<typeof getMemory>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(memoryId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMemory>>, TError, TData>>, }
+export const getGetMemoryQueryOptions = <TData = Awaited<ReturnType<typeof getMemory>>, TError = ErrorEnvelope>(memoryId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMemory>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetMemoryQueryKey(memoryId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMemory>>> = ({ signal }) => getMemory(unref(memoryId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMemory>>> = ({ signal }) => getMemory(unref(memoryId), { signal, ...requestOptions });
 
       
 
@@ -609,15 +412,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetMemoryQueryResult = NonNullable<Awaited<ReturnType<typeof getMemory>>>
-export type GetMemoryQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetMemoryQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Memory
  */
 
-export function useGetMemory<TData = Awaited<ReturnType<typeof getMemory>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- memoryId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMemory>>, TError, TData>>, }
+export function useGetMemory<TData = Awaited<ReturnType<typeof getMemory>>, TError = ErrorEnvelope>(
+ memoryId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMemory>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -643,17 +446,17 @@ export type updateMemoryResponse200 = {
 }
 
 export type updateMemoryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateMemoryResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateMemoryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -671,7 +474,7 @@ export const getUpdateMemoryUrl = (memoryId: string,) => {
 
   
 
-  return `/memories/${memoryId}`
+  return `/api/v1/memories/${memoryId}`
 }
 
 export const updateMemory = async (memoryId: string,
@@ -690,16 +493,16 @@ export const updateMemory = async (memoryId: string,
 
 
 
-export const getUpdateMemoryMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMemory>>, TError,{memoryId: string;data: MemoryUpdateRequest}, TContext>, }
+export const getUpdateMemoryMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMemory>>, TError,{memoryId: string;data: MemoryUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateMemory>>, TError,{memoryId: string;data: MemoryUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateMemory'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -707,7 +510,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMemory>>, {memoryId: string;data: MemoryUpdateRequest}> = (props) => {
           const {memoryId,data} = props ?? {};
 
-          return  updateMemory(memoryId,data,)
+          return  updateMemory(memoryId,data,requestOptions)
         }
 
 
@@ -719,13 +522,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateMemoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateMemory>>>
     export type UpdateMemoryMutationBody = MemoryUpdateRequest
-    export type UpdateMemoryMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateMemoryMutationError = ErrorEnvelope
 
     /**
  * @summary Update Memory
  */
-export const useUpdateMemory = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMemory>>, TError,{memoryId: string;data: MemoryUpdateRequest}, TContext>, }
+export const useUpdateMemory = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMemory>>, TError,{memoryId: string;data: MemoryUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateMemory>>,
         TError,
@@ -744,17 +547,17 @@ export type deleteMemoryResponse200 = {
 }
 
 export type deleteMemoryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteMemoryResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteMemoryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -772,7 +575,7 @@ export const getDeleteMemoryUrl = (memoryId: string,) => {
 
   
 
-  return `/memories/${memoryId}`
+  return `/api/v1/memories/${memoryId}`
 }
 
 export const deleteMemory = async (memoryId: string, options?: RequestInit): Promise<deleteMemoryResponse> => {
@@ -789,16 +592,16 @@ export const deleteMemory = async (memoryId: string, options?: RequestInit): Pro
 
 
 
-export const getDeleteMemoryMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError,{memoryId: string}, TContext>, }
+export const getDeleteMemoryMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError,{memoryId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError,{memoryId: string}, TContext> => {
 
 const mutationKey = ['deleteMemory'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -806,7 +609,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMemory>>, {memoryId: string}> = (props) => {
           const {memoryId} = props ?? {};
 
-          return  deleteMemory(memoryId,)
+          return  deleteMemory(memoryId,requestOptions)
         }
 
 
@@ -818,13 +621,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteMemoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMemory>>>
     
-    export type DeleteMemoryMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteMemoryMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Memory
  */
-export const useDeleteMemory = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError,{memoryId: string}, TContext>, }
+export const useDeleteMemory = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError,{memoryId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteMemory>>,
         TError,

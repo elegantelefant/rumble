@@ -3,10 +3,12 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
+import type { IndexName } from './indexName';
 import type { LegalSearchFilters } from './legalSearchFilters';
 import type { LegalSearchRequestSort } from './legalSearchRequestSort';
+import type { SearchRegion } from './searchRegion';
 
 /**
  * Request for legal document search.
@@ -19,10 +21,10 @@ export interface LegalSearchRequest {
    * @minLength 1
    */
   query: string;
-  /** ISO country code: SG, UK, AU, MY, ID. Selects indices for that jurisdiction. */
-  country?: string | null;
+  /** ISO jurisdiction code (SG, UK, AU, MY, ID, HK, CA, US, US_CA, US_DE, US_MA, US_NY). Selects indices for that jurisdiction. US_* codes are state-level. */
+  country?: SearchRegion | null;
   /** Specific ES indices to search (overrides country). For power users. */
-  indices?: string[] | null;
+  indices?: IndexName[] | null;
   /**
    * Number of results to return
    * @minimum 1
@@ -34,9 +36,9 @@ export interface LegalSearchRequest {
   /** Pagination cursor (search_after values from previous response) */
   cursor?: unknown[] | null;
   /** Include facet aggregations in response */
-  include_aggregations?: boolean;
+  includeAggregations?: boolean;
   /** Deduplicate results by legisId */
-  collapse_duplicates?: boolean;
+  collapseDuplicates?: boolean;
   /** Optional filters to narrow results */
   filters?: LegalSearchFilters | null;
   /** Apply Cohere reranking to improve result relevance */
@@ -46,5 +48,5 @@ export interface LegalSearchRequest {
    * @minimum 1
    * @maximum 50
    */
-  rerank_top_n?: number;
+  rerankTopN?: number;
 }

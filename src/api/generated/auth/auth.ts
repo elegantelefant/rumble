@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useQuery
@@ -22,12 +22,14 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
+  ErrorEnvelope,
   WhoamiResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -40,7 +42,7 @@ export type whoamiResponse200 = {
 }
 
 export type whoamiResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -58,7 +60,7 @@ export const getWhoamiUrl = () => {
 
   
 
-  return `/whoami`
+  return `/api/v1/whoami`
 }
 
 export const whoami = async ( options?: RequestInit): Promise<whoamiResponse> => {
@@ -78,21 +80,21 @@ export const whoami = async ( options?: RequestInit): Promise<whoamiResponse> =>
 
 export const getWhoamiQueryKey = () => {
     return [
-    'whoami'
+    'api','v1','whoami'
     ] as const;
     }
 
     
-export const getWhoamiQueryOptions = <TData = Awaited<ReturnType<typeof whoami>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof whoami>>, TError, TData>>, }
+export const getWhoamiQueryOptions = <TData = Awaited<ReturnType<typeof whoami>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof whoami>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getWhoamiQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof whoami>>> = ({ signal }) => whoami({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof whoami>>> = ({ signal }) => whoami({ signal, ...requestOptions });
 
       
 
@@ -102,15 +104,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type WhoamiQueryResult = NonNullable<Awaited<ReturnType<typeof whoami>>>
-export type WhoamiQueryError = AuthErrorResponse
+export type WhoamiQueryError = ErrorEnvelope
 
 
 /**
  * @summary Whoami
  */
 
-export function useWhoami<TData = Awaited<ReturnType<typeof whoami>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof whoami>>, TError, TData>>, }
+export function useWhoami<TData = Awaited<ReturnType<typeof whoami>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof whoami>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

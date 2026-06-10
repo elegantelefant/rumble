@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,9 +30,7 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   OkResponse,
   PlaybookCreateRequest,
@@ -47,6 +45,8 @@ import type {
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
@@ -59,7 +59,7 @@ export type listPlaybooksResponse200 = {
 }
 
 export type listPlaybooksResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -77,7 +77,7 @@ export const getListPlaybooksUrl = () => {
 
   
 
-  return `/playbooks`
+  return `/api/v1/playbooks`
 }
 
 export const listPlaybooks = async ( options?: RequestInit): Promise<listPlaybooksResponse> => {
@@ -97,21 +97,21 @@ export const listPlaybooks = async ( options?: RequestInit): Promise<listPlayboo
 
 export const getListPlaybooksQueryKey = () => {
     return [
-    'playbooks'
+    'api','v1','playbooks'
     ] as const;
     }
 
     
-export const getListPlaybooksQueryOptions = <TData = Awaited<ReturnType<typeof listPlaybooks>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlaybooks>>, TError, TData>>, }
+export const getListPlaybooksQueryOptions = <TData = Awaited<ReturnType<typeof listPlaybooks>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlaybooks>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListPlaybooksQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlaybooks>>> = ({ signal }) => listPlaybooks({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlaybooks>>> = ({ signal }) => listPlaybooks({ signal, ...requestOptions });
 
       
 
@@ -121,15 +121,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListPlaybooksQueryResult = NonNullable<Awaited<ReturnType<typeof listPlaybooks>>>
-export type ListPlaybooksQueryError = AuthErrorResponse
+export type ListPlaybooksQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Playbooks
  */
 
-export function useListPlaybooks<TData = Awaited<ReturnType<typeof listPlaybooks>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlaybooks>>, TError, TData>>, }
+export function useListPlaybooks<TData = Awaited<ReturnType<typeof listPlaybooks>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlaybooks>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -155,12 +155,12 @@ export type createPlaybookResponse200 = {
 }
 
 export type createPlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createPlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -178,7 +178,7 @@ export const getCreatePlaybookUrl = () => {
 
   
 
-  return `/playbooks`
+  return `/api/v1/playbooks`
 }
 
 export const createPlaybook = async (playbookCreateRequest: PlaybookCreateRequest, options?: RequestInit): Promise<createPlaybookResponse> => {
@@ -196,16 +196,16 @@ export const createPlaybook = async (playbookCreateRequest: PlaybookCreateReques
 
 
 
-export const getCreatePlaybookMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaybook>>, TError,{data: PlaybookCreateRequest}, TContext>, }
+export const getCreatePlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaybook>>, TError,{data: PlaybookCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createPlaybook>>, TError,{data: PlaybookCreateRequest}, TContext> => {
 
 const mutationKey = ['createPlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -213,7 +213,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlaybook>>, {data: PlaybookCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createPlaybook(data,)
+          return  createPlaybook(data,requestOptions)
         }
 
 
@@ -225,13 +225,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreatePlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof createPlaybook>>>
     export type CreatePlaybookMutationBody = PlaybookCreateRequest
-    export type CreatePlaybookMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreatePlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Create Playbook
  */
-export const useCreatePlaybook = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaybook>>, TError,{data: PlaybookCreateRequest}, TContext>, }
+export const useCreatePlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaybook>>, TError,{data: PlaybookCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createPlaybook>>,
         TError,
@@ -250,17 +250,17 @@ export type getPlaybookResponse200 = {
 }
 
 export type getPlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getPlaybookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getPlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -278,7 +278,7 @@ export const getGetPlaybookUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}`
+  return `/api/v1/playbooks/${playbookId}`
 }
 
 export const getPlaybook = async (playbookId: string, options?: RequestInit): Promise<getPlaybookResponse> => {
@@ -298,21 +298,21 @@ export const getPlaybook = async (playbookId: string, options?: RequestInit): Pr
 
 export const getGetPlaybookQueryKey = (playbookId: MaybeRef<string>,) => {
     return [
-    'playbooks',playbookId
+    'api','v1','playbooks',playbookId
     ] as const;
     }
 
     
-export const getGetPlaybookQueryOptions = <TData = Awaited<ReturnType<typeof getPlaybook>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(playbookId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybook>>, TError, TData>>, }
+export const getGetPlaybookQueryOptions = <TData = Awaited<ReturnType<typeof getPlaybook>>, TError = ErrorEnvelope>(playbookId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybook>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetPlaybookQueryKey(playbookId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlaybook>>> = ({ signal }) => getPlaybook(unref(playbookId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlaybook>>> = ({ signal }) => getPlaybook(unref(playbookId), { signal, ...requestOptions });
 
       
 
@@ -322,15 +322,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetPlaybookQueryResult = NonNullable<Awaited<ReturnType<typeof getPlaybook>>>
-export type GetPlaybookQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetPlaybookQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Playbook
  */
 
-export function useGetPlaybook<TData = Awaited<ReturnType<typeof getPlaybook>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- playbookId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybook>>, TError, TData>>, }
+export function useGetPlaybook<TData = Awaited<ReturnType<typeof getPlaybook>>, TError = ErrorEnvelope>(
+ playbookId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybook>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -356,17 +356,17 @@ export type updatePlaybookResponse200 = {
 }
 
 export type updatePlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updatePlaybookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updatePlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -384,7 +384,7 @@ export const getUpdatePlaybookUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}`
+  return `/api/v1/playbooks/${playbookId}`
 }
 
 export const updatePlaybook = async (playbookId: string,
@@ -403,16 +403,16 @@ export const updatePlaybook = async (playbookId: string,
 
 
 
-export const getUpdatePlaybookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlaybook>>, TError,{playbookId: string;data: PlaybookUpdateRequest}, TContext>, }
+export const getUpdatePlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlaybook>>, TError,{playbookId: string;data: PlaybookUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updatePlaybook>>, TError,{playbookId: string;data: PlaybookUpdateRequest}, TContext> => {
 
 const mutationKey = ['updatePlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -420,7 +420,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePlaybook>>, {playbookId: string;data: PlaybookUpdateRequest}> = (props) => {
           const {playbookId,data} = props ?? {};
 
-          return  updatePlaybook(playbookId,data,)
+          return  updatePlaybook(playbookId,data,requestOptions)
         }
 
 
@@ -432,13 +432,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdatePlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof updatePlaybook>>>
     export type UpdatePlaybookMutationBody = PlaybookUpdateRequest
-    export type UpdatePlaybookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdatePlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Update Playbook
  */
-export const useUpdatePlaybook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlaybook>>, TError,{playbookId: string;data: PlaybookUpdateRequest}, TContext>, }
+export const useUpdatePlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlaybook>>, TError,{playbookId: string;data: PlaybookUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updatePlaybook>>,
         TError,
@@ -457,17 +457,17 @@ export type deletePlaybookResponse200 = {
 }
 
 export type deletePlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deletePlaybookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deletePlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -485,7 +485,7 @@ export const getDeletePlaybookUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}`
+  return `/api/v1/playbooks/${playbookId}`
 }
 
 export const deletePlaybook = async (playbookId: string, options?: RequestInit): Promise<deletePlaybookResponse> => {
@@ -502,16 +502,16 @@ export const deletePlaybook = async (playbookId: string, options?: RequestInit):
 
 
 
-export const getDeletePlaybookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlaybook>>, TError,{playbookId: string}, TContext>, }
+export const getDeletePlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlaybook>>, TError,{playbookId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deletePlaybook>>, TError,{playbookId: string}, TContext> => {
 
 const mutationKey = ['deletePlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -519,7 +519,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePlaybook>>, {playbookId: string}> = (props) => {
           const {playbookId} = props ?? {};
 
-          return  deletePlaybook(playbookId,)
+          return  deletePlaybook(playbookId,requestOptions)
         }
 
 
@@ -531,13 +531,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeletePlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof deletePlaybook>>>
     
-    export type DeletePlaybookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeletePlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Playbook
  */
-export const useDeletePlaybook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlaybook>>, TError,{playbookId: string}, TContext>, }
+export const useDeletePlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlaybook>>, TError,{playbookId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deletePlaybook>>,
         TError,
@@ -556,22 +556,22 @@ export type generatePlaybookResponse200 = {
 }
 
 export type generatePlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type generatePlaybookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type generatePlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type generatePlaybookResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -589,7 +589,7 @@ export const getGeneratePlaybookUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}/generate`
+  return `/api/v1/playbooks/${playbookId}/generate`
 }
 
 export const generatePlaybook = async (playbookId: string,
@@ -608,16 +608,16 @@ export const generatePlaybook = async (playbookId: string,
 
 
 
-export const getGeneratePlaybookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePlaybook>>, TError,{playbookId: string;data: PlaybookGenerateRequest}, TContext>, }
+export const getGeneratePlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePlaybook>>, TError,{playbookId: string;data: PlaybookGenerateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof generatePlaybook>>, TError,{playbookId: string;data: PlaybookGenerateRequest}, TContext> => {
 
 const mutationKey = ['generatePlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -625,7 +625,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof generatePlaybook>>, {playbookId: string;data: PlaybookGenerateRequest}> = (props) => {
           const {playbookId,data} = props ?? {};
 
-          return  generatePlaybook(playbookId,data,)
+          return  generatePlaybook(playbookId,data,requestOptions)
         }
 
 
@@ -637,13 +637,13 @@ const {mutation: mutationOptions} = options ?
 
     export type GeneratePlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof generatePlaybook>>>
     export type GeneratePlaybookMutationBody = PlaybookGenerateRequest
-    export type GeneratePlaybookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type GeneratePlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Generate Playbook
  */
-export const useGeneratePlaybook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePlaybook>>, TError,{playbookId: string;data: PlaybookGenerateRequest}, TContext>, }
+export const useGeneratePlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePlaybook>>, TError,{playbookId: string;data: PlaybookGenerateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof generatePlaybook>>,
         TError,
@@ -662,22 +662,22 @@ export type synthesiseRuleResponse200 = {
 }
 
 export type synthesiseRuleResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type synthesiseRuleResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type synthesiseRuleResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type synthesiseRuleResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -695,7 +695,7 @@ export const getSynthesiseRuleUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}/rules`
+  return `/api/v1/playbooks/${playbookId}/rules`
 }
 
 export const synthesiseRule = async (playbookId: string,
@@ -714,16 +714,16 @@ export const synthesiseRule = async (playbookId: string,
 
 
 
-export const getSynthesiseRuleMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof synthesiseRule>>, TError,{playbookId: string;data: PlaybookRulesRequest}, TContext>, }
+export const getSynthesiseRuleMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof synthesiseRule>>, TError,{playbookId: string;data: PlaybookRulesRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof synthesiseRule>>, TError,{playbookId: string;data: PlaybookRulesRequest}, TContext> => {
 
 const mutationKey = ['synthesiseRule'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -731,7 +731,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof synthesiseRule>>, {playbookId: string;data: PlaybookRulesRequest}> = (props) => {
           const {playbookId,data} = props ?? {};
 
-          return  synthesiseRule(playbookId,data,)
+          return  synthesiseRule(playbookId,data,requestOptions)
         }
 
 
@@ -743,13 +743,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SynthesiseRuleMutationResult = NonNullable<Awaited<ReturnType<typeof synthesiseRule>>>
     export type SynthesiseRuleMutationBody = PlaybookRulesRequest
-    export type SynthesiseRuleMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type SynthesiseRuleMutationError = ErrorEnvelope
 
     /**
  * @summary Synthesise Rule
  */
-export const useSynthesiseRule = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof synthesiseRule>>, TError,{playbookId: string;data: PlaybookRulesRequest}, TContext>, }
+export const useSynthesiseRule = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof synthesiseRule>>, TError,{playbookId: string;data: PlaybookRulesRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof synthesiseRule>>,
         TError,
@@ -768,22 +768,22 @@ export type resynthesisePlaybookResponse200 = {
 }
 
 export type resynthesisePlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type resynthesisePlaybookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type resynthesisePlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type resynthesisePlaybookResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -801,7 +801,7 @@ export const getResynthesisePlaybookUrl = (playbookId: string,) => {
 
   
 
-  return `/playbooks/${playbookId}/resynthesise`
+  return `/api/v1/playbooks/${playbookId}/resynthesise`
 }
 
 export const resynthesisePlaybook = async (playbookId: string,
@@ -820,16 +820,16 @@ export const resynthesisePlaybook = async (playbookId: string,
 
 
 
-export const getResynthesisePlaybookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resynthesisePlaybook>>, TError,{playbookId: string;data: PlaybookResynthesiseRequest}, TContext>, }
+export const getResynthesisePlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resynthesisePlaybook>>, TError,{playbookId: string;data: PlaybookResynthesiseRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof resynthesisePlaybook>>, TError,{playbookId: string;data: PlaybookResynthesiseRequest}, TContext> => {
 
 const mutationKey = ['resynthesisePlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -837,7 +837,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof resynthesisePlaybook>>, {playbookId: string;data: PlaybookResynthesiseRequest}> = (props) => {
           const {playbookId,data} = props ?? {};
 
-          return  resynthesisePlaybook(playbookId,data,)
+          return  resynthesisePlaybook(playbookId,data,requestOptions)
         }
 
 
@@ -849,13 +849,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ResynthesisePlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof resynthesisePlaybook>>>
     export type ResynthesisePlaybookMutationBody = PlaybookResynthesiseRequest
-    export type ResynthesisePlaybookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ResynthesisePlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Resynthesise Playbook
  */
-export const useResynthesisePlaybook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resynthesisePlaybook>>, TError,{playbookId: string;data: PlaybookResynthesiseRequest}, TContext>, }
+export const useResynthesisePlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resynthesisePlaybook>>, TError,{playbookId: string;data: PlaybookResynthesiseRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof resynthesisePlaybook>>,
         TError,

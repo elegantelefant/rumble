@@ -3,16 +3,19 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
+import type { FileContentBlockRequest } from './fileContentBlockRequest';
 
 export interface ChatMessageRequest {
   /** @minLength 1 */
   text: string;
-  learning_mode?: boolean;
+  learningMode?: boolean | null;
   model?: string;
   /** Legal document IDs (legisIds) to include as RAG context */
-  briefcase_doc_ids?: string[] | null;
+  briefcaseDocIds?: string[] | null;
   /** Specific facets to include: overview, key_provisions, scope, risks, etc. */
-  briefcase_facets?: string[] | null;
+  briefcaseFacets?: string[] | null;
+  /** Optional file attachments inlined as base64. Each block is decoded into a pydantic_ai BinaryContent part and joined to the user prompt as a multimodal message. Only supported when the resolved model has multimodal capability; otherwise the agent ignores non-text parts. */
+  contentBlocks?: FileContentBlockRequest[] | null;
 }

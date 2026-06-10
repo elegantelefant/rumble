@@ -3,13 +3,13 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 export interface BriefcaseItemResponse {
   id: string;
-  briefcase_id: string;
-  legis_id: string;
+  briefcaseId: string;
+  legisId: string;
   title?: string | null;
   url?: string | null;
   body?: string | null;
@@ -17,5 +17,5 @@ export interface BriefcaseItemResponse {
   tags?: string[];
   timestamp?: number | null;
   position?: number;
-  added_at?: string | null;
+  addedAt?: string | null;
 }

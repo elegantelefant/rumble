@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,9 +16,7 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   OrchestrateRequest,
   OrchestrateResponse
 } from '../../models';
@@ -31,13 +29,17 @@ interface TypedResponse<T> extends Response {
 
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
- * Orchestrate a complex legal task via the Mammoth agent.
+ * **Deprecated** — use ``POST /legal-requests/{id}/execute`` for tracked async,
+or ``POST /orchestrate/stream`` for real-time streaming.
 
-Analyzes the natural language ask and delegates to the appropriate
-capability (draft, review, research, translate, etc).
+This sync endpoint blocks the HTTP request and risks Cloud Run 300s timeout
+on complex tasks. No step tracking or document auto-creation.
+ * @deprecated
  * @summary Orchestrate
  */
 export type orchestrateResponse200 = {
@@ -46,17 +48,17 @@ export type orchestrateResponse200 = {
 }
 
 export type orchestrateResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type orchestrateResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type orchestrateResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -74,7 +76,7 @@ export const getOrchestrateUrl = () => {
 
   
 
-  return `/orchestrate`
+  return `/api/v1/orchestrate`
 }
 
 export const orchestrate = async (orchestrateRequest: OrchestrateRequest, options?: RequestInit): Promise<orchestrateResponse> => {
@@ -92,16 +94,16 @@ export const orchestrate = async (orchestrateRequest: OrchestrateRequest, option
 
 
 
-export const getOrchestrateMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrate>>, TError,{data: OrchestrateRequest}, TContext>, }
+export const getOrchestrateMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrate>>, TError,{data: OrchestrateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof orchestrate>>, TError,{data: OrchestrateRequest}, TContext> => {
 
 const mutationKey = ['orchestrate'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -109,7 +111,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof orchestrate>>, {data: OrchestrateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  orchestrate(data,)
+          return  orchestrate(data,requestOptions)
         }
 
 
@@ -121,13 +123,14 @@ const {mutation: mutationOptions} = options ?
 
     export type OrchestrateMutationResult = NonNullable<Awaited<ReturnType<typeof orchestrate>>>
     export type OrchestrateMutationBody = OrchestrateRequest
-    export type OrchestrateMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type OrchestrateMutationError = ErrorEnvelope
 
     /**
+ * @deprecated
  * @summary Orchestrate
  */
-export const useOrchestrate = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrate>>, TError,{data: OrchestrateRequest}, TContext>, }
+export const useOrchestrate = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrate>>, TError,{data: OrchestrateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof orchestrate>>,
         TError,
@@ -143,12 +146,15 @@ Emits NDJSON chunks (or SSE if `Accept: text/event-stream`).
 
 **Chunk lifecycle:**
 
-| type    | value                | description           |
-|---------|----------------------|-----------------------|
-| `status`| processing message   | Agent is working      |
-| `delta` | partial result text  | Incremental output    |
-| `done`  | `"completed"`        | Stream finished       |
-| `error` | error message        | Stream failed         |
+| type    | value                | description                   |
+|---------|----------------------|-------------------------------|
+| `status`| processing message   | Agent is working              |
+| `delta` | partial result text  | Incremental output            |
+| `done`  | `"completed"`        | Stream finished               |
+| `error` | `{code, message}`    | Structured failure (terminal) |
+
+Every successful stream ends with exactly one `done`. On failure the
+terminal event is a structured `error` and `done` is NOT emitted.
  * @summary Orchestrate Stream
  */
 export type orchestrateStreamResponse200ApplicationJson = {
@@ -162,17 +168,17 @@ export type orchestrateStreamResponse200ApplicationXNdjson = {
 }
 
 export type orchestrateStreamResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type orchestrateStreamResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type orchestrateStreamResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -190,7 +196,7 @@ export const getOrchestrateStreamUrl = () => {
 
   
 
-  return `/orchestrate/stream`
+  return `/api/v1/orchestrate/stream`
 }
 
 export const orchestrateStream = async (orchestrateRequest: OrchestrateRequest, options?: RequestInit): Promise<orchestrateStreamResponse> => {
@@ -208,16 +214,16 @@ export const orchestrateStream = async (orchestrateRequest: OrchestrateRequest, 
 
 
 
-export const getOrchestrateStreamMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateStream>>, TError,{data: OrchestrateRequest}, TContext>, }
+export const getOrchestrateStreamMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateStream>>, TError,{data: OrchestrateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof orchestrateStream>>, TError,{data: OrchestrateRequest}, TContext> => {
 
 const mutationKey = ['orchestrateStream'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -225,7 +231,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof orchestrateStream>>, {data: OrchestrateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  orchestrateStream(data,)
+          return  orchestrateStream(data,requestOptions)
         }
 
 
@@ -237,13 +243,13 @@ const {mutation: mutationOptions} = options ?
 
     export type OrchestrateStreamMutationResult = NonNullable<Awaited<ReturnType<typeof orchestrateStream>>>
     export type OrchestrateStreamMutationBody = OrchestrateRequest
-    export type OrchestrateStreamMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type OrchestrateStreamMutationError = ErrorEnvelope
 
     /**
  * @summary Orchestrate Stream
  */
-export const useOrchestrateStream = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateStream>>, TError,{data: OrchestrateRequest}, TContext>, }
+export const useOrchestrateStream = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateStream>>, TError,{data: OrchestrateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof orchestrateStream>>,
         TError,

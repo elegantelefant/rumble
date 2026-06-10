@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,15 +16,15 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
   ClarifyRequest,
   ClarifyResponse,
-  ErrorResponse,
-  HTTPValidationError
+  ErrorEnvelope
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -38,17 +38,17 @@ export type clarifyResponse200 = {
 }
 
 export type clarifyResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type clarifyResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type clarifyResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -66,7 +66,7 @@ export const getClarifyUrl = () => {
 
   
 
-  return `/clarify`
+  return `/api/v1/clarify`
 }
 
 export const clarify = async (clarifyRequest: ClarifyRequest, options?: RequestInit): Promise<clarifyResponse> => {
@@ -84,16 +84,16 @@ export const clarify = async (clarifyRequest: ClarifyRequest, options?: RequestI
 
 
 
-export const getClarifyMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clarify>>, TError,{data: ClarifyRequest}, TContext>, }
+export const getClarifyMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clarify>>, TError,{data: ClarifyRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof clarify>>, TError,{data: ClarifyRequest}, TContext> => {
 
 const mutationKey = ['clarify'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -101,7 +101,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof clarify>>, {data: ClarifyRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  clarify(data,)
+          return  clarify(data,requestOptions)
         }
 
 
@@ -113,13 +113,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ClarifyMutationResult = NonNullable<Awaited<ReturnType<typeof clarify>>>
     export type ClarifyMutationBody = ClarifyRequest
-    export type ClarifyMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type ClarifyMutationError = ErrorEnvelope
 
     /**
  * @summary Clarify
  */
-export const useClarify = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clarify>>, TError,{data: ClarifyRequest}, TContext>, }
+export const useClarify = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clarify>>, TError,{data: ClarifyRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof clarify>>,
         TError,

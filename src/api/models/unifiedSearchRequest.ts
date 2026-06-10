@@ -3,19 +3,21 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
+import type { IndexName } from './indexName';
 import type { LegalSearchFilters } from './legalSearchFilters';
+import type { SearchRegion } from './searchRegion';
 import type { UnifiedSearchRequestMode } from './unifiedSearchRequestMode';
 import type { UnifiedSearchRequestSort } from './unifiedSearchRequestSort';
 
 export interface UnifiedSearchRequest {
   /** @minLength 1 */
   query: string;
-  /** ISO country code: SG, UK, AU, MY, ID. Selects indices for that jurisdiction. */
-  region?: string | null;
+  /** ISO country code selecting indices for that jurisdiction. US_* codes are state-level. Must match `legal_search.REGION_INDICES`. */
+  region?: SearchRegion | null;
   /** Explicit ES indices (overrides region). */
-  indexes?: string[] | null;
+  indexes?: IndexName[] | null;
   /** Search mode. 'auto' detects from query. */
   mode?: UnifiedSearchRequestMode;
   filters?: LegalSearchFilters | null;
@@ -32,5 +34,7 @@ export interface UnifiedSearchRequest {
    * @minimum 1
    * @maximum 50
    */
-  rerank_top_n?: number;
+  rerankTopN?: number;
+  /** Optional ranking experiment variant (e.g. 'experimental_a'). Logged for A/B analysis. */
+  rankingVariant?: string | null;
 }

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { DocumentFacets } from './documentFacets';
 
@@ -13,7 +13,7 @@ import type { DocumentFacets } from './documentFacets';
 export interface BriefcaseSummaryResponse {
   summaries: DocumentFacets[];
   /** Number of facets generated (not from cache) */
-  generated_count: number;
+  generatedCount: number;
   /** Number of facets retrieved from cache */
-  cached_count: number;
+  cachedCount: number;
 }

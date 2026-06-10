@@ -3,13 +3,14 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { GraphReferenceItem } from './graphReferenceItem';
 
 export interface GraphReferencesResponse {
-  legis_id: string;
+  legisId: string;
   inbound?: GraphReferenceItem[];
   outbound?: GraphReferenceItem[];
+  similar?: GraphReferenceItem[];
   references?: GraphReferenceItem[];
 }

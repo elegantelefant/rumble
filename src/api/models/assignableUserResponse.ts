@@ -3,15 +3,19 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 /**
  * A user who can be assigned to legal requests.
+
+`firm_name` is populated only for external counsel (org_role='external');
+sourced from external_counsel_meta. None for internal roles.
  */
 export interface AssignableUserResponse {
   id: string;
   name: string;
   email: string;
-  org_role?: string | null;
+  orgRole?: string | null;
+  firmName?: string | null;
 }

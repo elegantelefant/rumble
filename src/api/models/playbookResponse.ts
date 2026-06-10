@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { PlaybookResponseSteps } from './playbookResponseSteps';
 
@@ -15,8 +15,8 @@ export interface PlaybookResponse {
   name: string;
   description?: string | null;
   steps?: PlaybookResponseSteps;
-  is_public?: boolean;
-  created_by?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
+  isPublic?: boolean;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }

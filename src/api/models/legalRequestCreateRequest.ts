@@ -3,25 +3,32 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { LegalRequestCreateRequestInput } from './legalRequestCreateRequestInput';
+import type { AnalysisInput } from './analysisInput';
+import type { DraftInput } from './draftInput';
+import type { ExtractionInput } from './extractionInput';
 import type { LegalRequestPriority } from './legalRequestPriority';
 import type { LegalRequestType } from './legalRequestType';
+import type { ResearchInput } from './researchInput';
+import type { ReviewInput } from './reviewInput';
+import type { UncertainInput } from './uncertainInput';
 
 /**
  * Create a new legal request.
  */
 export interface LegalRequestCreateRequest {
-  request_type: LegalRequestType;
+  requestType: LegalRequestType;
   /** @minLength 1 */
   title: string;
   description?: string | null;
   category?: string | null;
   priority?: LegalRequestPriority;
-  briefcase_id?: string | null;
-  input?: LegalRequestCreateRequestInput;
-  due_at?: string | null;
-  assignee_id?: string | null;
-  as_draft?: boolean;
+  briefcaseId?: string | null;
+  /** Optional structured payload specific to `request_type`. Quick-drop-in callers may omit this. If provided, the sub-schema's `type` field MUST match `request_type` — a mismatch returns 422. */
+  input?: ResearchInput | DraftInput | ReviewInput | ExtractionInput | AnalysisInput | UncertainInput | null;
+  /** Deadline for the request. Accepts an ISO date (`YYYY-MM-DD`) or a full ISO date-time. Date-only values are coerced to 23:59:59 Asia/Singapore (end-of-day local) — Singapore-domain users think "due by end of Thursday" locally, not UTC midnight. */
+  dueAt?: string | null;
+  assigneeId?: string | null;
+  restricted?: boolean;
 }

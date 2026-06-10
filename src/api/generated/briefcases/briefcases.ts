@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,7 +30,6 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   BriefcaseContextCheckResponse,
   BriefcaseContextResponse,
   BriefcaseCreateRequest,
@@ -53,9 +52,9 @@ import type {
   BriefcaseShareListResponse,
   BriefcaseShareResponse,
   BriefcaseUpdateRequest,
-  ErrorResponse,
+  BriefcaseWithNotesResponse,
+  ErrorEnvelope,
   ExportBriefcaseParams,
-  HTTPValidationError,
   ListBriefcasesParams,
   OkResponse,
   PatchPayload,
@@ -66,6 +65,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -79,12 +80,12 @@ export type createBriefcaseResponse200 = {
 }
 
 export type createBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -102,7 +103,7 @@ export const getCreateBriefcaseUrl = () => {
 
   
 
-  return `/briefcases`
+  return `/api/v1/briefcases`
 }
 
 export const createBriefcase = async (briefcaseCreateRequest: BriefcaseCreateRequest, options?: RequestInit): Promise<createBriefcaseResponse> => {
@@ -120,16 +121,16 @@ export const createBriefcase = async (briefcaseCreateRequest: BriefcaseCreateReq
 
 
 
-export const getCreateBriefcaseMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcase>>, TError,{data: BriefcaseCreateRequest}, TContext>, }
+export const getCreateBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcase>>, TError,{data: BriefcaseCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createBriefcase>>, TError,{data: BriefcaseCreateRequest}, TContext> => {
 
 const mutationKey = ['createBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -137,7 +138,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBriefcase>>, {data: BriefcaseCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createBriefcase(data,)
+          return  createBriefcase(data,requestOptions)
         }
 
 
@@ -149,13 +150,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof createBriefcase>>>
     export type CreateBriefcaseMutationBody = BriefcaseCreateRequest
-    export type CreateBriefcaseMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreateBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Create Briefcase
  */
-export const useCreateBriefcase = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcase>>, TError,{data: BriefcaseCreateRequest}, TContext>, }
+export const useCreateBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcase>>, TError,{data: BriefcaseCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createBriefcase>>,
         TError,
@@ -174,12 +175,12 @@ export type listBriefcasesResponse200 = {
 }
 
 export type listBriefcasesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listBriefcasesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -204,7 +205,7 @@ export const getListBriefcasesUrl = (params?: ListBriefcasesParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/briefcases?${stringifiedParams}` : `/briefcases`
+  return stringifiedParams.length > 0 ? `/api/v1/briefcases?${stringifiedParams}` : `/api/v1/briefcases`
 }
 
 export const listBriefcases = async (params?: ListBriefcasesParams, options?: RequestInit): Promise<listBriefcasesResponse> => {
@@ -224,21 +225,21 @@ export const listBriefcases = async (params?: ListBriefcasesParams, options?: Re
 
 export const getListBriefcasesQueryKey = (params?: MaybeRef<ListBriefcasesParams>,) => {
     return [
-    'briefcases', ...(params ? [params] : [])
+    'api','v1','briefcases', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListBriefcasesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcases>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListBriefcasesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcases>>, TError, TData>>, }
+export const getListBriefcasesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcases>>, TError = ErrorEnvelope>(params?: MaybeRef<ListBriefcasesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcases>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListBriefcasesQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcases>>> = ({ signal }) => listBriefcases(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcases>>> = ({ signal }) => listBriefcases(unref(params), { signal, ...requestOptions });
 
       
 
@@ -248,15 +249,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListBriefcasesQueryResult = NonNullable<Awaited<ReturnType<typeof listBriefcases>>>
-export type ListBriefcasesQueryError = AuthErrorResponse | HTTPValidationError
+export type ListBriefcasesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Briefcases
  */
 
-export function useListBriefcases<TData = Awaited<ReturnType<typeof listBriefcases>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListBriefcasesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcases>>, TError, TData>>, }
+export function useListBriefcases<TData = Awaited<ReturnType<typeof listBriefcases>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListBriefcasesParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcases>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -282,12 +283,12 @@ export type getActiveBriefcaseResponse200 = {
 }
 
 export type getActiveBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getActiveBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
@@ -305,7 +306,7 @@ export const getGetActiveBriefcaseUrl = () => {
 
   
 
-  return `/briefcases/active`
+  return `/api/v1/briefcases/active`
 }
 
 export const getActiveBriefcase = async ( options?: RequestInit): Promise<getActiveBriefcaseResponse> => {
@@ -325,21 +326,21 @@ export const getActiveBriefcase = async ( options?: RequestInit): Promise<getAct
 
 export const getGetActiveBriefcaseQueryKey = () => {
     return [
-    'briefcases','active'
+    'api','v1','briefcases','active'
     ] as const;
     }
 
     
-export const getGetActiveBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof getActiveBriefcase>>, TError = AuthErrorResponse | ErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActiveBriefcase>>, TError, TData>>, }
+export const getGetActiveBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof getActiveBriefcase>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActiveBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetActiveBriefcaseQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActiveBriefcase>>> = ({ signal }) => getActiveBriefcase({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActiveBriefcase>>> = ({ signal }) => getActiveBriefcase({ signal, ...requestOptions });
 
       
 
@@ -349,15 +350,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetActiveBriefcaseQueryResult = NonNullable<Awaited<ReturnType<typeof getActiveBriefcase>>>
-export type GetActiveBriefcaseQueryError = AuthErrorResponse | ErrorResponse
+export type GetActiveBriefcaseQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Active Briefcase
  */
 
-export function useGetActiveBriefcase<TData = Awaited<ReturnType<typeof getActiveBriefcase>>, TError = AuthErrorResponse | ErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActiveBriefcase>>, TError, TData>>, }
+export function useGetActiveBriefcase<TData = Awaited<ReturnType<typeof getActiveBriefcase>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActiveBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -383,7 +384,7 @@ export type sharedWithMeResponse200 = {
 }
 
 export type sharedWithMeResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -401,7 +402,7 @@ export const getSharedWithMeUrl = () => {
 
   
 
-  return `/briefcases/shared-with-me`
+  return `/api/v1/briefcases/shared-with-me`
 }
 
 export const sharedWithMe = async ( options?: RequestInit): Promise<sharedWithMeResponse> => {
@@ -421,21 +422,21 @@ export const sharedWithMe = async ( options?: RequestInit): Promise<sharedWithMe
 
 export const getSharedWithMeQueryKey = () => {
     return [
-    'briefcases','shared-with-me'
+    'api','v1','briefcases','shared-with-me'
     ] as const;
     }
 
     
-export const getSharedWithMeQueryOptions = <TData = Awaited<ReturnType<typeof sharedWithMe>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof sharedWithMe>>, TError, TData>>, }
+export const getSharedWithMeQueryOptions = <TData = Awaited<ReturnType<typeof sharedWithMe>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof sharedWithMe>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getSharedWithMeQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof sharedWithMe>>> = ({ signal }) => sharedWithMe({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof sharedWithMe>>> = ({ signal }) => sharedWithMe({ signal, ...requestOptions });
 
       
 
@@ -445,15 +446,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type SharedWithMeQueryResult = NonNullable<Awaited<ReturnType<typeof sharedWithMe>>>
-export type SharedWithMeQueryError = AuthErrorResponse
+export type SharedWithMeQueryError = ErrorEnvelope
 
 
 /**
  * @summary Shared With Me
  */
 
-export function useSharedWithMe<TData = Awaited<ReturnType<typeof sharedWithMe>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof sharedWithMe>>, TError, TData>>, }
+export function useSharedWithMe<TData = Awaited<ReturnType<typeof sharedWithMe>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof sharedWithMe>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -479,17 +480,17 @@ export type getBriefcaseResponse200 = {
 }
 
 export type getBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -507,7 +508,7 @@ export const getGetBriefcaseUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}`
+  return `/api/v1/briefcases/${briefcaseId}`
 }
 
 export const getBriefcase = async (briefcaseId: string, options?: RequestInit): Promise<getBriefcaseResponse> => {
@@ -527,21 +528,21 @@ export const getBriefcase = async (briefcaseId: string, options?: RequestInit): 
 
 export const getGetBriefcaseQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId
+    'api','v1','briefcases',briefcaseId
     ] as const;
     }
 
     
-export const getGetBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof getBriefcase>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcase>>, TError, TData>>, }
+export const getGetBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof getBriefcase>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetBriefcaseQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBriefcase>>> = ({ signal }) => getBriefcase(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBriefcase>>> = ({ signal }) => getBriefcase(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -551,15 +552,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetBriefcaseQueryResult = NonNullable<Awaited<ReturnType<typeof getBriefcase>>>
-export type GetBriefcaseQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetBriefcaseQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Briefcase
  */
 
-export function useGetBriefcase<TData = Awaited<ReturnType<typeof getBriefcase>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcase>>, TError, TData>>, }
+export function useGetBriefcase<TData = Awaited<ReturnType<typeof getBriefcase>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -585,17 +586,17 @@ export type updateBriefcaseResponse200 = {
 }
 
 export type updateBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -613,7 +614,7 @@ export const getUpdateBriefcaseUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}`
+  return `/api/v1/briefcases/${briefcaseId}`
 }
 
 export const updateBriefcase = async (briefcaseId: string,
@@ -632,16 +633,16 @@ export const updateBriefcase = async (briefcaseId: string,
 
 
 
-export const getUpdateBriefcaseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcase>>, TError,{briefcaseId: string;data: BriefcaseUpdateRequest}, TContext>, }
+export const getUpdateBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcase>>, TError,{briefcaseId: string;data: BriefcaseUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateBriefcase>>, TError,{briefcaseId: string;data: BriefcaseUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -649,7 +650,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBriefcase>>, {briefcaseId: string;data: BriefcaseUpdateRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  updateBriefcase(briefcaseId,data,)
+          return  updateBriefcase(briefcaseId,data,requestOptions)
         }
 
 
@@ -661,13 +662,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof updateBriefcase>>>
     export type UpdateBriefcaseMutationBody = BriefcaseUpdateRequest
-    export type UpdateBriefcaseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Update Briefcase
  */
-export const useUpdateBriefcase = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcase>>, TError,{briefcaseId: string;data: BriefcaseUpdateRequest}, TContext>, }
+export const useUpdateBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcase>>, TError,{briefcaseId: string;data: BriefcaseUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateBriefcase>>,
         TError,
@@ -686,17 +687,17 @@ export type deleteBriefcaseResponse200 = {
 }
 
 export type deleteBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -714,7 +715,7 @@ export const getDeleteBriefcaseUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}`
+  return `/api/v1/briefcases/${briefcaseId}`
 }
 
 export const deleteBriefcase = async (briefcaseId: string, options?: RequestInit): Promise<deleteBriefcaseResponse> => {
@@ -731,16 +732,16 @@ export const deleteBriefcase = async (briefcaseId: string, options?: RequestInit
 
 
 
-export const getDeleteBriefcaseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcase>>, TError,{briefcaseId: string}, TContext>, }
+export const getDeleteBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcase>>, TError,{briefcaseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcase>>, TError,{briefcaseId: string}, TContext> => {
 
 const mutationKey = ['deleteBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -748,7 +749,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBriefcase>>, {briefcaseId: string}> = (props) => {
           const {briefcaseId} = props ?? {};
 
-          return  deleteBriefcase(briefcaseId,)
+          return  deleteBriefcase(briefcaseId,requestOptions)
         }
 
 
@@ -760,13 +761,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBriefcase>>>
     
-    export type DeleteBriefcaseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Briefcase
  */
-export const useDeleteBriefcase = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcase>>, TError,{briefcaseId: string}, TContext>, }
+export const useDeleteBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcase>>, TError,{briefcaseId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteBriefcase>>,
         TError,
@@ -776,7 +777,7 @@ export const useDeleteBriefcase = <TError = AuthErrorResponse | ErrorResponse | 
       return useMutation(getDeleteBriefcaseMutationOptions(options), queryClient);
     }
     /**
- * Reorder briefcase position. (Placeholder - requires multi-briefcase reorder logic)
+ * Reorder briefcases for the current user.
  * @summary Reorder Briefcase
  */
 export type reorderBriefcaseResponse200 = {
@@ -785,17 +786,17 @@ export type reorderBriefcaseResponse200 = {
 }
 
 export type reorderBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type reorderBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type reorderBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -813,7 +814,7 @@ export const getReorderBriefcaseUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/order`
+  return `/api/v1/briefcases/${briefcaseId}/order`
 }
 
 export const reorderBriefcase = async (briefcaseId: string,
@@ -832,16 +833,16 @@ export const reorderBriefcase = async (briefcaseId: string,
 
 
 
-export const getReorderBriefcaseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcase>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, }
+export const getReorderBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcase>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcase>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext> => {
 
 const mutationKey = ['reorderBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -849,7 +850,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderBriefcase>>, {briefcaseId: string;data: ReorderRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  reorderBriefcase(briefcaseId,data,)
+          return  reorderBriefcase(briefcaseId,data,requestOptions)
         }
 
 
@@ -861,13 +862,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ReorderBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof reorderBriefcase>>>
     export type ReorderBriefcaseMutationBody = ReorderRequest
-    export type ReorderBriefcaseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ReorderBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Reorder Briefcase
  */
-export const useReorderBriefcase = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcase>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, }
+export const useReorderBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcase>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof reorderBriefcase>>,
         TError,
@@ -886,17 +887,17 @@ export type shareBriefcaseResponse200 = {
 }
 
 export type shareBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type shareBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type shareBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -914,7 +915,7 @@ export const getShareBriefcaseUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/share`
+  return `/api/v1/briefcases/${briefcaseId}/share`
 }
 
 export const shareBriefcase = async (briefcaseId: string,
@@ -933,16 +934,16 @@ export const shareBriefcase = async (briefcaseId: string,
 
 
 
-export const getShareBriefcaseMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareBriefcase>>, TError,{briefcaseId: string;data: ShareRequest}, TContext>, }
+export const getShareBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareBriefcase>>, TError,{briefcaseId: string;data: ShareRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof shareBriefcase>>, TError,{briefcaseId: string;data: ShareRequest}, TContext> => {
 
 const mutationKey = ['shareBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -950,7 +951,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof shareBriefcase>>, {briefcaseId: string;data: ShareRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  shareBriefcase(briefcaseId,data,)
+          return  shareBriefcase(briefcaseId,data,requestOptions)
         }
 
 
@@ -962,13 +963,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ShareBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof shareBriefcase>>>
     export type ShareBriefcaseMutationBody = ShareRequest
-    export type ShareBriefcaseMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ShareBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Share Briefcase
  */
-export const useShareBriefcase = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareBriefcase>>, TError,{briefcaseId: string;data: ShareRequest}, TContext>, }
+export const useShareBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shareBriefcase>>, TError,{briefcaseId: string;data: ShareRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof shareBriefcase>>,
         TError,
@@ -987,17 +988,17 @@ export type listBriefcaseSharesResponse200 = {
 }
 
 export type listBriefcaseSharesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listBriefcaseSharesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listBriefcaseSharesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1015,7 +1016,7 @@ export const getListBriefcaseSharesUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/shares`
+  return `/api/v1/briefcases/${briefcaseId}/shares`
 }
 
 export const listBriefcaseShares = async (briefcaseId: string, options?: RequestInit): Promise<listBriefcaseSharesResponse> => {
@@ -1035,21 +1036,21 @@ export const listBriefcaseShares = async (briefcaseId: string, options?: Request
 
 export const getListBriefcaseSharesQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'shares'
+    'api','v1','briefcases',briefcaseId,'shares'
     ] as const;
     }
 
     
-export const getListBriefcaseSharesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseShares>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseShares>>, TError, TData>>, }
+export const getListBriefcaseSharesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseShares>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseShares>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListBriefcaseSharesQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseShares>>> = ({ signal }) => listBriefcaseShares(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseShares>>> = ({ signal }) => listBriefcaseShares(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -1059,15 +1060,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListBriefcaseSharesQueryResult = NonNullable<Awaited<ReturnType<typeof listBriefcaseShares>>>
-export type ListBriefcaseSharesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListBriefcaseSharesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Briefcase Shares
  */
 
-export function useListBriefcaseShares<TData = Awaited<ReturnType<typeof listBriefcaseShares>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseShares>>, TError, TData>>, }
+export function useListBriefcaseShares<TData = Awaited<ReturnType<typeof listBriefcaseShares>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseShares>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1093,17 +1094,17 @@ export type revokeShareResponse200 = {
 }
 
 export type revokeShareResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type revokeShareResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type revokeShareResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1122,7 +1123,7 @@ export const getRevokeShareUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/shares/${shareId}`
+  return `/api/v1/briefcases/${briefcaseId}/shares/${shareId}`
 }
 
 export const revokeShare = async (briefcaseId: string,
@@ -1140,16 +1141,16 @@ export const revokeShare = async (briefcaseId: string,
 
 
 
-export const getRevokeShareMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, }
+export const getRevokeShareMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof revokeShare>>, TError,{briefcaseId: string;shareId: string}, TContext> => {
 
 const mutationKey = ['revokeShare'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1157,7 +1158,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeShare>>, {briefcaseId: string;shareId: string}> = (props) => {
           const {briefcaseId,shareId} = props ?? {};
 
-          return  revokeShare(briefcaseId,shareId,)
+          return  revokeShare(briefcaseId,shareId,requestOptions)
         }
 
 
@@ -1169,13 +1170,13 @@ const {mutation: mutationOptions} = options ?
 
     export type RevokeShareMutationResult = NonNullable<Awaited<ReturnType<typeof revokeShare>>>
     
-    export type RevokeShareMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type RevokeShareMutationError = ErrorEnvelope
 
     /**
  * @summary Revoke Share
  */
-export const useRevokeShare = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, }
+export const useRevokeShare = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof revokeShare>>,
         TError,
@@ -1194,17 +1195,17 @@ export type acceptShareResponse200 = {
 }
 
 export type acceptShareResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type acceptShareResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type acceptShareResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1223,7 +1224,7 @@ export const getAcceptShareUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/shares/${shareId}/accept`
+  return `/api/v1/briefcases/${briefcaseId}/shares/${shareId}/accept`
 }
 
 export const acceptShare = async (briefcaseId: string,
@@ -1241,16 +1242,16 @@ export const acceptShare = async (briefcaseId: string,
 
 
 
-export const getAcceptShareMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, }
+export const getAcceptShareMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof acceptShare>>, TError,{briefcaseId: string;shareId: string}, TContext> => {
 
 const mutationKey = ['acceptShare'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1258,7 +1259,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptShare>>, {briefcaseId: string;shareId: string}> = (props) => {
           const {briefcaseId,shareId} = props ?? {};
 
-          return  acceptShare(briefcaseId,shareId,)
+          return  acceptShare(briefcaseId,shareId,requestOptions)
         }
 
 
@@ -1270,13 +1271,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AcceptShareMutationResult = NonNullable<Awaited<ReturnType<typeof acceptShare>>>
     
-    export type AcceptShareMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AcceptShareMutationError = ErrorEnvelope
 
     /**
  * @summary Accept Share
  */
-export const useAcceptShare = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, }
+export const useAcceptShare = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShare>>, TError,{briefcaseId: string;shareId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof acceptShare>>,
         TError,
@@ -1295,17 +1296,17 @@ export type listBriefcaseItemsResponse200 = {
 }
 
 export type listBriefcaseItemsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listBriefcaseItemsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listBriefcaseItemsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1323,7 +1324,7 @@ export const getListBriefcaseItemsUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/items`
+  return `/api/v1/briefcases/${briefcaseId}/items`
 }
 
 export const listBriefcaseItems = async (briefcaseId: string, options?: RequestInit): Promise<listBriefcaseItemsResponse> => {
@@ -1343,21 +1344,21 @@ export const listBriefcaseItems = async (briefcaseId: string, options?: RequestI
 
 export const getListBriefcaseItemsQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'items'
+    'api','v1','briefcases',briefcaseId,'items'
     ] as const;
     }
 
     
-export const getListBriefcaseItemsQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseItems>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseItems>>, TError, TData>>, }
+export const getListBriefcaseItemsQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseItems>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseItems>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListBriefcaseItemsQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseItems>>> = ({ signal }) => listBriefcaseItems(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseItems>>> = ({ signal }) => listBriefcaseItems(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -1367,15 +1368,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListBriefcaseItemsQueryResult = NonNullable<Awaited<ReturnType<typeof listBriefcaseItems>>>
-export type ListBriefcaseItemsQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListBriefcaseItemsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Briefcase Items
  */
 
-export function useListBriefcaseItems<TData = Awaited<ReturnType<typeof listBriefcaseItems>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseItems>>, TError, TData>>, }
+export function useListBriefcaseItems<TData = Awaited<ReturnType<typeof listBriefcaseItems>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseItems>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1401,17 +1402,17 @@ export type addBriefcaseItemResponse200 = {
 }
 
 export type addBriefcaseItemResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type addBriefcaseItemResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type addBriefcaseItemResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1429,7 +1430,7 @@ export const getAddBriefcaseItemUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/items`
+  return `/api/v1/briefcases/${briefcaseId}/items`
 }
 
 export const addBriefcaseItem = async (briefcaseId: string,
@@ -1448,16 +1449,16 @@ export const addBriefcaseItem = async (briefcaseId: string,
 
 
 
-export const getAddBriefcaseItemMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addBriefcaseItem>>, TError,{briefcaseId: string;data: BriefcaseItemCreateRequest}, TContext>, }
+export const getAddBriefcaseItemMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addBriefcaseItem>>, TError,{briefcaseId: string;data: BriefcaseItemCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof addBriefcaseItem>>, TError,{briefcaseId: string;data: BriefcaseItemCreateRequest}, TContext> => {
 
 const mutationKey = ['addBriefcaseItem'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1465,7 +1466,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof addBriefcaseItem>>, {briefcaseId: string;data: BriefcaseItemCreateRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  addBriefcaseItem(briefcaseId,data,)
+          return  addBriefcaseItem(briefcaseId,data,requestOptions)
         }
 
 
@@ -1477,13 +1478,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AddBriefcaseItemMutationResult = NonNullable<Awaited<ReturnType<typeof addBriefcaseItem>>>
     export type AddBriefcaseItemMutationBody = BriefcaseItemCreateRequest
-    export type AddBriefcaseItemMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AddBriefcaseItemMutationError = ErrorEnvelope
 
     /**
  * @summary Add Briefcase Item
  */
-export const useAddBriefcaseItem = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addBriefcaseItem>>, TError,{briefcaseId: string;data: BriefcaseItemCreateRequest}, TContext>, }
+export const useAddBriefcaseItem = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addBriefcaseItem>>, TError,{briefcaseId: string;data: BriefcaseItemCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof addBriefcaseItem>>,
         TError,
@@ -1502,17 +1503,17 @@ export type batchAddBriefcaseItemsResponse200 = {
 }
 
 export type batchAddBriefcaseItemsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type batchAddBriefcaseItemsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type batchAddBriefcaseItemsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1530,7 +1531,7 @@ export const getBatchAddBriefcaseItemsUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/items/batch`
+  return `/api/v1/briefcases/${briefcaseId}/items/batch`
 }
 
 export const batchAddBriefcaseItems = async (briefcaseId: string,
@@ -1549,16 +1550,16 @@ export const batchAddBriefcaseItems = async (briefcaseId: string,
 
 
 
-export const getBatchAddBriefcaseItemsMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, TError,{briefcaseId: string;data: BriefcaseItemBatchRequest}, TContext>, }
+export const getBatchAddBriefcaseItemsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, TError,{briefcaseId: string;data: BriefcaseItemBatchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, TError,{briefcaseId: string;data: BriefcaseItemBatchRequest}, TContext> => {
 
 const mutationKey = ['batchAddBriefcaseItems'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1566,7 +1567,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, {briefcaseId: string;data: BriefcaseItemBatchRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  batchAddBriefcaseItems(briefcaseId,data,)
+          return  batchAddBriefcaseItems(briefcaseId,data,requestOptions)
         }
 
 
@@ -1578,13 +1579,13 @@ const {mutation: mutationOptions} = options ?
 
     export type BatchAddBriefcaseItemsMutationResult = NonNullable<Awaited<ReturnType<typeof batchAddBriefcaseItems>>>
     export type BatchAddBriefcaseItemsMutationBody = BriefcaseItemBatchRequest
-    export type BatchAddBriefcaseItemsMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type BatchAddBriefcaseItemsMutationError = ErrorEnvelope
 
     /**
  * @summary Batch Add Briefcase Items
  */
-export const useBatchAddBriefcaseItems = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, TError,{briefcaseId: string;data: BriefcaseItemBatchRequest}, TContext>, }
+export const useBatchAddBriefcaseItems = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof batchAddBriefcaseItems>>, TError,{briefcaseId: string;data: BriefcaseItemBatchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof batchAddBriefcaseItems>>,
         TError,
@@ -1603,17 +1604,17 @@ export type deleteBriefcaseItemResponse200 = {
 }
 
 export type deleteBriefcaseItemResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteBriefcaseItemResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteBriefcaseItemResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1632,7 +1633,7 @@ export const getDeleteBriefcaseItemUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/items/${itemId}`
+  return `/api/v1/briefcases/${briefcaseId}/items/${itemId}`
 }
 
 export const deleteBriefcaseItem = async (briefcaseId: string,
@@ -1650,16 +1651,16 @@ export const deleteBriefcaseItem = async (briefcaseId: string,
 
 
 
-export const getDeleteBriefcaseItemMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseItem>>, TError,{briefcaseId: string;itemId: string}, TContext>, }
+export const getDeleteBriefcaseItemMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseItem>>, TError,{briefcaseId: string;itemId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseItem>>, TError,{briefcaseId: string;itemId: string}, TContext> => {
 
 const mutationKey = ['deleteBriefcaseItem'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1667,7 +1668,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBriefcaseItem>>, {briefcaseId: string;itemId: string}> = (props) => {
           const {briefcaseId,itemId} = props ?? {};
 
-          return  deleteBriefcaseItem(briefcaseId,itemId,)
+          return  deleteBriefcaseItem(briefcaseId,itemId,requestOptions)
         }
 
 
@@ -1679,13 +1680,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteBriefcaseItemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBriefcaseItem>>>
     
-    export type DeleteBriefcaseItemMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteBriefcaseItemMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Briefcase Item
  */
-export const useDeleteBriefcaseItem = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseItem>>, TError,{briefcaseId: string;itemId: string}, TContext>, }
+export const useDeleteBriefcaseItem = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseItem>>, TError,{briefcaseId: string;itemId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteBriefcaseItem>>,
         TError,
@@ -1704,17 +1705,17 @@ export type reorderBriefcaseItemsResponse200 = {
 }
 
 export type reorderBriefcaseItemsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type reorderBriefcaseItemsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type reorderBriefcaseItemsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1732,7 +1733,7 @@ export const getReorderBriefcaseItemsUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/items/order`
+  return `/api/v1/briefcases/${briefcaseId}/items/order`
 }
 
 export const reorderBriefcaseItems = async (briefcaseId: string,
@@ -1751,16 +1752,16 @@ export const reorderBriefcaseItems = async (briefcaseId: string,
 
 
 
-export const getReorderBriefcaseItemsMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcaseItems>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, }
+export const getReorderBriefcaseItemsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcaseItems>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcaseItems>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext> => {
 
 const mutationKey = ['reorderBriefcaseItems'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1768,7 +1769,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderBriefcaseItems>>, {briefcaseId: string;data: ReorderRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  reorderBriefcaseItems(briefcaseId,data,)
+          return  reorderBriefcaseItems(briefcaseId,data,requestOptions)
         }
 
 
@@ -1780,13 +1781,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ReorderBriefcaseItemsMutationResult = NonNullable<Awaited<ReturnType<typeof reorderBriefcaseItems>>>
     export type ReorderBriefcaseItemsMutationBody = ReorderRequest
-    export type ReorderBriefcaseItemsMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ReorderBriefcaseItemsMutationError = ErrorEnvelope
 
     /**
  * @summary Reorder Briefcase Items
  */
-export const useReorderBriefcaseItems = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcaseItems>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, }
+export const useReorderBriefcaseItems = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderBriefcaseItems>>, TError,{briefcaseId: string;data: ReorderRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof reorderBriefcaseItems>>,
         TError,
@@ -1805,17 +1806,17 @@ export type createItemNoteResponse200 = {
 }
 
 export type createItemNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createItemNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type createItemNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1834,7 +1835,7 @@ export const getCreateItemNoteUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/items/${itemId}/notes`
+  return `/api/v1/briefcases/${briefcaseId}/items/${itemId}/notes`
 }
 
 export const createItemNote = async (briefcaseId: string,
@@ -1854,16 +1855,16 @@ export const createItemNote = async (briefcaseId: string,
 
 
 
-export const getCreateItemNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createItemNote>>, TError,{briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}, TContext>, }
+export const getCreateItemNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createItemNote>>, TError,{briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createItemNote>>, TError,{briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}, TContext> => {
 
 const mutationKey = ['createItemNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1871,7 +1872,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createItemNote>>, {briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}> = (props) => {
           const {briefcaseId,itemId,data} = props ?? {};
 
-          return  createItemNote(briefcaseId,itemId,data,)
+          return  createItemNote(briefcaseId,itemId,data,requestOptions)
         }
 
 
@@ -1883,13 +1884,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateItemNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createItemNote>>>
     export type CreateItemNoteMutationBody = BriefcaseItemNoteRequest
-    export type CreateItemNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CreateItemNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Create Item Note
  */
-export const useCreateItemNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createItemNote>>, TError,{briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}, TContext>, }
+export const useCreateItemNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createItemNote>>, TError,{briefcaseId: string;itemId: string;data: BriefcaseItemNoteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createItemNote>>,
         TError,
@@ -1908,17 +1909,17 @@ export type listItemNotesResponse200 = {
 }
 
 export type listItemNotesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listItemNotesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listItemNotesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1937,7 +1938,7 @@ export const getListItemNotesUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/items/${itemId}/notes`
+  return `/api/v1/briefcases/${briefcaseId}/items/${itemId}/notes`
 }
 
 export const listItemNotes = async (briefcaseId: string,
@@ -1959,22 +1960,22 @@ export const listItemNotes = async (briefcaseId: string,
 export const getListItemNotesQueryKey = (briefcaseId: MaybeRef<string>,
     itemId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'items',itemId,'notes'
+    'api','v1','briefcases',briefcaseId,'items',itemId,'notes'
     ] as const;
     }
 
     
-export const getListItemNotesQueryOptions = <TData = Awaited<ReturnType<typeof listItemNotes>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>,
-    itemId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemNotes>>, TError, TData>>, }
+export const getListItemNotesQueryOptions = <TData = Awaited<ReturnType<typeof listItemNotes>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>,
+    itemId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListItemNotesQueryKey(briefcaseId,itemId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listItemNotes>>> = ({ signal }) => listItemNotes(unref(briefcaseId),unref(itemId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listItemNotes>>> = ({ signal }) => listItemNotes(unref(briefcaseId),unref(itemId), { signal, ...requestOptions });
 
       
 
@@ -1984,16 +1985,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListItemNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listItemNotes>>>
-export type ListItemNotesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListItemNotesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Item Notes
  */
 
-export function useListItemNotes<TData = Awaited<ReturnType<typeof listItemNotes>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
+export function useListItemNotes<TData = Awaited<ReturnType<typeof listItemNotes>>, TError = ErrorEnvelope>(
  briefcaseId: MaybeRef<string>,
-    itemId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemNotes>>, TError, TData>>, }
+    itemId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2019,17 +2020,17 @@ export type updateItemNoteResponse200 = {
 }
 
 export type updateItemNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateItemNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateItemNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2049,7 +2050,7 @@ export const getUpdateItemNoteUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/items/${itemId}/notes/${noteId}`
+  return `/api/v1/briefcases/${briefcaseId}/items/${itemId}/notes/${noteId}`
 }
 
 export const updateItemNote = async (briefcaseId: string,
@@ -2070,16 +2071,16 @@ export const updateItemNote = async (briefcaseId: string,
 
 
 
-export const getUpdateItemNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}, TContext>, }
+export const getUpdateItemNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateItemNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2087,7 +2088,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateItemNote>>, {briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}> = (props) => {
           const {briefcaseId,itemId,noteId,data} = props ?? {};
 
-          return  updateItemNote(briefcaseId,itemId,noteId,data,)
+          return  updateItemNote(briefcaseId,itemId,noteId,data,requestOptions)
         }
 
 
@@ -2099,13 +2100,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateItemNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateItemNote>>>
     export type UpdateItemNoteMutationBody = BriefcaseItemNoteUpdateRequest
-    export type UpdateItemNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateItemNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Update Item Note
  */
-export const useUpdateItemNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}, TContext>, }
+export const useUpdateItemNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string;data: BriefcaseItemNoteUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateItemNote>>,
         TError,
@@ -2124,17 +2125,17 @@ export type deleteItemNoteResponse200 = {
 }
 
 export type deleteItemNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteItemNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteItemNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2154,7 +2155,7 @@ export const getDeleteItemNoteUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/items/${itemId}/notes/${noteId}`
+  return `/api/v1/briefcases/${briefcaseId}/items/${itemId}/notes/${noteId}`
 }
 
 export const deleteItemNote = async (briefcaseId: string,
@@ -2173,16 +2174,16 @@ export const deleteItemNote = async (briefcaseId: string,
 
 
 
-export const getDeleteItemNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string}, TContext>, }
+export const getDeleteItemNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string}, TContext> => {
 
 const mutationKey = ['deleteItemNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2190,7 +2191,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteItemNote>>, {briefcaseId: string;itemId: string;noteId: string}> = (props) => {
           const {briefcaseId,itemId,noteId} = props ?? {};
 
-          return  deleteItemNote(briefcaseId,itemId,noteId,)
+          return  deleteItemNote(briefcaseId,itemId,noteId,requestOptions)
         }
 
 
@@ -2202,13 +2203,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteItemNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteItemNote>>>
     
-    export type DeleteItemNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteItemNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Item Note
  */
-export const useDeleteItemNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string}, TContext>, }
+export const useDeleteItemNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteItemNote>>, TError,{briefcaseId: string;itemId: string;noteId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteItemNote>>,
         TError,
@@ -2227,17 +2228,17 @@ export type createBriefcaseNoteResponse200 = {
 }
 
 export type createBriefcaseNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createBriefcaseNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type createBriefcaseNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2255,7 +2256,7 @@ export const getCreateBriefcaseNoteUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/notes`
+  return `/api/v1/briefcases/${briefcaseId}/notes`
 }
 
 export const createBriefcaseNote = async (briefcaseId: string,
@@ -2274,16 +2275,16 @@ export const createBriefcaseNote = async (briefcaseId: string,
 
 
 
-export const getCreateBriefcaseNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcaseNote>>, TError,{briefcaseId: string;data: BriefcaseNoteRequest}, TContext>, }
+export const getCreateBriefcaseNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcaseNote>>, TError,{briefcaseId: string;data: BriefcaseNoteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createBriefcaseNote>>, TError,{briefcaseId: string;data: BriefcaseNoteRequest}, TContext> => {
 
 const mutationKey = ['createBriefcaseNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2291,7 +2292,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBriefcaseNote>>, {briefcaseId: string;data: BriefcaseNoteRequest}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  createBriefcaseNote(briefcaseId,data,)
+          return  createBriefcaseNote(briefcaseId,data,requestOptions)
         }
 
 
@@ -2303,13 +2304,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateBriefcaseNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createBriefcaseNote>>>
     export type CreateBriefcaseNoteMutationBody = BriefcaseNoteRequest
-    export type CreateBriefcaseNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CreateBriefcaseNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Create Briefcase Note
  */
-export const useCreateBriefcaseNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcaseNote>>, TError,{briefcaseId: string;data: BriefcaseNoteRequest}, TContext>, }
+export const useCreateBriefcaseNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefcaseNote>>, TError,{briefcaseId: string;data: BriefcaseNoteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createBriefcaseNote>>,
         TError,
@@ -2328,17 +2329,17 @@ export type listBriefcaseNotesResponse200 = {
 }
 
 export type listBriefcaseNotesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listBriefcaseNotesResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listBriefcaseNotesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2356,7 +2357,7 @@ export const getListBriefcaseNotesUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/notes`
+  return `/api/v1/briefcases/${briefcaseId}/notes`
 }
 
 export const listBriefcaseNotes = async (briefcaseId: string, options?: RequestInit): Promise<listBriefcaseNotesResponse> => {
@@ -2376,21 +2377,21 @@ export const listBriefcaseNotes = async (briefcaseId: string, options?: RequestI
 
 export const getListBriefcaseNotesQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'notes'
+    'api','v1','briefcases',briefcaseId,'notes'
     ] as const;
     }
 
     
-export const getListBriefcaseNotesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseNotes>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseNotes>>, TError, TData>>, }
+export const getListBriefcaseNotesQueryOptions = <TData = Awaited<ReturnType<typeof listBriefcaseNotes>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListBriefcaseNotesQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseNotes>>> = ({ signal }) => listBriefcaseNotes(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBriefcaseNotes>>> = ({ signal }) => listBriefcaseNotes(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -2400,15 +2401,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListBriefcaseNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listBriefcaseNotes>>>
-export type ListBriefcaseNotesQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListBriefcaseNotesQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Briefcase Notes
  */
 
-export function useListBriefcaseNotes<TData = Awaited<ReturnType<typeof listBriefcaseNotes>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseNotes>>, TError, TData>>, }
+export function useListBriefcaseNotes<TData = Awaited<ReturnType<typeof listBriefcaseNotes>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBriefcaseNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2434,17 +2435,17 @@ export type updateBriefcaseNoteResponse200 = {
 }
 
 export type updateBriefcaseNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateBriefcaseNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateBriefcaseNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2463,7 +2464,7 @@ export const getUpdateBriefcaseNoteUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/notes/${noteId}`
+  return `/api/v1/briefcases/${briefcaseId}/notes/${noteId}`
 }
 
 export const updateBriefcaseNote = async (briefcaseId: string,
@@ -2483,16 +2484,16 @@ export const updateBriefcaseNote = async (briefcaseId: string,
 
 
 
-export const getUpdateBriefcaseNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcaseNote>>, TError,{briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}, TContext>, }
+export const getUpdateBriefcaseNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcaseNote>>, TError,{briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateBriefcaseNote>>, TError,{briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateBriefcaseNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2500,7 +2501,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBriefcaseNote>>, {briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}> = (props) => {
           const {briefcaseId,noteId,data} = props ?? {};
 
-          return  updateBriefcaseNote(briefcaseId,noteId,data,)
+          return  updateBriefcaseNote(briefcaseId,noteId,data,requestOptions)
         }
 
 
@@ -2512,13 +2513,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateBriefcaseNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateBriefcaseNote>>>
     export type UpdateBriefcaseNoteMutationBody = BriefcaseNoteUpdateRequest
-    export type UpdateBriefcaseNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateBriefcaseNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Update Briefcase Note
  */
-export const useUpdateBriefcaseNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcaseNote>>, TError,{briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}, TContext>, }
+export const useUpdateBriefcaseNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBriefcaseNote>>, TError,{briefcaseId: string;noteId: string;data: BriefcaseNoteUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateBriefcaseNote>>,
         TError,
@@ -2537,17 +2538,17 @@ export type deleteBriefcaseNoteResponse200 = {
 }
 
 export type deleteBriefcaseNoteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteBriefcaseNoteResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteBriefcaseNoteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2566,7 +2567,7 @@ export const getDeleteBriefcaseNoteUrl = (briefcaseId: string,
 
   
 
-  return `/briefcases/${briefcaseId}/notes/${noteId}`
+  return `/api/v1/briefcases/${briefcaseId}/notes/${noteId}`
 }
 
 export const deleteBriefcaseNote = async (briefcaseId: string,
@@ -2584,16 +2585,16 @@ export const deleteBriefcaseNote = async (briefcaseId: string,
 
 
 
-export const getDeleteBriefcaseNoteMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseNote>>, TError,{briefcaseId: string;noteId: string}, TContext>, }
+export const getDeleteBriefcaseNoteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseNote>>, TError,{briefcaseId: string;noteId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseNote>>, TError,{briefcaseId: string;noteId: string}, TContext> => {
 
 const mutationKey = ['deleteBriefcaseNote'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2601,7 +2602,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBriefcaseNote>>, {briefcaseId: string;noteId: string}> = (props) => {
           const {briefcaseId,noteId} = props ?? {};
 
-          return  deleteBriefcaseNote(briefcaseId,noteId,)
+          return  deleteBriefcaseNote(briefcaseId,noteId,requestOptions)
         }
 
 
@@ -2613,13 +2614,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteBriefcaseNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBriefcaseNote>>>
     
-    export type DeleteBriefcaseNoteMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteBriefcaseNoteMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Briefcase Note
  */
-export const useDeleteBriefcaseNote = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseNote>>, TError,{briefcaseId: string;noteId: string}, TContext>, }
+export const useDeleteBriefcaseNote = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBriefcaseNote>>, TError,{briefcaseId: string;noteId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteBriefcaseNote>>,
         TError,
@@ -2638,17 +2639,17 @@ export type exportBriefcaseResponse200 = {
 }
 
 export type exportBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type exportBriefcaseResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type exportBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2674,7 +2675,7 @@ export const getExportBriefcaseUrl = (briefcaseId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/briefcases/${briefcaseId}/export?${stringifiedParams}` : `/briefcases/${briefcaseId}/export`
+  return stringifiedParams.length > 0 ? `/api/v1/briefcases/${briefcaseId}/export?${stringifiedParams}` : `/api/v1/briefcases/${briefcaseId}/export`
 }
 
 export const exportBriefcase = async (briefcaseId: string,
@@ -2696,22 +2697,22 @@ export const exportBriefcase = async (briefcaseId: string,
 export const getExportBriefcaseQueryKey = (briefcaseId: MaybeRef<string>,
     params?: MaybeRef<ExportBriefcaseParams>,) => {
     return [
-    'briefcases',briefcaseId,'export', ...(params ? [params] : [])
+    'api','v1','briefcases',briefcaseId,'export', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getExportBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof exportBriefcase>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>,
-    params?: MaybeRef<ExportBriefcaseParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportBriefcase>>, TError, TData>>, }
+export const getExportBriefcaseQueryOptions = <TData = Awaited<ReturnType<typeof exportBriefcase>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>,
+    params?: MaybeRef<ExportBriefcaseParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getExportBriefcaseQueryKey(briefcaseId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportBriefcase>>> = ({ signal }) => exportBriefcase(unref(briefcaseId),unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportBriefcase>>> = ({ signal }) => exportBriefcase(unref(briefcaseId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -2721,20 +2722,147 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ExportBriefcaseQueryResult = NonNullable<Awaited<ReturnType<typeof exportBriefcase>>>
-export type ExportBriefcaseQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ExportBriefcaseQueryError = ErrorEnvelope
 
 
 /**
  * @summary Export Briefcase
  */
 
-export function useExportBriefcase<TData = Awaited<ReturnType<typeof exportBriefcase>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
+export function useExportBriefcase<TData = Awaited<ReturnType<typeof exportBriefcase>>, TError = ErrorEnvelope>(
  briefcaseId: MaybeRef<string>,
-    params?: MaybeRef<ExportBriefcaseParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportBriefcase>>, TError, TData>>, }
+    params?: MaybeRef<ExportBriefcaseParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportBriefcase>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getExportBriefcaseQueryOptions(briefcaseId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * Return briefcase + items + per-item notes for the FE-driven export.
+
+Per WS-16 deepdive Q4 the FE export is a "my notes about this set of
+cases" document (titles + body + per-item notes). The existing BE
+`/v1/briefcases/{id}/export` produces a RAG-context AI summary —
+intentionally a different product. This endpoint serves the FE-side
+renderer for PR-32; it does NOT replace the RAG export.
+
+Supports three FE export modes (selection happens FE-side):
+  - manifest: titles + legis_ids only
+  - notes:    titles + body + per-item notes
+  - combined: union
+
+`title` resolution:
+  1. Use `briefcase_item.title` if non-null (already a cache).
+  2. Otherwise, batch-fetch from Elasticsearch by `legisId` (one
+     round trip for N items).
+  3. On any ES failure, fall back to None with a warning — never 500.
+
+Security note: ownership is enforced by `briefcase_dep`, which raises
+404 (not 403) for briefcases belonging to another user — so we don't
+leak briefcase existence to non-owners.
+ * @summary Briefcase With Notes
+ */
+export type briefcaseWithNotesResponse200 = {
+  data: BriefcaseWithNotesResponse
+  status: 200
+}
+
+export type briefcaseWithNotesResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type briefcaseWithNotesResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type briefcaseWithNotesResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type briefcaseWithNotesResponseSuccess = (briefcaseWithNotesResponse200) & {
+  headers: Headers;
+};
+export type briefcaseWithNotesResponseError = (briefcaseWithNotesResponse401 | briefcaseWithNotesResponse404 | briefcaseWithNotesResponse422) & {
+  headers: Headers;
+};
+
+export type briefcaseWithNotesResponse = (briefcaseWithNotesResponseSuccess | briefcaseWithNotesResponseError)
+
+export const getBriefcaseWithNotesUrl = (briefcaseId: string,) => {
+
+
+  
+
+  return `/api/v1/briefcases/${briefcaseId}/with-notes`
+}
+
+export const briefcaseWithNotes = async (briefcaseId: string, options?: RequestInit): Promise<briefcaseWithNotesResponse> => {
+  
+  return apiClient<briefcaseWithNotesResponse>(getBriefcaseWithNotesUrl(briefcaseId),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getBriefcaseWithNotesQueryKey = (briefcaseId: MaybeRef<string>,) => {
+    return [
+    'api','v1','briefcases',briefcaseId,'with-notes'
+    ] as const;
+    }
+
+    
+export const getBriefcaseWithNotesQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseWithNotes>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseWithNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getBriefcaseWithNotesQueryKey(briefcaseId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseWithNotes>>> = ({ signal }) => briefcaseWithNotes(unref(briefcaseId), { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: computed(() => !!(unref(briefcaseId))), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof briefcaseWithNotes>>, TError, TData> 
+}
+
+export type BriefcaseWithNotesQueryResult = NonNullable<Awaited<ReturnType<typeof briefcaseWithNotes>>>
+export type BriefcaseWithNotesQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Briefcase With Notes
+ */
+
+export function useBriefcaseWithNotes<TData = Awaited<ReturnType<typeof briefcaseWithNotes>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseWithNotes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getBriefcaseWithNotesQueryOptions(briefcaseId,options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2756,17 +2884,17 @@ export type briefcaseContextQuickResponse200 = {
 }
 
 export type briefcaseContextQuickResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type briefcaseContextQuickResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type briefcaseContextQuickResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2784,7 +2912,7 @@ export const getBriefcaseContextQuickUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/context/quick`
+  return `/api/v1/briefcases/${briefcaseId}/context/quick`
 }
 
 export const briefcaseContextQuick = async (briefcaseId: string, options?: RequestInit): Promise<briefcaseContextQuickResponse> => {
@@ -2804,21 +2932,21 @@ export const briefcaseContextQuick = async (briefcaseId: string, options?: Reque
 
 export const getBriefcaseContextQuickQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'context','quick'
+    'api','v1','briefcases',briefcaseId,'context','quick'
     ] as const;
     }
 
     
-export const getBriefcaseContextQuickQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextQuick>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextQuick>>, TError, TData>>, }
+export const getBriefcaseContextQuickQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextQuick>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextQuick>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getBriefcaseContextQuickQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextQuick>>> = ({ signal }) => briefcaseContextQuick(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextQuick>>> = ({ signal }) => briefcaseContextQuick(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -2828,15 +2956,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type BriefcaseContextQuickQueryResult = NonNullable<Awaited<ReturnType<typeof briefcaseContextQuick>>>
-export type BriefcaseContextQuickQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type BriefcaseContextQuickQueryError = ErrorEnvelope
 
 
 /**
  * @summary Briefcase Context Quick
  */
 
-export function useBriefcaseContextQuick<TData = Awaited<ReturnType<typeof briefcaseContextQuick>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextQuick>>, TError, TData>>, }
+export function useBriefcaseContextQuick<TData = Awaited<ReturnType<typeof briefcaseContextQuick>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextQuick>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2862,17 +2990,17 @@ export type briefcaseContextFullResponse200 = {
 }
 
 export type briefcaseContextFullResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type briefcaseContextFullResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type briefcaseContextFullResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2890,7 +3018,7 @@ export const getBriefcaseContextFullUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/context/full`
+  return `/api/v1/briefcases/${briefcaseId}/context/full`
 }
 
 export const briefcaseContextFull = async (briefcaseId: string, options?: RequestInit): Promise<briefcaseContextFullResponse> => {
@@ -2910,21 +3038,21 @@ export const briefcaseContextFull = async (briefcaseId: string, options?: Reques
 
 export const getBriefcaseContextFullQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'context','full'
+    'api','v1','briefcases',briefcaseId,'context','full'
     ] as const;
     }
 
     
-export const getBriefcaseContextFullQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextFull>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextFull>>, TError, TData>>, }
+export const getBriefcaseContextFullQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextFull>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextFull>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getBriefcaseContextFullQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextFull>>> = ({ signal }) => briefcaseContextFull(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextFull>>> = ({ signal }) => briefcaseContextFull(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -2934,15 +3062,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type BriefcaseContextFullQueryResult = NonNullable<Awaited<ReturnType<typeof briefcaseContextFull>>>
-export type BriefcaseContextFullQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type BriefcaseContextFullQueryError = ErrorEnvelope
 
 
 /**
  * @summary Briefcase Context Full
  */
 
-export function useBriefcaseContextFull<TData = Awaited<ReturnType<typeof briefcaseContextFull>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextFull>>, TError, TData>>, }
+export function useBriefcaseContextFull<TData = Awaited<ReturnType<typeof briefcaseContextFull>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextFull>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2968,17 +3096,17 @@ export type briefcaseContextCheckResponse200 = {
 }
 
 export type briefcaseContextCheckResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type briefcaseContextCheckResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type briefcaseContextCheckResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2996,7 +3124,7 @@ export const getBriefcaseContextCheckUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/context/check`
+  return `/api/v1/briefcases/${briefcaseId}/context/check`
 }
 
 export const briefcaseContextCheck = async (briefcaseId: string, options?: RequestInit): Promise<briefcaseContextCheckResponse> => {
@@ -3016,21 +3144,21 @@ export const briefcaseContextCheck = async (briefcaseId: string, options?: Reque
 
 export const getBriefcaseContextCheckQueryKey = (briefcaseId: MaybeRef<string>,) => {
     return [
-    'briefcases',briefcaseId,'context','check'
+    'api','v1','briefcases',briefcaseId,'context','check'
     ] as const;
     }
 
     
-export const getBriefcaseContextCheckQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextCheck>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextCheck>>, TError, TData>>, }
+export const getBriefcaseContextCheckQueryOptions = <TData = Awaited<ReturnType<typeof briefcaseContextCheck>>, TError = ErrorEnvelope>(briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextCheck>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getBriefcaseContextCheckQueryKey(briefcaseId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextCheck>>> = ({ signal }) => briefcaseContextCheck(unref(briefcaseId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof briefcaseContextCheck>>> = ({ signal }) => briefcaseContextCheck(unref(briefcaseId), { signal, ...requestOptions });
 
       
 
@@ -3040,15 +3168,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type BriefcaseContextCheckQueryResult = NonNullable<Awaited<ReturnType<typeof briefcaseContextCheck>>>
-export type BriefcaseContextCheckQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type BriefcaseContextCheckQueryError = ErrorEnvelope
 
 
 /**
  * @summary Briefcase Context Check
  */
 
-export function useBriefcaseContextCheck<TData = Awaited<ReturnType<typeof briefcaseContextCheck>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextCheck>>, TError, TData>>, }
+export function useBriefcaseContextCheck<TData = Awaited<ReturnType<typeof briefcaseContextCheck>>, TError = ErrorEnvelope>(
+ briefcaseId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof briefcaseContextCheck>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -3065,7 +3193,7 @@ export function useBriefcaseContextCheck<TData = Awaited<ReturnType<typeof brief
 
 
 /**
- * Provide/update context for a briefcase. (Placeholder)
+ * Generate and store RAG context summaries for all items in the briefcase.
  * @summary Briefcase Context Provide
  */
 export type briefcaseContextProvideResponse200 = {
@@ -3074,17 +3202,17 @@ export type briefcaseContextProvideResponse200 = {
 }
 
 export type briefcaseContextProvideResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type briefcaseContextProvideResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type briefcaseContextProvideResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -3102,7 +3230,7 @@ export const getBriefcaseContextProvideUrl = (briefcaseId: string,) => {
 
   
 
-  return `/briefcases/${briefcaseId}/context/provide`
+  return `/api/v1/briefcases/${briefcaseId}/context/provide`
 }
 
 export const briefcaseContextProvide = async (briefcaseId: string,
@@ -3121,16 +3249,16 @@ export const briefcaseContextProvide = async (briefcaseId: string,
 
 
 
-export const getBriefcaseContextProvideMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof briefcaseContextProvide>>, TError,{briefcaseId: string;data: PatchPayload}, TContext>, }
+export const getBriefcaseContextProvideMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof briefcaseContextProvide>>, TError,{briefcaseId: string;data: PatchPayload}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof briefcaseContextProvide>>, TError,{briefcaseId: string;data: PatchPayload}, TContext> => {
 
 const mutationKey = ['briefcaseContextProvide'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -3138,7 +3266,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof briefcaseContextProvide>>, {briefcaseId: string;data: PatchPayload}> = (props) => {
           const {briefcaseId,data} = props ?? {};
 
-          return  briefcaseContextProvide(briefcaseId,data,)
+          return  briefcaseContextProvide(briefcaseId,data,requestOptions)
         }
 
 
@@ -3150,13 +3278,13 @@ const {mutation: mutationOptions} = options ?
 
     export type BriefcaseContextProvideMutationResult = NonNullable<Awaited<ReturnType<typeof briefcaseContextProvide>>>
     export type BriefcaseContextProvideMutationBody = PatchPayload
-    export type BriefcaseContextProvideMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type BriefcaseContextProvideMutationError = ErrorEnvelope
 
     /**
  * @summary Briefcase Context Provide
  */
-export const useBriefcaseContextProvide = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof briefcaseContextProvide>>, TError,{briefcaseId: string;data: PatchPayload}, TContext>, }
+export const useBriefcaseContextProvide = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof briefcaseContextProvide>>, TError,{briefcaseId: string;data: PatchPayload}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof briefcaseContextProvide>>,
         TError,

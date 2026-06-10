@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -31,17 +31,17 @@ import type {
 
 import type {
   AmendCitationBody,
-  AuthErrorResponse,
   CitationCheckRequest,
   CitationCheckResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -58,17 +58,17 @@ export type citationsCheckResponse200 = {
 }
 
 export type citationsCheckResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type citationsCheckResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type citationsCheckResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -86,7 +86,7 @@ export const getCitationsCheckUrl = () => {
 
   
 
-  return `/citations/check`
+  return `/api/v1/citations/check`
 }
 
 export const citationsCheck = async (citationCheckRequest: CitationCheckRequest, options?: RequestInit): Promise<citationsCheckResponse> => {
@@ -104,16 +104,16 @@ export const citationsCheck = async (citationCheckRequest: CitationCheckRequest,
 
 
 
-export const getCitationsCheckMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof citationsCheck>>, TError,{data: CitationCheckRequest}, TContext>, }
+export const getCitationsCheckMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof citationsCheck>>, TError,{data: CitationCheckRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof citationsCheck>>, TError,{data: CitationCheckRequest}, TContext> => {
 
 const mutationKey = ['citationsCheck'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -121,7 +121,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof citationsCheck>>, {data: CitationCheckRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  citationsCheck(data,)
+          return  citationsCheck(data,requestOptions)
         }
 
 
@@ -133,13 +133,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CitationsCheckMutationResult = NonNullable<Awaited<ReturnType<typeof citationsCheck>>>
     export type CitationsCheckMutationBody = CitationCheckRequest
-    export type CitationsCheckMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type CitationsCheckMutationError = ErrorEnvelope
 
     /**
  * @summary Citations Check
  */
-export const useCitationsCheck = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof citationsCheck>>, TError,{data: CitationCheckRequest}, TContext>, }
+export const useCitationsCheck = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof citationsCheck>>, TError,{data: CitationCheckRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof citationsCheck>>,
         TError,
@@ -149,7 +149,12 @@ export const useCitationsCheck = <TError = AuthErrorResponse | HTTPValidationErr
       return useMutation(getCitationsCheckMutationOptions(options), queryClient);
     }
     /**
- * Get citation check manifest for a completed job.
+ * Get citation check manifest.
+
+- 200 when completed.
+- 202 with Retry-After while queued or running — keep polling.
+- 409 when the job failed or was cancelled.
+- 404 when the job does not exist or belongs to another org.
  * @summary Citation Check Result
  */
 export type citationCheckResultResponse200 = {
@@ -157,25 +162,35 @@ export type citationCheckResultResponse200 = {
   status: 200
 }
 
+export type citationCheckResultResponse202 = {
+  data: void
+  status: 202
+}
+
 export type citationCheckResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type citationCheckResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
+export type citationCheckResultResponse409 = {
+  data: ErrorEnvelope
+  status: 409
+}
+
 export type citationCheckResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
-export type citationCheckResultResponseSuccess = (citationCheckResultResponse200) & {
+export type citationCheckResultResponseSuccess = (citationCheckResultResponse200 | citationCheckResultResponse202) & {
   headers: Headers;
 };
-export type citationCheckResultResponseError = (citationCheckResultResponse401 | citationCheckResultResponse404 | citationCheckResultResponse422) & {
+export type citationCheckResultResponseError = (citationCheckResultResponse401 | citationCheckResultResponse404 | citationCheckResultResponse409 | citationCheckResultResponse422) & {
   headers: Headers;
 };
 
@@ -186,7 +201,7 @@ export const getCitationCheckResultUrl = (jobId: string,) => {
 
   
 
-  return `/citations/${jobId}/result`
+  return `/api/v1/citations/${jobId}/result`
 }
 
 export const citationCheckResult = async (jobId: string, options?: RequestInit): Promise<citationCheckResultResponse> => {
@@ -206,21 +221,21 @@ export const citationCheckResult = async (jobId: string, options?: RequestInit):
 
 export const getCitationCheckResultQueryKey = (jobId: MaybeRef<string>,) => {
     return [
-    'citations',jobId,'result'
+    'api','v1','citations',jobId,'result'
     ] as const;
     }
 
     
-export const getCitationCheckResultQueryOptions = <TData = Awaited<ReturnType<typeof citationCheckResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof citationCheckResult>>, TError, TData>>, }
+export const getCitationCheckResultQueryOptions = <TData = Awaited<ReturnType<typeof citationCheckResult>>, TError = ErrorEnvelope>(jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof citationCheckResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getCitationCheckResultQueryKey(jobId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof citationCheckResult>>> = ({ signal }) => citationCheckResult(unref(jobId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof citationCheckResult>>> = ({ signal }) => citationCheckResult(unref(jobId), { signal, ...requestOptions });
 
       
 
@@ -230,15 +245,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type CitationCheckResultQueryResult = NonNullable<Awaited<ReturnType<typeof citationCheckResult>>>
-export type CitationCheckResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type CitationCheckResultQueryError = ErrorEnvelope
 
 
 /**
  * @summary Citation Check Result
  */
 
-export function useCitationCheckResult<TData = Awaited<ReturnType<typeof citationCheckResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof citationCheckResult>>, TError, TData>>, }
+export function useCitationCheckResult<TData = Awaited<ReturnType<typeof citationCheckResult>>, TError = ErrorEnvelope>(
+ jobId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof citationCheckResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -264,12 +279,12 @@ export type reportUnknownResponse200 = {
 }
 
 export type reportUnknownResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type reportUnknownResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -287,7 +302,7 @@ export const getReportUnknownUrl = () => {
 
   
 
-  return `/citations/unknown`
+  return `/api/v1/citations/unknown`
 }
 
 export const reportUnknown = async (citationCheckRequest: CitationCheckRequest, options?: RequestInit): Promise<reportUnknownResponse> => {
@@ -305,16 +320,16 @@ export const reportUnknown = async (citationCheckRequest: CitationCheckRequest, 
 
 
 
-export const getReportUnknownMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportUnknown>>, TError,{data: CitationCheckRequest}, TContext>, }
+export const getReportUnknownMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportUnknown>>, TError,{data: CitationCheckRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof reportUnknown>>, TError,{data: CitationCheckRequest}, TContext> => {
 
 const mutationKey = ['reportUnknown'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -322,7 +337,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportUnknown>>, {data: CitationCheckRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  reportUnknown(data,)
+          return  reportUnknown(data,requestOptions)
         }
 
 
@@ -334,13 +349,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ReportUnknownMutationResult = NonNullable<Awaited<ReturnType<typeof reportUnknown>>>
     export type ReportUnknownMutationBody = CitationCheckRequest
-    export type ReportUnknownMutationError = AuthErrorResponse | HTTPValidationError
+    export type ReportUnknownMutationError = ErrorEnvelope
 
     /**
  * @summary Report Unknown
  */
-export const useReportUnknown = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportUnknown>>, TError,{data: CitationCheckRequest}, TContext>, }
+export const useReportUnknown = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportUnknown>>, TError,{data: CitationCheckRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof reportUnknown>>,
         TError,
@@ -359,17 +374,17 @@ export type amendCitationResponse200 = {
 }
 
 export type amendCitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type amendCitationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type amendCitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -387,7 +402,7 @@ export const getAmendCitationUrl = (citationId: string,) => {
 
   
 
-  return `/citations/${citationId}`
+  return `/api/v1/citations/${citationId}`
 }
 
 export const amendCitation = async (citationId: string,
@@ -406,16 +421,16 @@ export const amendCitation = async (citationId: string,
 
 
 
-export const getAmendCitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendCitation>>, TError,{citationId: string;data: AmendCitationBody}, TContext>, }
+export const getAmendCitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendCitation>>, TError,{citationId: string;data: AmendCitationBody}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof amendCitation>>, TError,{citationId: string;data: AmendCitationBody}, TContext> => {
 
 const mutationKey = ['amendCitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -423,7 +438,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof amendCitation>>, {citationId: string;data: AmendCitationBody}> = (props) => {
           const {citationId,data} = props ?? {};
 
-          return  amendCitation(citationId,data,)
+          return  amendCitation(citationId,data,requestOptions)
         }
 
 
@@ -435,13 +450,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AmendCitationMutationResult = NonNullable<Awaited<ReturnType<typeof amendCitation>>>
     export type AmendCitationMutationBody = AmendCitationBody
-    export type AmendCitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AmendCitationMutationError = ErrorEnvelope
 
     /**
  * @summary Amend Citation
  */
-export const useAmendCitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendCitation>>, TError,{citationId: string;data: AmendCitationBody}, TContext>, }
+export const useAmendCitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendCitation>>, TError,{citationId: string;data: AmendCitationBody}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof amendCitation>>,
         TError,
@@ -460,17 +475,17 @@ export type deleteCitationResponse200 = {
 }
 
 export type deleteCitationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteCitationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteCitationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -488,7 +503,7 @@ export const getDeleteCitationUrl = (citationId: string,) => {
 
   
 
-  return `/citations/${citationId}`
+  return `/api/v1/citations/${citationId}`
 }
 
 export const deleteCitation = async (citationId: string, options?: RequestInit): Promise<deleteCitationResponse> => {
@@ -505,16 +520,16 @@ export const deleteCitation = async (citationId: string, options?: RequestInit):
 
 
 
-export const getDeleteCitationMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCitation>>, TError,{citationId: string}, TContext>, }
+export const getDeleteCitationMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCitation>>, TError,{citationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteCitation>>, TError,{citationId: string}, TContext> => {
 
 const mutationKey = ['deleteCitation'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -522,7 +537,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCitation>>, {citationId: string}> = (props) => {
           const {citationId} = props ?? {};
 
-          return  deleteCitation(citationId,)
+          return  deleteCitation(citationId,requestOptions)
         }
 
 
@@ -534,13 +549,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteCitationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCitation>>>
     
-    export type DeleteCitationMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteCitationMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Citation
  */
-export const useDeleteCitation = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCitation>>, TError,{citationId: string}, TContext>, }
+export const useDeleteCitation = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCitation>>, TError,{citationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteCitation>>,
         TError,

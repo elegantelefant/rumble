@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useQuery
@@ -22,12 +22,14 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
+  ErrorEnvelope,
   JokeResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -41,14 +43,19 @@ export type jokeResponse200 = {
 }
 
 export type jokeResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
+}
+
+export type jokeResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type jokeResponseSuccess = (jokeResponse200) & {
   headers: Headers;
 };
-export type jokeResponseError = (jokeResponse401) & {
+export type jokeResponseError = (jokeResponse401 | jokeResponse429) & {
   headers: Headers;
 };
 
@@ -59,7 +66,7 @@ export const getJokeUrl = () => {
 
   
 
-  return `/joke`
+  return `/api/v1/joke`
 }
 
 export const joke = async ( options?: RequestInit): Promise<jokeResponse> => {
@@ -79,21 +86,21 @@ export const joke = async ( options?: RequestInit): Promise<jokeResponse> => {
 
 export const getJokeQueryKey = () => {
     return [
-    'joke'
+    'api','v1','joke'
     ] as const;
     }
 
     
-export const getJokeQueryOptions = <TData = Awaited<ReturnType<typeof joke>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof joke>>, TError, TData>>, }
+export const getJokeQueryOptions = <TData = Awaited<ReturnType<typeof joke>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof joke>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getJokeQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof joke>>> = ({ signal }) => joke({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof joke>>> = ({ signal }) => joke({ signal, ...requestOptions });
 
       
 
@@ -103,15 +110,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type JokeQueryResult = NonNullable<Awaited<ReturnType<typeof joke>>>
-export type JokeQueryError = AuthErrorResponse
+export type JokeQueryError = ErrorEnvelope
 
 
 /**
  * @summary Joke
  */
 
-export function useJoke<TData = Awaited<ReturnType<typeof joke>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof joke>>, TError, TData>>, }
+export function useJoke<TData = Awaited<ReturnType<typeof joke>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof joke>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

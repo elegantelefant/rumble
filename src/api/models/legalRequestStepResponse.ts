@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { LegalRequestStepResponseInputSummary } from './legalRequestStepResponseInputSummary';
 import type { LegalRequestStepResponseOutputSummary } from './legalRequestStepResponseOutputSummary';
@@ -13,15 +13,15 @@ import type { LegalRequestStepResponseOutputSummary } from './legalRequestStepRe
  */
 export interface LegalRequestStepResponse {
   id: number;
-  step_order: number;
-  step_name: string;
+  stepOrder: number;
+  stepName: string;
   service: string;
   status: string;
-  input_summary?: LegalRequestStepResponseInputSummary;
-  output_summary?: LegalRequestStepResponseOutputSummary;
+  inputSummary?: LegalRequestStepResponseInputSummary;
+  outputSummary?: LegalRequestStepResponseOutputSummary;
   error?: string | null;
-  duration_ms?: number | null;
-  created_at: string;
-  started_at?: string | null;
-  completed_at?: string | null;
+  durationMs?: number | null;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }

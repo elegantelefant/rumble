@@ -3,11 +3,20 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { NotificationResponse } from './notificationResponse';
+import type { RequestAssignedNotification } from './requestAssignedNotification';
+import type { RequestAwaitingReviewNotification } from './requestAwaitingReviewNotification';
+import type { RequestCancelledNotification } from './requestCancelledNotification';
+import type { RequestCommentedNotification } from './requestCommentedNotification';
+import type { RequestCompletedNotification } from './requestCompletedNotification';
+import type { RequestFailedNotification } from './requestFailedNotification';
+import type { RequestPickedUpNotification } from './requestPickedUpNotification';
+import type { RequestReassignedNotification } from './requestReassignedNotification';
+import type { RequestStartedNotification } from './requestStartedNotification';
+import type { UnknownNotification } from './unknownNotification';
 
 export interface NotificationListResponse {
-  notifications?: NotificationResponse[];
-  unread_count?: number;
+  notifications?: (RequestAssignedNotification | RequestReassignedNotification | RequestCompletedNotification | RequestFailedNotification | RequestCancelledNotification | RequestStartedNotification | RequestPickedUpNotification | RequestAwaitingReviewNotification | RequestCommentedNotification | UnknownNotification)[];
+  unreadCount?: number;
 }

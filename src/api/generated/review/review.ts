@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,9 +30,7 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   JobCreatedResponse,
   ReviewRequest,
   ReviewResponse
@@ -40,6 +38,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -56,17 +56,17 @@ export type reviewResponse200 = {
 }
 
 export type reviewResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type reviewResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type reviewResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -84,7 +84,7 @@ export const getReviewUrl = () => {
 
   
 
-  return `/review`
+  return `/api/v1/review`
 }
 
 export const review = async (reviewRequest: ReviewRequest, options?: RequestInit): Promise<reviewResponse> => {
@@ -102,16 +102,16 @@ export const review = async (reviewRequest: ReviewRequest, options?: RequestInit
 
 
 
-export const getReviewMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof review>>, TError,{data: ReviewRequest}, TContext>, }
+export const getReviewMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof review>>, TError,{data: ReviewRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof review>>, TError,{data: ReviewRequest}, TContext> => {
 
 const mutationKey = ['review'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -119,7 +119,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof review>>, {data: ReviewRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  review(data,)
+          return  review(data,requestOptions)
         }
 
 
@@ -131,13 +131,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ReviewMutationResult = NonNullable<Awaited<ReturnType<typeof review>>>
     export type ReviewMutationBody = ReviewRequest
-    export type ReviewMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type ReviewMutationError = ErrorEnvelope
 
     /**
  * @summary Review
  */
-export const useReview = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof review>>, TError,{data: ReviewRequest}, TContext>, }
+export const useReview = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof review>>, TError,{data: ReviewRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof review>>,
         TError,
@@ -148,6 +148,7 @@ export const useReview = <TError = AuthErrorResponse | HTTPValidationError | Err
     }
     /**
  * Get review result. Prefer using /jobs/{id}/result directly.
+ * @deprecated
  * @summary Review Result
  */
 export type reviewResultResponse200 = {
@@ -156,17 +157,17 @@ export type reviewResultResponse200 = {
 }
 
 export type reviewResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type reviewResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type reviewResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -184,7 +185,7 @@ export const getReviewResultUrl = (id: string,) => {
 
   
 
-  return `/review/${id}/result`
+  return `/api/v1/review/${id}/result`
 }
 
 export const reviewResult = async (id: string, options?: RequestInit): Promise<reviewResultResponse> => {
@@ -204,21 +205,21 @@ export const reviewResult = async (id: string, options?: RequestInit): Promise<r
 
 export const getReviewResultQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'review',id,'result'
+    'api','v1','review',id,'result'
     ] as const;
     }
 
     
-export const getReviewResultQueryOptions = <TData = Awaited<ReturnType<typeof reviewResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reviewResult>>, TError, TData>>, }
+export const getReviewResultQueryOptions = <TData = Awaited<ReturnType<typeof reviewResult>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reviewResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getReviewResultQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof reviewResult>>> = ({ signal }) => reviewResult(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof reviewResult>>> = ({ signal }) => reviewResult(unref(id), { signal, ...requestOptions });
 
       
 
@@ -228,15 +229,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ReviewResultQueryResult = NonNullable<Awaited<ReturnType<typeof reviewResult>>>
-export type ReviewResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ReviewResultQueryError = ErrorEnvelope
 
 
 /**
+ * @deprecated
  * @summary Review Result
  */
 
-export function useReviewResult<TData = Awaited<ReturnType<typeof reviewResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reviewResult>>, TError, TData>>, }
+export function useReviewResult<TData = Awaited<ReturnType<typeof reviewResult>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof reviewResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

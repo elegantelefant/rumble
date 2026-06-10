@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -26,13 +26,14 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  BodyProcessReadingListReadingListProcessPost,
-  HTTPValidationError
+  BodyProcessReadingListApiV1ReadingListProcessPost,
+  ErrorEnvelope
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -45,7 +46,7 @@ export type readingListHealthResponse200 = {
 }
 
 export type readingListHealthResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -63,7 +64,7 @@ export const getReadingListHealthUrl = () => {
 
   
 
-  return `/reading-list/health`
+  return `/api/v1/reading-list/health`
 }
 
 export const readingListHealth = async ( options?: RequestInit): Promise<readingListHealthResponse> => {
@@ -83,21 +84,21 @@ export const readingListHealth = async ( options?: RequestInit): Promise<reading
 
 export const getReadingListHealthQueryKey = () => {
     return [
-    'reading-list','health'
+    'api','v1','reading-list','health'
     ] as const;
     }
 
     
-export const getReadingListHealthQueryOptions = <TData = Awaited<ReturnType<typeof readingListHealth>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readingListHealth>>, TError, TData>>, }
+export const getReadingListHealthQueryOptions = <TData = Awaited<ReturnType<typeof readingListHealth>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readingListHealth>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getReadingListHealthQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof readingListHealth>>> = ({ signal }) => readingListHealth({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readingListHealth>>> = ({ signal }) => readingListHealth({ signal, ...requestOptions });
 
       
 
@@ -107,15 +108,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ReadingListHealthQueryResult = NonNullable<Awaited<ReturnType<typeof readingListHealth>>>
-export type ReadingListHealthQueryError = AuthErrorResponse
+export type ReadingListHealthQueryError = ErrorEnvelope
 
 
 /**
  * @summary Reading List Health
  */
 
-export function useReadingListHealth<TData = Awaited<ReturnType<typeof readingListHealth>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readingListHealth>>, TError, TData>>, }
+export function useReadingListHealth<TData = Awaited<ReturnType<typeof readingListHealth>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readingListHealth>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -141,19 +142,24 @@ export type processReadingListResponse200 = {
 }
 
 export type processReadingListResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type processReadingListResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type processReadingListResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type processReadingListResponseSuccess = (processReadingListResponse200) & {
   headers: Headers;
 };
-export type processReadingListResponseError = (processReadingListResponse401 | processReadingListResponse422) & {
+export type processReadingListResponseError = (processReadingListResponse401 | processReadingListResponse422 | processReadingListResponse429) & {
   headers: Headers;
 };
 
@@ -164,12 +170,12 @@ export const getProcessReadingListUrl = () => {
 
   
 
-  return `/reading-list/process`
+  return `/api/v1/reading-list/process`
 }
 
-export const processReadingList = async (bodyProcessReadingListReadingListProcessPost: BodyProcessReadingListReadingListProcessPost, options?: RequestInit): Promise<processReadingListResponse> => {
+export const processReadingList = async (bodyProcessReadingListApiV1ReadingListProcessPost: BodyProcessReadingListApiV1ReadingListProcessPost, options?: RequestInit): Promise<processReadingListResponse> => {
     const formData = new FormData();
-formData.append(`file`, bodyProcessReadingListReadingListProcessPost.file);
+formData.append(`file`, bodyProcessReadingListApiV1ReadingListProcessPost.file);
 
   return apiClient<processReadingListResponse>(getProcessReadingListUrl(),
   {      
@@ -184,24 +190,24 @@ formData.append(`file`, bodyProcessReadingListReadingListProcessPost.file);
 
 
 
-export const getProcessReadingListMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListReadingListProcessPost}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListReadingListProcessPost}, TContext> => {
+export const getProcessReadingListMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListApiV1ReadingListProcessPost}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListApiV1ReadingListProcessPost}, TContext> => {
 
 const mutationKey = ['processReadingList'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processReadingList>>, {data: BodyProcessReadingListReadingListProcessPost}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processReadingList>>, {data: BodyProcessReadingListApiV1ReadingListProcessPost}> = (props) => {
           const {data} = props ?? {};
 
-          return  processReadingList(data,)
+          return  processReadingList(data,requestOptions)
         }
 
 
@@ -212,18 +218,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ProcessReadingListMutationResult = NonNullable<Awaited<ReturnType<typeof processReadingList>>>
-    export type ProcessReadingListMutationBody = BodyProcessReadingListReadingListProcessPost
-    export type ProcessReadingListMutationError = AuthErrorResponse | HTTPValidationError
+    export type ProcessReadingListMutationBody = BodyProcessReadingListApiV1ReadingListProcessPost
+    export type ProcessReadingListMutationError = ErrorEnvelope
 
     /**
  * @summary Process Reading List
  */
-export const useProcessReadingList = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListReadingListProcessPost}, TContext>, }
+export const useProcessReadingList = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processReadingList>>, TError,{data: BodyProcessReadingListApiV1ReadingListProcessPost}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof processReadingList>>,
         TError,
-        {data: BodyProcessReadingListReadingListProcessPost},
+        {data: BodyProcessReadingListApiV1ReadingListProcessPost},
         TContext
       > => {
       return useMutation(getProcessReadingListMutationOptions(options), queryClient);

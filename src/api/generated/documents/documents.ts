@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,17 +30,15 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   DocumentCreateRequest,
   DocumentListResponse,
   DocumentResponse,
   DocumentUpdateRequest,
-  ErrorResponse,
+  ErrorEnvelope,
   FileDownloadResponse,
   GetLegalConnectionsParams,
   GetLegalDocumentParams,
   GetLegalRecentParams,
-  HTTPValidationError,
   LegalConnectionsResponse,
   LegalDocument,
   LegalDocumentMetadata,
@@ -52,6 +50,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -68,17 +68,17 @@ export type createDocumentResponse200 = {
 }
 
 export type createDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createDocumentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type createDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -96,7 +96,7 @@ export const getCreateDocumentUrl = () => {
 
   
 
-  return `/documents`
+  return `/api/v1/documents`
 }
 
 export const createDocument = async (documentCreateRequest: DocumentCreateRequest, options?: RequestInit): Promise<createDocumentResponse> => {
@@ -114,16 +114,16 @@ export const createDocument = async (documentCreateRequest: DocumentCreateReques
 
 
 
-export const getCreateDocumentMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDocument>>, TError,{data: DocumentCreateRequest}, TContext>, }
+export const getCreateDocumentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDocument>>, TError,{data: DocumentCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createDocument>>, TError,{data: DocumentCreateRequest}, TContext> => {
 
 const mutationKey = ['createDocument'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -131,7 +131,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDocument>>, {data: DocumentCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createDocument(data,)
+          return  createDocument(data,requestOptions)
         }
 
 
@@ -143,13 +143,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof createDocument>>>
     export type CreateDocumentMutationBody = DocumentCreateRequest
-    export type CreateDocumentMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CreateDocumentMutationError = ErrorEnvelope
 
     /**
  * @summary Create Document
  */
-export const useCreateDocument = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDocument>>, TError,{data: DocumentCreateRequest}, TContext>, }
+export const useCreateDocument = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDocument>>, TError,{data: DocumentCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createDocument>>,
         TError,
@@ -168,12 +168,12 @@ export type listDocumentsResponse200 = {
 }
 
 export type listDocumentsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listDocumentsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -198,7 +198,7 @@ export const getListDocumentsUrl = (params?: ListDocumentsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/documents?${stringifiedParams}` : `/documents`
+  return stringifiedParams.length > 0 ? `/api/v1/documents?${stringifiedParams}` : `/api/v1/documents`
 }
 
 export const listDocuments = async (params?: ListDocumentsParams, options?: RequestInit): Promise<listDocumentsResponse> => {
@@ -218,21 +218,21 @@ export const listDocuments = async (params?: ListDocumentsParams, options?: Requ
 
 export const getListDocumentsQueryKey = (params?: MaybeRef<ListDocumentsParams>,) => {
     return [
-    'documents', ...(params ? [params] : [])
+    'api','v1','documents', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listDocuments>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListDocumentsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocuments>>, TError, TData>>, }
+export const getListDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listDocuments>>, TError = ErrorEnvelope>(params?: MaybeRef<ListDocumentsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocuments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListDocumentsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDocuments>>> = ({ signal }) => listDocuments(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDocuments>>> = ({ signal }) => listDocuments(unref(params), { signal, ...requestOptions });
 
       
 
@@ -242,19 +242,115 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListDocumentsQueryResult = NonNullable<Awaited<ReturnType<typeof listDocuments>>>
-export type ListDocumentsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListDocumentsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Documents
  */
 
-export function useListDocuments<TData = Awaited<ReturnType<typeof listDocuments>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListDocumentsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocuments>>, TError, TData>>, }
+export function useListDocuments<TData = Awaited<ReturnType<typeof listDocuments>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListDocumentsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDocuments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListDocumentsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * List documents awaiting counsel review.
+ * @summary List Pending Review Documents
+ */
+export type listPendingReviewDocumentsResponse200 = {
+  data: DocumentListResponse
+  status: 200
+}
+
+export type listPendingReviewDocumentsResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type listPendingReviewDocumentsResponseSuccess = (listPendingReviewDocumentsResponse200) & {
+  headers: Headers;
+};
+export type listPendingReviewDocumentsResponseError = (listPendingReviewDocumentsResponse401) & {
+  headers: Headers;
+};
+
+export type listPendingReviewDocumentsResponse = (listPendingReviewDocumentsResponseSuccess | listPendingReviewDocumentsResponseError)
+
+export const getListPendingReviewDocumentsUrl = () => {
+
+
+  
+
+  return `/api/v1/documents/pending-review`
+}
+
+export const listPendingReviewDocuments = async ( options?: RequestInit): Promise<listPendingReviewDocumentsResponse> => {
+  
+  return apiClient<listPendingReviewDocumentsResponse>(getListPendingReviewDocumentsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getListPendingReviewDocumentsQueryKey = () => {
+    return [
+    'api','v1','documents','pending-review'
+    ] as const;
+    }
+
+    
+export const getListPendingReviewDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getListPendingReviewDocumentsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPendingReviewDocuments>>> = ({ signal }) => listPendingReviewDocuments({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData> 
+}
+
+export type ListPendingReviewDocumentsQueryResult = NonNullable<Awaited<ReturnType<typeof listPendingReviewDocuments>>>
+export type ListPendingReviewDocumentsQueryError = ErrorEnvelope
+
+
+/**
+ * @summary List Pending Review Documents
+ */
+
+export function useListPendingReviewDocuments<TData = Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListPendingReviewDocumentsQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -276,17 +372,17 @@ export type getDocumentResponse200 = {
 }
 
 export type getDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getDocumentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -304,7 +400,7 @@ export const getGetDocumentUrl = (documentId: string,) => {
 
   
 
-  return `/documents/${documentId}`
+  return `/api/v1/documents/${documentId}`
 }
 
 export const getDocument = async (documentId: string, options?: RequestInit): Promise<getDocumentResponse> => {
@@ -324,21 +420,21 @@ export const getDocument = async (documentId: string, options?: RequestInit): Pr
 
 export const getGetDocumentQueryKey = (documentId: MaybeRef<string>,) => {
     return [
-    'documents',documentId
+    'api','v1','documents',documentId
     ] as const;
     }
 
     
-export const getGetDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getDocument>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocument>>, TError, TData>>, }
+export const getGetDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getDocument>>, TError = ErrorEnvelope>(documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetDocumentQueryKey(documentId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocument>>> = ({ signal }) => getDocument(unref(documentId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocument>>> = ({ signal }) => getDocument(unref(documentId), { signal, ...requestOptions });
 
       
 
@@ -348,15 +444,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof getDocument>>>
-export type GetDocumentQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetDocumentQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Document
  */
 
-export function useGetDocument<TData = Awaited<ReturnType<typeof getDocument>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocument>>, TError, TData>>, }
+export function useGetDocument<TData = Awaited<ReturnType<typeof getDocument>>, TError = ErrorEnvelope>(
+ documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -382,17 +478,17 @@ export type updateDocumentResponse200 = {
 }
 
 export type updateDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateDocumentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -410,7 +506,7 @@ export const getUpdateDocumentUrl = (documentId: string,) => {
 
   
 
-  return `/documents/${documentId}`
+  return `/api/v1/documents/${documentId}`
 }
 
 export const updateDocument = async (documentId: string,
@@ -429,16 +525,16 @@ export const updateDocument = async (documentId: string,
 
 
 
-export const getUpdateDocumentMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDocument>>, TError,{documentId: string;data: DocumentUpdateRequest}, TContext>, }
+export const getUpdateDocumentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDocument>>, TError,{documentId: string;data: DocumentUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateDocument>>, TError,{documentId: string;data: DocumentUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateDocument'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -446,7 +542,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDocument>>, {documentId: string;data: DocumentUpdateRequest}> = (props) => {
           const {documentId,data} = props ?? {};
 
-          return  updateDocument(documentId,data,)
+          return  updateDocument(documentId,data,requestOptions)
         }
 
 
@@ -458,13 +554,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof updateDocument>>>
     export type UpdateDocumentMutationBody = DocumentUpdateRequest
-    export type UpdateDocumentMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateDocumentMutationError = ErrorEnvelope
 
     /**
  * @summary Update Document
  */
-export const useUpdateDocument = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDocument>>, TError,{documentId: string;data: DocumentUpdateRequest}, TContext>, }
+export const useUpdateDocument = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDocument>>, TError,{documentId: string;data: DocumentUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateDocument>>,
         TError,
@@ -483,17 +579,17 @@ export type deleteDocumentResponse200 = {
 }
 
 export type deleteDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteDocumentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -511,7 +607,7 @@ export const getDeleteDocumentUrl = (documentId: string,) => {
 
   
 
-  return `/documents/${documentId}`
+  return `/api/v1/documents/${documentId}`
 }
 
 export const deleteDocument = async (documentId: string, options?: RequestInit): Promise<deleteDocumentResponse> => {
@@ -528,16 +624,16 @@ export const deleteDocument = async (documentId: string, options?: RequestInit):
 
 
 
-export const getDeleteDocumentMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{documentId: string}, TContext>, }
+export const getDeleteDocumentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{documentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{documentId: string}, TContext> => {
 
 const mutationKey = ['deleteDocument'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -545,7 +641,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDocument>>, {documentId: string}> = (props) => {
           const {documentId} = props ?? {};
 
-          return  deleteDocument(documentId,)
+          return  deleteDocument(documentId,requestOptions)
         }
 
 
@@ -557,13 +653,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDocument>>>
     
-    export type DeleteDocumentMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteDocumentMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Document
  */
-export const useDeleteDocument = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{documentId: string}, TContext>, }
+export const useDeleteDocument = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{documentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteDocument>>,
         TError,
@@ -584,17 +680,17 @@ export type downloadDocumentResponse200 = {
 }
 
 export type downloadDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type downloadDocumentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type downloadDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -612,7 +708,7 @@ export const getDownloadDocumentUrl = (documentId: string,) => {
 
   
 
-  return `/documents/${documentId}/download`
+  return `/api/v1/documents/${documentId}/download`
 }
 
 export const downloadDocument = async (documentId: string, options?: RequestInit): Promise<downloadDocumentResponse> => {
@@ -632,21 +728,21 @@ export const downloadDocument = async (documentId: string, options?: RequestInit
 
 export const getDownloadDocumentQueryKey = (documentId: MaybeRef<string>,) => {
     return [
-    'documents',documentId,'download'
+    'api','v1','documents',documentId,'download'
     ] as const;
     }
 
     
-export const getDownloadDocumentQueryOptions = <TData = Awaited<ReturnType<typeof downloadDocument>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocument>>, TError, TData>>, }
+export const getDownloadDocumentQueryOptions = <TData = Awaited<ReturnType<typeof downloadDocument>>, TError = ErrorEnvelope>(documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getDownloadDocumentQueryKey(documentId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadDocument>>> = ({ signal }) => downloadDocument(unref(documentId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadDocument>>> = ({ signal }) => downloadDocument(unref(documentId), { signal, ...requestOptions });
 
       
 
@@ -656,15 +752,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type DownloadDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof downloadDocument>>>
-export type DownloadDocumentQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type DownloadDocumentQueryError = ErrorEnvelope
 
 
 /**
  * @summary Download Document
  */
 
-export function useDownloadDocument<TData = Awaited<ReturnType<typeof downloadDocument>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocument>>, TError, TData>>, }
+export function useDownloadDocument<TData = Awaited<ReturnType<typeof downloadDocument>>, TError = ErrorEnvelope>(
+ documentId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -690,17 +786,17 @@ export type markDocumentReviewedResponse200 = {
 }
 
 export type markDocumentReviewedResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type markDocumentReviewedResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type markDocumentReviewedResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -718,7 +814,7 @@ export const getMarkDocumentReviewedUrl = (documentId: string,) => {
 
   
 
-  return `/documents/${documentId}/mark-reviewed`
+  return `/api/v1/documents/${documentId}/mark-reviewed`
 }
 
 export const markDocumentReviewed = async (documentId: string, options?: RequestInit): Promise<markDocumentReviewedResponse> => {
@@ -735,16 +831,16 @@ export const markDocumentReviewed = async (documentId: string, options?: Request
 
 
 
-export const getMarkDocumentReviewedMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDocumentReviewed>>, TError,{documentId: string}, TContext>, }
+export const getMarkDocumentReviewedMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDocumentReviewed>>, TError,{documentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof markDocumentReviewed>>, TError,{documentId: string}, TContext> => {
 
 const mutationKey = ['markDocumentReviewed'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -752,7 +848,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof markDocumentReviewed>>, {documentId: string}> = (props) => {
           const {documentId} = props ?? {};
 
-          return  markDocumentReviewed(documentId,)
+          return  markDocumentReviewed(documentId,requestOptions)
         }
 
 
@@ -764,13 +860,13 @@ const {mutation: mutationOptions} = options ?
 
     export type MarkDocumentReviewedMutationResult = NonNullable<Awaited<ReturnType<typeof markDocumentReviewed>>>
     
-    export type MarkDocumentReviewedMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type MarkDocumentReviewedMutationError = ErrorEnvelope
 
     /**
  * @summary Mark Document Reviewed
  */
-export const useMarkDocumentReviewed = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDocumentReviewed>>, TError,{documentId: string}, TContext>, }
+export const useMarkDocumentReviewed = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDocumentReviewed>>, TError,{documentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof markDocumentReviewed>>,
         TError,
@@ -780,103 +876,9 @@ export const useMarkDocumentReviewed = <TError = AuthErrorResponse | ErrorRespon
       return useMutation(getMarkDocumentReviewedMutationOptions(options), queryClient);
     }
     /**
- * List documents awaiting counsel review.
- * @summary List Pending Review Documents
- */
-export type listPendingReviewDocumentsResponse200 = {
-  data: DocumentListResponse
-  status: 200
-}
-
-export type listPendingReviewDocumentsResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type listPendingReviewDocumentsResponseSuccess = (listPendingReviewDocumentsResponse200) & {
-  headers: Headers;
-};
-export type listPendingReviewDocumentsResponseError = (listPendingReviewDocumentsResponse401) & {
-  headers: Headers;
-};
-
-export type listPendingReviewDocumentsResponse = (listPendingReviewDocumentsResponseSuccess | listPendingReviewDocumentsResponseError)
-
-export const getListPendingReviewDocumentsUrl = () => {
-
-
-  
-
-  return `/documents/pending-review`
-}
-
-export const listPendingReviewDocuments = async ( options?: RequestInit): Promise<listPendingReviewDocumentsResponse> => {
-  
-  return apiClient<listPendingReviewDocumentsResponse>(getListPendingReviewDocumentsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-  
-
-
-
-
-export const getListPendingReviewDocumentsQueryKey = () => {
-    return [
-    'documents','pending-review'
-    ] as const;
-    }
-
-    
-export const getListPendingReviewDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  getListPendingReviewDocumentsQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPendingReviewDocuments>>> = ({ signal }) => listPendingReviewDocuments({ signal });
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData> 
-}
-
-export type ListPendingReviewDocumentsQueryResult = NonNullable<Awaited<ReturnType<typeof listPendingReviewDocuments>>>
-export type ListPendingReviewDocumentsQueryError = AuthErrorResponse
-
-
-/**
- * @summary List Pending Review Documents
- */
-
-export function useListPendingReviewDocuments<TData = Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPendingReviewDocuments>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getListPendingReviewDocumentsQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
-
-  return query;
-}
-
-
-
-
-/**
  * Get feed of recently added legal resources.
+
+Defaults to the last 30 days of indexed documents when no timestamp is supplied.
  * @summary Get Legal Recent
  */
 export type getLegalRecentResponse200 = {
@@ -885,17 +887,17 @@ export type getLegalRecentResponse200 = {
 }
 
 export type getLegalRecentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getLegalRecentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getLegalRecentResponse503 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 503
 }
 
@@ -920,7 +922,7 @@ export const getGetLegalRecentUrl = (params?: GetLegalRecentParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/corpus/recent?${stringifiedParams}` : `/corpus/recent`
+  return stringifiedParams.length > 0 ? `/api/v1/corpus/recent?${stringifiedParams}` : `/api/v1/corpus/recent`
 }
 
 export const getLegalRecent = async (params?: GetLegalRecentParams, options?: RequestInit): Promise<getLegalRecentResponse> => {
@@ -940,21 +942,21 @@ export const getLegalRecent = async (params?: GetLegalRecentParams, options?: Re
 
 export const getGetLegalRecentQueryKey = (params?: MaybeRef<GetLegalRecentParams>,) => {
     return [
-    'corpus','recent', ...(params ? [params] : [])
+    'api','v1','corpus','recent', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getGetLegalRecentQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRecent>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(params?: MaybeRef<GetLegalRecentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRecent>>, TError, TData>>, }
+export const getGetLegalRecentQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRecent>>, TError = ErrorEnvelope>(params?: MaybeRef<GetLegalRecentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRecent>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalRecentQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRecent>>> = ({ signal }) => getLegalRecent(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRecent>>> = ({ signal }) => getLegalRecent(unref(params), { signal, ...requestOptions });
 
       
 
@@ -964,15 +966,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalRecentQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalRecent>>>
-export type GetLegalRecentQueryError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+export type GetLegalRecentQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Legal Recent
  */
 
-export function useGetLegalRecent<TData = Awaited<ReturnType<typeof getLegalRecent>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(
- params?: MaybeRef<GetLegalRecentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRecent>>, TError, TData>>, }
+export function useGetLegalRecent<TData = Awaited<ReturnType<typeof getLegalRecent>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<GetLegalRecentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRecent>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -999,25 +1001,30 @@ export type getLegalDocumentResponse200 = {
   status: 200
 }
 
+export type getLegalDocumentResponse400 = {
+  data: void
+  status: 400
+}
+
 export type getLegalDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getLegalDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getLegalDocumentResponse503 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 503
 }
 
 export type getLegalDocumentResponseSuccess = (getLegalDocumentResponse200) & {
   headers: Headers;
 };
-export type getLegalDocumentResponseError = (getLegalDocumentResponse401 | getLegalDocumentResponse422 | getLegalDocumentResponse503) & {
+export type getLegalDocumentResponseError = (getLegalDocumentResponse400 | getLegalDocumentResponse401 | getLegalDocumentResponse422 | getLegalDocumentResponse503) & {
   headers: Headers;
 };
 
@@ -1036,7 +1043,7 @@ export const getGetLegalDocumentUrl = (legisId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/corpus/${legisId}?${stringifiedParams}` : `/corpus/${legisId}`
+  return stringifiedParams.length > 0 ? `/api/v1/corpus/${legisId}?${stringifiedParams}` : `/api/v1/corpus/${legisId}`
 }
 
 export const getLegalDocument = async (legisId: string,
@@ -1058,22 +1065,22 @@ export const getLegalDocument = async (legisId: string,
 export const getGetLegalDocumentQueryKey = (legisId: MaybeRef<string>,
     params?: MaybeRef<GetLegalDocumentParams>,) => {
     return [
-    'corpus',legisId, ...(params ? [params] : [])
+    'api','v1','corpus',legisId, ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getGetLegalDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getLegalDocument>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(legisId: MaybeRef<string>,
-    params?: MaybeRef<GetLegalDocumentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalDocument>>, TError, TData>>, }
+export const getGetLegalDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getLegalDocument>>, TError = void | ErrorEnvelope>(legisId: MaybeRef<string>,
+    params?: MaybeRef<GetLegalDocumentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalDocumentQueryKey(legisId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalDocument>>> = ({ signal }) => getLegalDocument(unref(legisId),unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalDocument>>> = ({ signal }) => getLegalDocument(unref(legisId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -1083,16 +1090,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalDocument>>>
-export type GetLegalDocumentQueryError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+export type GetLegalDocumentQueryError = void | ErrorEnvelope
 
 
 /**
  * @summary Get Legal Document
  */
 
-export function useGetLegalDocument<TData = Awaited<ReturnType<typeof getLegalDocument>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(
+export function useGetLegalDocument<TData = Awaited<ReturnType<typeof getLegalDocument>>, TError = void | ErrorEnvelope>(
  legisId: MaybeRef<string>,
-    params?: MaybeRef<GetLegalDocumentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalDocument>>, TError, TData>>, }
+    params?: MaybeRef<GetLegalDocumentParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalDocument>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1117,25 +1124,30 @@ export type getLegalTimelineResponse200 = {
   status: 200
 }
 
+export type getLegalTimelineResponse400 = {
+  data: void
+  status: 400
+}
+
 export type getLegalTimelineResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getLegalTimelineResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getLegalTimelineResponse503 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 503
 }
 
 export type getLegalTimelineResponseSuccess = (getLegalTimelineResponse200) & {
   headers: Headers;
 };
-export type getLegalTimelineResponseError = (getLegalTimelineResponse401 | getLegalTimelineResponse422 | getLegalTimelineResponse503) & {
+export type getLegalTimelineResponseError = (getLegalTimelineResponse400 | getLegalTimelineResponse401 | getLegalTimelineResponse422 | getLegalTimelineResponse503) & {
   headers: Headers;
 };
 
@@ -1146,7 +1158,7 @@ export const getGetLegalTimelineUrl = (legisId: string,) => {
 
   
 
-  return `/corpus/${legisId}/timeline`
+  return `/api/v1/corpus/${legisId}/timeline`
 }
 
 export const getLegalTimeline = async (legisId: string, options?: RequestInit): Promise<getLegalTimelineResponse> => {
@@ -1166,21 +1178,21 @@ export const getLegalTimeline = async (legisId: string, options?: RequestInit): 
 
 export const getGetLegalTimelineQueryKey = (legisId: MaybeRef<string>,) => {
     return [
-    'corpus',legisId,'timeline'
+    'api','v1','corpus',legisId,'timeline'
     ] as const;
     }
 
     
-export const getGetLegalTimelineQueryOptions = <TData = Awaited<ReturnType<typeof getLegalTimeline>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalTimeline>>, TError, TData>>, }
+export const getGetLegalTimelineQueryOptions = <TData = Awaited<ReturnType<typeof getLegalTimeline>>, TError = void | ErrorEnvelope>(legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalTimeline>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalTimelineQueryKey(legisId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalTimeline>>> = ({ signal }) => getLegalTimeline(unref(legisId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalTimeline>>> = ({ signal }) => getLegalTimeline(unref(legisId), { signal, ...requestOptions });
 
       
 
@@ -1190,15 +1202,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalTimelineQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalTimeline>>>
-export type GetLegalTimelineQueryError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+export type GetLegalTimelineQueryError = void | ErrorEnvelope
 
 
 /**
  * @summary Get Legal Timeline
  */
 
-export function useGetLegalTimeline<TData = Awaited<ReturnType<typeof getLegalTimeline>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(
- legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalTimeline>>, TError, TData>>, }
+export function useGetLegalTimeline<TData = Awaited<ReturnType<typeof getLegalTimeline>>, TError = void | ErrorEnvelope>(
+ legisId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalTimeline>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1223,25 +1235,30 @@ export type getLegalConnectionsResponse200 = {
   status: 200
 }
 
+export type getLegalConnectionsResponse400 = {
+  data: void
+  status: 400
+}
+
 export type getLegalConnectionsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getLegalConnectionsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type getLegalConnectionsResponse503 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 503
 }
 
 export type getLegalConnectionsResponseSuccess = (getLegalConnectionsResponse200) & {
   headers: Headers;
 };
-export type getLegalConnectionsResponseError = (getLegalConnectionsResponse401 | getLegalConnectionsResponse422 | getLegalConnectionsResponse503) & {
+export type getLegalConnectionsResponseError = (getLegalConnectionsResponse400 | getLegalConnectionsResponse401 | getLegalConnectionsResponse422 | getLegalConnectionsResponse503) & {
   headers: Headers;
 };
 
@@ -1260,7 +1277,7 @@ export const getGetLegalConnectionsUrl = (legisId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/corpus/${legisId}/connections?${stringifiedParams}` : `/corpus/${legisId}/connections`
+  return stringifiedParams.length > 0 ? `/api/v1/corpus/${legisId}/connections?${stringifiedParams}` : `/api/v1/corpus/${legisId}/connections`
 }
 
 export const getLegalConnections = async (legisId: string,
@@ -1282,22 +1299,22 @@ export const getLegalConnections = async (legisId: string,
 export const getGetLegalConnectionsQueryKey = (legisId: MaybeRef<string>,
     params?: MaybeRef<GetLegalConnectionsParams>,) => {
     return [
-    'corpus',legisId,'connections', ...(params ? [params] : [])
+    'api','v1','corpus',legisId,'connections', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getGetLegalConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof getLegalConnections>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(legisId: MaybeRef<string>,
-    params?: MaybeRef<GetLegalConnectionsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalConnections>>, TError, TData>>, }
+export const getGetLegalConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof getLegalConnections>>, TError = void | ErrorEnvelope>(legisId: MaybeRef<string>,
+    params?: MaybeRef<GetLegalConnectionsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalConnections>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalConnectionsQueryKey(legisId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalConnections>>> = ({ signal }) => getLegalConnections(unref(legisId),unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalConnections>>> = ({ signal }) => getLegalConnections(unref(legisId),unref(params), { signal, ...requestOptions });
 
       
 
@@ -1307,16 +1324,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalConnectionsQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalConnections>>>
-export type GetLegalConnectionsQueryError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+export type GetLegalConnectionsQueryError = void | ErrorEnvelope
 
 
 /**
  * @summary Get Legal Connections
  */
 
-export function useGetLegalConnections<TData = Awaited<ReturnType<typeof getLegalConnections>>, TError = AuthErrorResponse | HTTPValidationError | ErrorResponse>(
+export function useGetLegalConnections<TData = Awaited<ReturnType<typeof getLegalConnections>>, TError = void | ErrorEnvelope>(
  legisId: MaybeRef<string>,
-    params?: MaybeRef<GetLegalConnectionsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalConnections>>, TError, TData>>, }
+    params?: MaybeRef<GetLegalConnectionsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalConnections>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

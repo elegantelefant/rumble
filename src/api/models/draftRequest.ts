@@ -3,11 +3,12 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { DraftRequestContext } from './draftRequestContext';
 import type { DraftRequestDocumentTerms } from './draftRequestDocumentTerms';
 import type { DraftRequestPartiesItem } from './draftRequestPartiesItem';
+import type { DraftRequestPublishFormatsItem } from './draftRequestPublishFormatsItem';
 
 /**
  * Request to draft legal content based on a prompt.
@@ -21,19 +22,23 @@ export interface DraftRequest {
   /** Optional context for drafting. Common keys: 'briefcase_id' (str), 'jurisdiction' (str), 'style' (str), 'reference_documents' (list[str]). All keys are optional. */
   context?: DraftRequestContext;
   /** Type of document (e.g. 'NDA', 'lease') */
-  document_type?: string;
+  documentType?: string;
   /** Style preference (e.g. 'formal', 'plain_english') */
-  drafting_style?: string;
+  draftingStyle?: string;
   /** Party details: [{name, role, jurisdiction}] */
   parties?: DraftRequestPartiesItem[];
   /** Key terms to include (e.g. {term_years: 5}) */
-  document_terms?: DraftRequestDocumentTerms;
+  documentTerms?: DraftRequestDocumentTerms;
   /** RAG retrieval questions to inform the draft */
-  rag_questions?: string[];
+  ragQuestions?: string[];
   /** Compressed reference document summaries */
-  compressed_references?: string[];
+  compressedReferences?: string[];
+  /** File IDs from /files/presign to use as reference context */
+  referenceFileIds?: string[];
   /** Optional model override */
   model?: string;
   /** Export formats to generate (e.g. ['docx', 'pdf']). Empty = markdown only. */
-  publish_formats?: string[];
+  publishFormats?: DraftRequestPublishFormatsItem[];
+  /** Playbook ID to use as drafting constraints (requires DRAFTER_PLAYBOOK_ENABLED). */
+  playbookId?: string | null;
 }

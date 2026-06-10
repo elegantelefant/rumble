@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,19 +30,29 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   ListNotificationsParams,
+  NotificationBroadcastRequest,
+  NotificationBroadcastResponse,
   NotificationListResponse,
-  NotificationResponse,
   NotificationSendRequest,
   OkResponse,
-  SubscribeBody
+  RequestAssignedNotification,
+  RequestAwaitingReviewNotification,
+  RequestCancelledNotification,
+  RequestCommentedNotification,
+  RequestCompletedNotification,
+  RequestFailedNotification,
+  RequestPickedUpNotification,
+  RequestReassignedNotification,
+  RequestStartedNotification,
+  UnknownNotification
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -56,12 +66,12 @@ export type listNotificationsResponse200 = {
 }
 
 export type listNotificationsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listNotificationsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -86,7 +96,7 @@ export const getListNotificationsUrl = (params?: ListNotificationsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/notifications?${stringifiedParams}` : `/notifications`
+  return stringifiedParams.length > 0 ? `/api/v1/notifications?${stringifiedParams}` : `/api/v1/notifications`
 }
 
 export const listNotifications = async (params?: ListNotificationsParams, options?: RequestInit): Promise<listNotificationsResponse> => {
@@ -106,21 +116,21 @@ export const listNotifications = async (params?: ListNotificationsParams, option
 
 export const getListNotificationsQueryKey = (params?: MaybeRef<ListNotificationsParams>,) => {
     return [
-    'notifications', ...(params ? [params] : [])
+    'api','v1','notifications', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listNotifications>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListNotificationsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>>, }
+export const getListNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listNotifications>>, TError = ErrorEnvelope>(params?: MaybeRef<ListNotificationsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListNotificationsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNotifications>>> = ({ signal }) => listNotifications(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNotifications>>> = ({ signal }) => listNotifications(unref(params), { signal, ...requestOptions });
 
       
 
@@ -130,15 +140,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listNotifications>>>
-export type ListNotificationsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListNotificationsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Notifications
  */
 
-export function useListNotifications<TData = Awaited<ReturnType<typeof listNotifications>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListNotificationsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>>, }
+export function useListNotifications<TData = Awaited<ReturnType<typeof listNotifications>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListNotificationsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotifications>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -159,22 +169,22 @@ export function useListNotifications<TData = Awaited<ReturnType<typeof listNotif
  * @summary Get Notification
  */
 export type getNotificationResponse200 = {
-  data: NotificationResponse
+  data: RequestAssignedNotification | RequestReassignedNotification | RequestCompletedNotification | RequestFailedNotification | RequestCancelledNotification | RequestStartedNotification | RequestPickedUpNotification | RequestAwaitingReviewNotification | RequestCommentedNotification | UnknownNotification
   status: 200
 }
 
 export type getNotificationResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getNotificationResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getNotificationResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -192,7 +202,7 @@ export const getGetNotificationUrl = (notificationId: string,) => {
 
   
 
-  return `/notifications/${notificationId}`
+  return `/api/v1/notifications/${notificationId}`
 }
 
 export const getNotification = async (notificationId: string, options?: RequestInit): Promise<getNotificationResponse> => {
@@ -212,21 +222,21 @@ export const getNotification = async (notificationId: string, options?: RequestI
 
 export const getGetNotificationQueryKey = (notificationId: MaybeRef<string>,) => {
     return [
-    'notifications',notificationId
+    'api','v1','notifications',notificationId
     ] as const;
     }
 
     
-export const getGetNotificationQueryOptions = <TData = Awaited<ReturnType<typeof getNotification>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(notificationId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotification>>, TError, TData>>, }
+export const getGetNotificationQueryOptions = <TData = Awaited<ReturnType<typeof getNotification>>, TError = ErrorEnvelope>(notificationId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotification>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetNotificationQueryKey(notificationId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNotification>>> = ({ signal }) => getNotification(unref(notificationId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNotification>>> = ({ signal }) => getNotification(unref(notificationId), { signal, ...requestOptions });
 
       
 
@@ -236,15 +246,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetNotificationQueryResult = NonNullable<Awaited<ReturnType<typeof getNotification>>>
-export type GetNotificationQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetNotificationQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Notification
  */
 
-export function useGetNotification<TData = Awaited<ReturnType<typeof getNotification>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- notificationId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotification>>, TError, TData>>, }
+export function useGetNotification<TData = Awaited<ReturnType<typeof getNotification>>, TError = ErrorEnvelope>(
+ notificationId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotification>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -270,17 +280,17 @@ export type markReadResponse200 = {
 }
 
 export type markReadResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type markReadResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type markReadResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -298,7 +308,7 @@ export const getMarkReadUrl = (notificationId: string,) => {
 
   
 
-  return `/notifications/${notificationId}/read`
+  return `/api/v1/notifications/${notificationId}/read`
 }
 
 export const markRead = async (notificationId: string, options?: RequestInit): Promise<markReadResponse> => {
@@ -315,16 +325,16 @@ export const markRead = async (notificationId: string, options?: RequestInit): P
 
 
 
-export const getMarkReadMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markRead>>, TError,{notificationId: string}, TContext>, }
+export const getMarkReadMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markRead>>, TError,{notificationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof markRead>>, TError,{notificationId: string}, TContext> => {
 
 const mutationKey = ['markRead'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -332,7 +342,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof markRead>>, {notificationId: string}> = (props) => {
           const {notificationId} = props ?? {};
 
-          return  markRead(notificationId,)
+          return  markRead(notificationId,requestOptions)
         }
 
 
@@ -344,13 +354,13 @@ const {mutation: mutationOptions} = options ?
 
     export type MarkReadMutationResult = NonNullable<Awaited<ReturnType<typeof markRead>>>
     
-    export type MarkReadMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type MarkReadMutationError = ErrorEnvelope
 
     /**
  * @summary Mark Read
  */
-export const useMarkRead = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markRead>>, TError,{notificationId: string}, TContext>, }
+export const useMarkRead = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markRead>>, TError,{notificationId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof markRead>>,
         TError,
@@ -369,7 +379,7 @@ export type markAllReadResponse200 = {
 }
 
 export type markAllReadResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -387,7 +397,7 @@ export const getMarkAllReadUrl = () => {
 
   
 
-  return `/notifications/read-all`
+  return `/api/v1/notifications/read-all`
 }
 
 export const markAllRead = async ( options?: RequestInit): Promise<markAllReadResponse> => {
@@ -404,16 +414,16 @@ export const markAllRead = async ( options?: RequestInit): Promise<markAllReadRe
 
 
 
-export const getMarkAllReadMutationOptions = <TError = AuthErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllRead>>, TError,void, TContext>, }
+export const getMarkAllReadMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllRead>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof markAllRead>>, TError,void, TContext> => {
 
 const mutationKey = ['markAllRead'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -421,7 +431,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAllRead>>, void> = () => {
           
 
-          return  markAllRead()
+          return  markAllRead(requestOptions)
         }
 
 
@@ -433,13 +443,13 @@ const {mutation: mutationOptions} = options ?
 
     export type MarkAllReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAllRead>>>
     
-    export type MarkAllReadMutationError = AuthErrorResponse
+    export type MarkAllReadMutationError = ErrorEnvelope
 
     /**
  * @summary Mark All Read
  */
-export const useMarkAllRead = <TError = AuthErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllRead>>, TError,void, TContext>, }
+export const useMarkAllRead = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllRead>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof markAllRead>>,
         TError,
@@ -449,215 +459,26 @@ export const useMarkAllRead = <TError = AuthErrorResponse,
       return useMutation(getMarkAllReadMutationOptions(options), queryClient);
     }
     /**
- * Subscribe to a notification channel. (Placeholder)
- * @summary Subscribe
- */
-export type subscribeResponse200 = {
-  data: OkResponse
-  status: 200
-}
-
-export type subscribeResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type subscribeResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type subscribeResponseSuccess = (subscribeResponse200) & {
-  headers: Headers;
-};
-export type subscribeResponseError = (subscribeResponse401 | subscribeResponse422) & {
-  headers: Headers;
-};
-
-export type subscribeResponse = (subscribeResponseSuccess | subscribeResponseError)
-
-export const getSubscribeUrl = () => {
-
-
-  
-
-  return `/notifications/subscribe`
-}
-
-export const subscribe = async (subscribeBody: SubscribeBody, options?: RequestInit): Promise<subscribeResponse> => {
-  
-  return apiClient<subscribeResponse>(getSubscribeUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      subscribeBody,)
-  }
-);}
-  
-
-
-
-export const getSubscribeMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof subscribe>>, TError,{data: SubscribeBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof subscribe>>, TError,{data: SubscribeBody}, TContext> => {
-
-const mutationKey = ['subscribe'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof subscribe>>, {data: SubscribeBody}> = (props) => {
-          const {data} = props ?? {};
-
-          return  subscribe(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type SubscribeMutationResult = NonNullable<Awaited<ReturnType<typeof subscribe>>>
-    export type SubscribeMutationBody = SubscribeBody
-    export type SubscribeMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Subscribe
- */
-export const useSubscribe = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof subscribe>>, TError,{data: SubscribeBody}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof subscribe>>,
-        TError,
-        {data: SubscribeBody},
-        TContext
-      > => {
-      return useMutation(getSubscribeMutationOptions(options), queryClient);
-    }
-    /**
- * Unsubscribe from a notification channel. (Placeholder)
- * @summary Unsubscribe
- */
-export type unsubscribeResponse200 = {
-  data: OkResponse
-  status: 200
-}
-
-export type unsubscribeResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type unsubscribeResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type unsubscribeResponseSuccess = (unsubscribeResponse200) & {
-  headers: Headers;
-};
-export type unsubscribeResponseError = (unsubscribeResponse401 | unsubscribeResponse422) & {
-  headers: Headers;
-};
-
-export type unsubscribeResponse = (unsubscribeResponseSuccess | unsubscribeResponseError)
-
-export const getUnsubscribeUrl = (channel: string,) => {
-
-
-  
-
-  return `/notifications/subscribe/${channel}`
-}
-
-export const unsubscribe = async (channel: string, options?: RequestInit): Promise<unsubscribeResponse> => {
-  
-  return apiClient<unsubscribeResponse>(getUnsubscribeUrl(channel),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-  
-
-
-
-export const getUnsubscribeMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unsubscribe>>, TError,{channel: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof unsubscribe>>, TError,{channel: string}, TContext> => {
-
-const mutationKey = ['unsubscribe'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unsubscribe>>, {channel: string}> = (props) => {
-          const {channel} = props ?? {};
-
-          return  unsubscribe(channel,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UnsubscribeMutationResult = NonNullable<Awaited<ReturnType<typeof unsubscribe>>>
-    
-    export type UnsubscribeMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Unsubscribe
- */
-export const useUnsubscribe = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unsubscribe>>, TError,{channel: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof unsubscribe>>,
-        TError,
-        {channel: string},
-        TContext
-      > => {
-      return useMutation(getUnsubscribeMutationOptions(options), queryClient);
-    }
-    /**
  * Send a notification to a user in the same org.
  * @summary Send
  */
 export type sendResponse200 = {
-  data: NotificationResponse
+  data: RequestAssignedNotification | RequestReassignedNotification | RequestCompletedNotification | RequestFailedNotification | RequestCancelledNotification | RequestStartedNotification | RequestPickedUpNotification | RequestAwaitingReviewNotification | RequestCommentedNotification | UnknownNotification
   status: 200
 }
 
 export type sendResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type sendResponse403 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 403
 }
 
 export type sendResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -675,7 +496,7 @@ export const getSendUrl = () => {
 
   
 
-  return `/notifications/send`
+  return `/api/v1/notifications/send`
 }
 
 export const send = async (notificationSendRequest: NotificationSendRequest, options?: RequestInit): Promise<sendResponse> => {
@@ -693,16 +514,16 @@ export const send = async (notificationSendRequest: NotificationSendRequest, opt
 
 
 
-export const getSendMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof send>>, TError,{data: NotificationSendRequest}, TContext>, }
+export const getSendMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof send>>, TError,{data: NotificationSendRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof send>>, TError,{data: NotificationSendRequest}, TContext> => {
 
 const mutationKey = ['send'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -710,7 +531,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof send>>, {data: NotificationSendRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  send(data,)
+          return  send(data,requestOptions)
         }
 
 
@@ -722,13 +543,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SendMutationResult = NonNullable<Awaited<ReturnType<typeof send>>>
     export type SendMutationBody = NotificationSendRequest
-    export type SendMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type SendMutationError = ErrorEnvelope
 
     /**
  * @summary Send
  */
-export const useSend = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof send>>, TError,{data: NotificationSendRequest}, TContext>, }
+export const useSend = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof send>>, TError,{data: NotificationSendRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof send>>,
         TError,
@@ -736,5 +557,105 @@ export const useSend = <TError = AuthErrorResponse | ErrorResponse | HTTPValidat
         TContext
       > => {
       return useMutation(getSendMutationOptions(options), queryClient);
+    }
+    /**
+ * Broadcast a notification to all active users in the org (admin only).
+ * @summary Broadcast
+ */
+export type broadcastResponse200 = {
+  data: NotificationBroadcastResponse
+  status: 200
+}
+
+export type broadcastResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type broadcastResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type broadcastResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type broadcastResponseSuccess = (broadcastResponse200) & {
+  headers: Headers;
+};
+export type broadcastResponseError = (broadcastResponse401 | broadcastResponse403 | broadcastResponse422) & {
+  headers: Headers;
+};
+
+export type broadcastResponse = (broadcastResponseSuccess | broadcastResponseError)
+
+export const getBroadcastUrl = () => {
+
+
+  
+
+  return `/api/v1/notifications/broadcast`
+}
+
+export const broadcast = async (notificationBroadcastRequest: NotificationBroadcastRequest, options?: RequestInit): Promise<broadcastResponse> => {
+  
+  return apiClient<broadcastResponse>(getBroadcastUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      notificationBroadcastRequest,)
+  }
+);}
+  
+
+
+
+export const getBroadcastMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof broadcast>>, TError,{data: NotificationBroadcastRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof broadcast>>, TError,{data: NotificationBroadcastRequest}, TContext> => {
+
+const mutationKey = ['broadcast'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof broadcast>>, {data: NotificationBroadcastRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  broadcast(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BroadcastMutationResult = NonNullable<Awaited<ReturnType<typeof broadcast>>>
+    export type BroadcastMutationBody = NotificationBroadcastRequest
+    export type BroadcastMutationError = ErrorEnvelope
+
+    /**
+ * @summary Broadcast
+ */
+export const useBroadcast = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof broadcast>>, TError,{data: NotificationBroadcastRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof broadcast>>,
+        TError,
+        {data: NotificationBroadcastRequest},
+        TContext
+      > => {
+      return useMutation(getBroadcastMutationOptions(options), queryClient);
     }
     

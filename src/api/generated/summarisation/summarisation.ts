@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,8 +16,7 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   SummariseChatRequest,
   SummariseChatResponse,
   SummariseDocumentRequest,
@@ -28,6 +27,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -41,19 +42,24 @@ export type summariseSearchResponse200 = {
 }
 
 export type summariseSearchResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type summariseSearchResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type summariseSearchResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type summariseSearchResponseSuccess = (summariseSearchResponse200) & {
   headers: Headers;
 };
-export type summariseSearchResponseError = (summariseSearchResponse401 | summariseSearchResponse422) & {
+export type summariseSearchResponseError = (summariseSearchResponse401 | summariseSearchResponse422 | summariseSearchResponse429) & {
   headers: Headers;
 };
 
@@ -64,7 +70,7 @@ export const getSummariseSearchUrl = () => {
 
   
 
-  return `/summarise/search`
+  return `/api/v1/summarise/search`
 }
 
 export const summariseSearch = async (summariseSearchRequest: SummariseSearchRequest, options?: RequestInit): Promise<summariseSearchResponse> => {
@@ -82,16 +88,16 @@ export const summariseSearch = async (summariseSearchRequest: SummariseSearchReq
 
 
 
-export const getSummariseSearchMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseSearch>>, TError,{data: SummariseSearchRequest}, TContext>, }
+export const getSummariseSearchMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseSearch>>, TError,{data: SummariseSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof summariseSearch>>, TError,{data: SummariseSearchRequest}, TContext> => {
 
 const mutationKey = ['summariseSearch'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -99,7 +105,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof summariseSearch>>, {data: SummariseSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  summariseSearch(data,)
+          return  summariseSearch(data,requestOptions)
         }
 
 
@@ -111,13 +117,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SummariseSearchMutationResult = NonNullable<Awaited<ReturnType<typeof summariseSearch>>>
     export type SummariseSearchMutationBody = SummariseSearchRequest
-    export type SummariseSearchMutationError = AuthErrorResponse | HTTPValidationError
+    export type SummariseSearchMutationError = ErrorEnvelope
 
     /**
  * @summary Summarise Search
  */
-export const useSummariseSearch = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseSearch>>, TError,{data: SummariseSearchRequest}, TContext>, }
+export const useSummariseSearch = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseSearch>>, TError,{data: SummariseSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof summariseSearch>>,
         TError,
@@ -136,19 +142,24 @@ export type summariseDocumentResponse200 = {
 }
 
 export type summariseDocumentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type summariseDocumentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type summariseDocumentResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type summariseDocumentResponseSuccess = (summariseDocumentResponse200) & {
   headers: Headers;
 };
-export type summariseDocumentResponseError = (summariseDocumentResponse401 | summariseDocumentResponse422) & {
+export type summariseDocumentResponseError = (summariseDocumentResponse401 | summariseDocumentResponse422 | summariseDocumentResponse429) & {
   headers: Headers;
 };
 
@@ -159,7 +170,7 @@ export const getSummariseDocumentUrl = () => {
 
   
 
-  return `/summarise/document`
+  return `/api/v1/summarise/document`
 }
 
 export const summariseDocument = async (summariseDocumentRequest: SummariseDocumentRequest, options?: RequestInit): Promise<summariseDocumentResponse> => {
@@ -177,16 +188,16 @@ export const summariseDocument = async (summariseDocumentRequest: SummariseDocum
 
 
 
-export const getSummariseDocumentMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseDocument>>, TError,{data: SummariseDocumentRequest}, TContext>, }
+export const getSummariseDocumentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseDocument>>, TError,{data: SummariseDocumentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof summariseDocument>>, TError,{data: SummariseDocumentRequest}, TContext> => {
 
 const mutationKey = ['summariseDocument'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -194,7 +205,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof summariseDocument>>, {data: SummariseDocumentRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  summariseDocument(data,)
+          return  summariseDocument(data,requestOptions)
         }
 
 
@@ -206,13 +217,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SummariseDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof summariseDocument>>>
     export type SummariseDocumentMutationBody = SummariseDocumentRequest
-    export type SummariseDocumentMutationError = AuthErrorResponse | HTTPValidationError
+    export type SummariseDocumentMutationError = ErrorEnvelope
 
     /**
  * @summary Summarise Document
  */
-export const useSummariseDocument = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseDocument>>, TError,{data: SummariseDocumentRequest}, TContext>, }
+export const useSummariseDocument = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseDocument>>, TError,{data: SummariseDocumentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof summariseDocument>>,
         TError,
@@ -231,19 +242,24 @@ export type summariseChatResponse200 = {
 }
 
 export type summariseChatResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type summariseChatResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type summariseChatResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type summariseChatResponseSuccess = (summariseChatResponse200) & {
   headers: Headers;
 };
-export type summariseChatResponseError = (summariseChatResponse401 | summariseChatResponse422) & {
+export type summariseChatResponseError = (summariseChatResponse401 | summariseChatResponse422 | summariseChatResponse429) & {
   headers: Headers;
 };
 
@@ -254,7 +270,7 @@ export const getSummariseChatUrl = () => {
 
   
 
-  return `/summarise/chat`
+  return `/api/v1/summarise/chat`
 }
 
 export const summariseChat = async (summariseChatRequest: SummariseChatRequest, options?: RequestInit): Promise<summariseChatResponse> => {
@@ -272,16 +288,16 @@ export const summariseChat = async (summariseChatRequest: SummariseChatRequest, 
 
 
 
-export const getSummariseChatMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseChat>>, TError,{data: SummariseChatRequest}, TContext>, }
+export const getSummariseChatMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseChat>>, TError,{data: SummariseChatRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof summariseChat>>, TError,{data: SummariseChatRequest}, TContext> => {
 
 const mutationKey = ['summariseChat'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -289,7 +305,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof summariseChat>>, {data: SummariseChatRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  summariseChat(data,)
+          return  summariseChat(data,requestOptions)
         }
 
 
@@ -301,13 +317,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SummariseChatMutationResult = NonNullable<Awaited<ReturnType<typeof summariseChat>>>
     export type SummariseChatMutationBody = SummariseChatRequest
-    export type SummariseChatMutationError = AuthErrorResponse | HTTPValidationError
+    export type SummariseChatMutationError = ErrorEnvelope
 
     /**
  * @summary Summarise Chat
  */
-export const useSummariseChat = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseChat>>, TError,{data: SummariseChatRequest}, TContext>, }
+export const useSummariseChat = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summariseChat>>, TError,{data: SummariseChatRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof summariseChat>>,
         TError,

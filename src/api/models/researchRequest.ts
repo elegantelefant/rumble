@@ -3,9 +3,12 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { ResearchRequestConstraints } from './researchRequestConstraints';
+import type { ResearchRequestDetailLevel } from './researchRequestDetailLevel';
+import type { ResearchRequestPublishFormatsItem } from './researchRequestPublishFormatsItem';
+import type { ResearchRequestTemplate } from './researchRequestTemplate';
 
 /**
  * Request to initiate deep legal research on a question.
@@ -19,13 +22,21 @@ export interface ResearchRequest {
   /** Optional constraints for research. Common keys: 'jurisdiction' (str), 'year_from' (int), 'year_to' (int), 'sources' (list[str]: 'cases'|'legislation'|'secondary'), 'max_depth' (int). All keys are optional. */
   constraints?: ResearchRequestConstraints;
   /** Maximum number of report sections */
-  max_sections?: number | null;
+  maxSections?: number | null;
   /** Export formats to generate (e.g. ['docx', 'pdf']). Empty = markdown only. */
-  publish_formats?: string[];
+  publishFormats?: ResearchRequestPublishFormatsItem[];
   /** Optional model override */
   model?: string;
   /** Additional research guidelines or focus areas */
   guidelines?: string;
   /** Preferred primary source type (e.g. 'cases', 'legislation') */
-  primary_source?: string;
+  primarySource?: string;
+  /** Memo structure template. 'custom' uses custom_sections. */
+  template?: ResearchRequestTemplate;
+  /** Ordered section headings, used only when template == 'custom'. */
+  customSections?: string[];
+  /** Jurisdiction to scope the research to (e.g. 'Singapore', 'England') */
+  jurisdiction?: string;
+  /** Research depth: 'shallow' = concise, 'deep' = exhaustive. */
+  detailLevel?: ResearchRequestDetailLevel;
 }

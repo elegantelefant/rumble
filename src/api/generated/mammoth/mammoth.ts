@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,16 +30,18 @@ import type {
 } from 'vue';
 
 import type {
-  AssignableUsersListResponse,
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  AssignableUsersGroupedResponse,
+  ErrorEnvelope,
+  GetLegalRequestMetricsParams,
   JobCreatedResponse,
   LegalRequestActivityResponse,
   LegalRequestAssignRequest,
   LegalRequestAttachRequest,
   LegalRequestAttachmentListResponse,
   LegalRequestAttachmentResponse,
+  LegalRequestCollaboratorInviteRequest,
+  LegalRequestCollaboratorListResponse,
+  LegalRequestCollaboratorResponse,
   LegalRequestCommentListResponse,
   LegalRequestCommentRequest,
   LegalRequestCommentResponse,
@@ -48,6 +50,8 @@ import type {
   LegalRequestExecuteResponse,
   LegalRequestFailRequest,
   LegalRequestListResponse,
+  LegalRequestMetricsResponse,
+  LegalRequestReassignRequest,
   LegalRequestResponse,
   LegalRequestStatsResponse,
   LegalRequestStepsResponse,
@@ -61,6 +65,8 @@ import type {
 import { apiClient } from '../../client';
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
@@ -73,12 +79,12 @@ export type createLegalRequestResponse200 = {
 }
 
 export type createLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -96,7 +102,7 @@ export const getCreateLegalRequestUrl = () => {
 
   
 
-  return `/legal-requests`
+  return `/api/v1/legal-requests`
 }
 
 export const createLegalRequest = async (legalRequestCreateRequest: LegalRequestCreateRequest, options?: RequestInit): Promise<createLegalRequestResponse> => {
@@ -114,16 +120,16 @@ export const createLegalRequest = async (legalRequestCreateRequest: LegalRequest
 
 
 
-export const getCreateLegalRequestMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLegalRequest>>, TError,{data: LegalRequestCreateRequest}, TContext>, }
+export const getCreateLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLegalRequest>>, TError,{data: LegalRequestCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createLegalRequest>>, TError,{data: LegalRequestCreateRequest}, TContext> => {
 
 const mutationKey = ['createLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -131,7 +137,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLegalRequest>>, {data: LegalRequestCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createLegalRequest(data,)
+          return  createLegalRequest(data,requestOptions)
         }
 
 
@@ -143,13 +149,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createLegalRequest>>>
     export type CreateLegalRequestMutationBody = LegalRequestCreateRequest
-    export type CreateLegalRequestMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreateLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Create Legal Request
  */
-export const useCreateLegalRequest = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLegalRequest>>, TError,{data: LegalRequestCreateRequest}, TContext>, }
+export const useCreateLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLegalRequest>>, TError,{data: LegalRequestCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createLegalRequest>>,
         TError,
@@ -168,12 +174,12 @@ export type listLegalRequestsResponse200 = {
 }
 
 export type listLegalRequestsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listLegalRequestsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -198,7 +204,7 @@ export const getListLegalRequestsUrl = (params?: ListLegalRequestsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/legal-requests?${stringifiedParams}` : `/legal-requests`
+  return stringifiedParams.length > 0 ? `/api/v1/legal-requests?${stringifiedParams}` : `/api/v1/legal-requests`
 }
 
 export const listLegalRequests = async (params?: ListLegalRequestsParams, options?: RequestInit): Promise<listLegalRequestsResponse> => {
@@ -218,21 +224,21 @@ export const listLegalRequests = async (params?: ListLegalRequestsParams, option
 
 export const getListLegalRequestsQueryKey = (params?: MaybeRef<ListLegalRequestsParams>,) => {
     return [
-    'legal-requests', ...(params ? [params] : [])
+    'api','v1','legal-requests', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getListLegalRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listLegalRequests>>, TError = AuthErrorResponse | HTTPValidationError>(params?: MaybeRef<ListLegalRequestsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequests>>, TError, TData>>, }
+export const getListLegalRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listLegalRequests>>, TError = ErrorEnvelope>(params?: MaybeRef<ListLegalRequestsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequests>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListLegalRequestsQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLegalRequests>>> = ({ signal }) => listLegalRequests(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLegalRequests>>> = ({ signal }) => listLegalRequests(unref(params), { signal, ...requestOptions });
 
       
 
@@ -242,15 +248,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListLegalRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listLegalRequests>>>
-export type ListLegalRequestsQueryError = AuthErrorResponse | HTTPValidationError
+export type ListLegalRequestsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Legal Requests
  */
 
-export function useListLegalRequests<TData = Awaited<ReturnType<typeof listLegalRequests>>, TError = AuthErrorResponse | HTTPValidationError>(
- params?: MaybeRef<ListLegalRequestsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequests>>, TError, TData>>, }
+export function useListLegalRequests<TData = Awaited<ReturnType<typeof listLegalRequests>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<ListLegalRequestsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequests>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -276,7 +282,7 @@ export type getLegalRequestStatsResponse200 = {
 }
 
 export type getLegalRequestStatsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -294,7 +300,7 @@ export const getGetLegalRequestStatsUrl = () => {
 
   
 
-  return `/legal-requests/stats`
+  return `/api/v1/legal-requests/stats`
 }
 
 export const getLegalRequestStats = async ( options?: RequestInit): Promise<getLegalRequestStatsResponse> => {
@@ -314,21 +320,21 @@ export const getLegalRequestStats = async ( options?: RequestInit): Promise<getL
 
 export const getGetLegalRequestStatsQueryKey = () => {
     return [
-    'legal-requests','stats'
+    'api','v1','legal-requests','stats'
     ] as const;
     }
 
     
-export const getGetLegalRequestStatsQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRequestStats>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestStats>>, TError, TData>>, }
+export const getGetLegalRequestStatsQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRequestStats>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestStats>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalRequestStatsQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRequestStats>>> = ({ signal }) => getLegalRequestStats({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRequestStats>>> = ({ signal }) => getLegalRequestStats({ signal, ...requestOptions });
 
       
 
@@ -338,15 +344,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalRequestStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalRequestStats>>>
-export type GetLegalRequestStatsQueryError = AuthErrorResponse
+export type GetLegalRequestStatsQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Legal Request Stats
  */
 
-export function useGetLegalRequestStats<TData = Awaited<ReturnType<typeof getLegalRequestStats>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestStats>>, TError, TData>>, }
+export function useGetLegalRequestStats<TData = Awaited<ReturnType<typeof getLegalRequestStats>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestStats>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -363,16 +369,135 @@ export function useGetLegalRequestStats<TData = Awaited<ReturnType<typeof getLeg
 
 
 /**
- * List users in the org who can be assigned to legal requests.
+ * Org-level Mammoth impact metrics: throughput + cycle time over a window.
+
+Counts-only aggregates, RLS-scoped to the caller's org (no PII). Gated to
+the Mammoth audience by the FE `mammoth` middleware (pro+); the backend
+enforces tenant isolation via `get_tenant_session` and applies the same
+member-visibility scoping as the list/stats endpoints (so restricted
+requests never leak into a non-privileged caller's aggregates).
+ * @summary Get Legal Request Metrics
+ */
+export type getLegalRequestMetricsResponse200 = {
+  data: LegalRequestMetricsResponse
+  status: 200
+}
+
+export type getLegalRequestMetricsResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type getLegalRequestMetricsResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type getLegalRequestMetricsResponseSuccess = (getLegalRequestMetricsResponse200) & {
+  headers: Headers;
+};
+export type getLegalRequestMetricsResponseError = (getLegalRequestMetricsResponse401 | getLegalRequestMetricsResponse422) & {
+  headers: Headers;
+};
+
+export type getLegalRequestMetricsResponse = (getLegalRequestMetricsResponseSuccess | getLegalRequestMetricsResponseError)
+
+export const getGetLegalRequestMetricsUrl = (params?: GetLegalRequestMetricsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/legal-requests/metrics?${stringifiedParams}` : `/api/v1/legal-requests/metrics`
+}
+
+export const getLegalRequestMetrics = async (params?: GetLegalRequestMetricsParams, options?: RequestInit): Promise<getLegalRequestMetricsResponse> => {
+  
+  return apiClient<getLegalRequestMetricsResponse>(getGetLegalRequestMetricsUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getGetLegalRequestMetricsQueryKey = (params?: MaybeRef<GetLegalRequestMetricsParams>,) => {
+    return [
+    'api','v1','legal-requests','metrics', ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getGetLegalRequestMetricsQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRequestMetrics>>, TError = ErrorEnvelope>(params?: MaybeRef<GetLegalRequestMetricsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestMetrics>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getGetLegalRequestMetricsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRequestMetrics>>> = ({ signal }) => getLegalRequestMetrics(unref(params), { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestMetrics>>, TError, TData> 
+}
+
+export type GetLegalRequestMetricsQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalRequestMetrics>>>
+export type GetLegalRequestMetricsQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Get Legal Request Metrics
+ */
+
+export function useGetLegalRequestMetrics<TData = Awaited<ReturnType<typeof getLegalRequestMetrics>>, TError = ErrorEnvelope>(
+ params?: MaybeRef<GetLegalRequestMetricsParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequestMetrics>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetLegalRequestMetricsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * List users assignable to legal requests, grouped by internal vs external counsel.
+
+Internal: org members with role counsel/admin/owner.
+External: org members with role 'external'; firm_name is sourced from
+external_counsel_meta (None if no meta row exists).
+Both buckets preserve users.list_by_org's name ordering.
  * @summary List Assignable Users
  */
 export type listAssignableUsersResponse200 = {
-  data: AssignableUsersListResponse
+  data: AssignableUsersGroupedResponse
   status: 200
 }
 
 export type listAssignableUsersResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -390,7 +515,7 @@ export const getListAssignableUsersUrl = () => {
 
   
 
-  return `/legal-requests/assignable-users`
+  return `/api/v1/legal-requests/assignable-users`
 }
 
 export const listAssignableUsers = async ( options?: RequestInit): Promise<listAssignableUsersResponse> => {
@@ -410,21 +535,21 @@ export const listAssignableUsers = async ( options?: RequestInit): Promise<listA
 
 export const getListAssignableUsersQueryKey = () => {
     return [
-    'legal-requests','assignable-users'
+    'api','v1','legal-requests','assignable-users'
     ] as const;
     }
 
     
-export const getListAssignableUsersQueryOptions = <TData = Awaited<ReturnType<typeof listAssignableUsers>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAssignableUsers>>, TError, TData>>, }
+export const getListAssignableUsersQueryOptions = <TData = Awaited<ReturnType<typeof listAssignableUsers>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAssignableUsers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListAssignableUsersQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAssignableUsers>>> = ({ signal }) => listAssignableUsers({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAssignableUsers>>> = ({ signal }) => listAssignableUsers({ signal, ...requestOptions });
 
       
 
@@ -434,15 +559,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListAssignableUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listAssignableUsers>>>
-export type ListAssignableUsersQueryError = AuthErrorResponse
+export type ListAssignableUsersQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Assignable Users
  */
 
-export function useListAssignableUsers<TData = Awaited<ReturnType<typeof listAssignableUsers>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAssignableUsers>>, TError, TData>>, }
+export function useListAssignableUsers<TData = Awaited<ReturnType<typeof listAssignableUsers>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAssignableUsers>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -468,17 +593,17 @@ export type getLegalRequestResponse200 = {
 }
 
 export type getLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -496,7 +621,7 @@ export const getGetLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}`
+  return `/api/v1/legal-requests/${requestId}`
 }
 
 export const getLegalRequest = async (requestId: string, options?: RequestInit): Promise<getLegalRequestResponse> => {
@@ -516,21 +641,21 @@ export const getLegalRequest = async (requestId: string, options?: RequestInit):
 
 export const getGetLegalRequestQueryKey = (requestId: MaybeRef<string>,) => {
     return [
-    'legal-requests',requestId
+    'api','v1','legal-requests',requestId
     ] as const;
     }
 
     
-export const getGetLegalRequestQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRequest>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequest>>, TError, TData>>, }
+export const getGetLegalRequestQueryOptions = <TData = Awaited<ReturnType<typeof getLegalRequest>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequest>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetLegalRequestQueryKey(requestId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRequest>>> = ({ signal }) => getLegalRequest(unref(requestId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalRequest>>> = ({ signal }) => getLegalRequest(unref(requestId), { signal, ...requestOptions });
 
       
 
@@ -540,15 +665,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetLegalRequestQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalRequest>>>
-export type GetLegalRequestQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetLegalRequestQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Legal Request
  */
 
-export function useGetLegalRequest<TData = Awaited<ReturnType<typeof getLegalRequest>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequest>>, TError, TData>>, }
+export function useGetLegalRequest<TData = Awaited<ReturnType<typeof getLegalRequest>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLegalRequest>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -574,17 +699,17 @@ export type updateLegalRequestResponse200 = {
 }
 
 export type updateLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updateLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type updateLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -602,7 +727,7 @@ export const getUpdateLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}`
+  return `/api/v1/legal-requests/${requestId}`
 }
 
 export const updateLegalRequest = async (requestId: string,
@@ -621,16 +746,16 @@ export const updateLegalRequest = async (requestId: string,
 
 
 
-export const getUpdateLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLegalRequest>>, TError,{requestId: string;data: LegalRequestUpdateRequest}, TContext>, }
+export const getUpdateLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLegalRequest>>, TError,{requestId: string;data: LegalRequestUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateLegalRequest>>, TError,{requestId: string;data: LegalRequestUpdateRequest}, TContext> => {
 
 const mutationKey = ['updateLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -638,7 +763,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLegalRequest>>, {requestId: string;data: LegalRequestUpdateRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  updateLegalRequest(requestId,data,)
+          return  updateLegalRequest(requestId,data,requestOptions)
         }
 
 
@@ -650,13 +775,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdateLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateLegalRequest>>>
     export type UpdateLegalRequestMutationBody = LegalRequestUpdateRequest
-    export type UpdateLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UpdateLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Update Legal Request
  */
-export const useUpdateLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLegalRequest>>, TError,{requestId: string;data: LegalRequestUpdateRequest}, TContext>, }
+export const useUpdateLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLegalRequest>>, TError,{requestId: string;data: LegalRequestUpdateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updateLegalRequest>>,
         TError,
@@ -674,25 +799,30 @@ export type deleteLegalRequestResponse200 = {
   status: 200
 }
 
+export type deleteLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type deleteLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type deleteLegalRequestResponseSuccess = (deleteLegalRequestResponse200) & {
   headers: Headers;
 };
-export type deleteLegalRequestResponseError = (deleteLegalRequestResponse401 | deleteLegalRequestResponse404 | deleteLegalRequestResponse422) & {
+export type deleteLegalRequestResponseError = (deleteLegalRequestResponse400 | deleteLegalRequestResponse401 | deleteLegalRequestResponse404 | deleteLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -703,7 +833,7 @@ export const getDeleteLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}`
+  return `/api/v1/legal-requests/${requestId}`
 }
 
 export const deleteLegalRequest = async (requestId: string, options?: RequestInit): Promise<deleteLegalRequestResponse> => {
@@ -720,16 +850,16 @@ export const deleteLegalRequest = async (requestId: string, options?: RequestIni
 
 
 
-export const getDeleteLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getDeleteLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['deleteLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -737,7 +867,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  deleteLegalRequest(requestId,)
+          return  deleteLegalRequest(requestId,requestOptions)
         }
 
 
@@ -749,13 +879,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLegalRequest>>>
     
-    export type DeleteLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Legal Request
  */
-export const useDeleteLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const useDeleteLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteLegalRequest>>,
         TError,
@@ -763,105 +893,6 @@ export const useDeleteLegalRequest = <TError = AuthErrorResponse | ErrorResponse
         TContext
       > => {
       return useMutation(getDeleteLegalRequestMutationOptions(options), queryClient);
-    }
-    /**
- * Publish a draft legal request (transitions draft -> pending).
- * @summary Publish Legal Request
- */
-export type publishLegalRequestResponse200 = {
-  data: LegalRequestResponse
-  status: 200
-}
-
-export type publishLegalRequestResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type publishLegalRequestResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
-
-export type publishLegalRequestResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type publishLegalRequestResponseSuccess = (publishLegalRequestResponse200) & {
-  headers: Headers;
-};
-export type publishLegalRequestResponseError = (publishLegalRequestResponse401 | publishLegalRequestResponse404 | publishLegalRequestResponse422) & {
-  headers: Headers;
-};
-
-export type publishLegalRequestResponse = (publishLegalRequestResponseSuccess | publishLegalRequestResponseError)
-
-export const getPublishLegalRequestUrl = (requestId: string,) => {
-
-
-  
-
-  return `/legal-requests/${requestId}/publish`
-}
-
-export const publishLegalRequest = async (requestId: string, options?: RequestInit): Promise<publishLegalRequestResponse> => {
-  
-  return apiClient<publishLegalRequestResponse>(getPublishLegalRequestUrl(requestId),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-  
-
-
-
-export const getPublishLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishLegalRequest>>, TError,{requestId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof publishLegalRequest>>, TError,{requestId: string}, TContext> => {
-
-const mutationKey = ['publishLegalRequest'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishLegalRequest>>, {requestId: string}> = (props) => {
-          const {requestId} = props ?? {};
-
-          return  publishLegalRequest(requestId,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PublishLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof publishLegalRequest>>>
-    
-    export type PublishLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
-
-    /**
- * @summary Publish Legal Request
- */
-export const usePublishLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishLegalRequest>>, TError,{requestId: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof publishLegalRequest>>,
-        TError,
-        {requestId: string},
-        TContext
-      > => {
-      return useMutation(getPublishLegalRequestMutationOptions(options), queryClient);
     }
     /**
  * Assign a legal request to a user.
@@ -872,25 +903,30 @@ export type assignLegalRequestResponse200 = {
   status: 200
 }
 
+export type assignLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type assignLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type assignLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type assignLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type assignLegalRequestResponseSuccess = (assignLegalRequestResponse200) & {
   headers: Headers;
 };
-export type assignLegalRequestResponseError = (assignLegalRequestResponse401 | assignLegalRequestResponse404 | assignLegalRequestResponse422) & {
+export type assignLegalRequestResponseError = (assignLegalRequestResponse400 | assignLegalRequestResponse401 | assignLegalRequestResponse404 | assignLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -901,7 +937,7 @@ export const getAssignLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/assign`
+  return `/api/v1/legal-requests/${requestId}/assign`
 }
 
 export const assignLegalRequest = async (requestId: string,
@@ -920,16 +956,16 @@ export const assignLegalRequest = async (requestId: string,
 
 
 
-export const getAssignLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignLegalRequest>>, TError,{requestId: string;data: LegalRequestAssignRequest}, TContext>, }
+export const getAssignLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignLegalRequest>>, TError,{requestId: string;data: LegalRequestAssignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof assignLegalRequest>>, TError,{requestId: string;data: LegalRequestAssignRequest}, TContext> => {
 
 const mutationKey = ['assignLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -937,7 +973,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignLegalRequest>>, {requestId: string;data: LegalRequestAssignRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  assignLegalRequest(requestId,data,)
+          return  assignLegalRequest(requestId,data,requestOptions)
         }
 
 
@@ -949,13 +985,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AssignLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof assignLegalRequest>>>
     export type AssignLegalRequestMutationBody = LegalRequestAssignRequest
-    export type AssignLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AssignLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Assign Legal Request
  */
-export const useAssignLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignLegalRequest>>, TError,{requestId: string;data: LegalRequestAssignRequest}, TContext>, }
+export const useAssignLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignLegalRequest>>, TError,{requestId: string;data: LegalRequestAssignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof assignLegalRequest>>,
         TError,
@@ -963,6 +999,120 @@ export const useAssignLegalRequest = <TError = AuthErrorResponse | ErrorResponse
         TContext
       > => {
       return useMutation(getAssignLegalRequestMutationOptions(options), queryClient);
+    }
+    /**
+ * Reassign an active legal request to a different user.
+
+Allowed for the current assignee (handoff) or admin/owner (override).
+Returns 409 if the request is in a terminal/non-reassignable state.
+ * @summary Reassign Legal Request
+ */
+export type reassignLegalRequestResponse200 = {
+  data: LegalRequestResponse
+  status: 200
+}
+
+export type reassignLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
+export type reassignLegalRequestResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type reassignLegalRequestResponse403 = {
+  data: ErrorEnvelope
+  status: 403
+}
+
+export type reassignLegalRequestResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type reassignLegalRequestResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type reassignLegalRequestResponseSuccess = (reassignLegalRequestResponse200) & {
+  headers: Headers;
+};
+export type reassignLegalRequestResponseError = (reassignLegalRequestResponse400 | reassignLegalRequestResponse401 | reassignLegalRequestResponse403 | reassignLegalRequestResponse404 | reassignLegalRequestResponse422) & {
+  headers: Headers;
+};
+
+export type reassignLegalRequestResponse = (reassignLegalRequestResponseSuccess | reassignLegalRequestResponseError)
+
+export const getReassignLegalRequestUrl = (requestId: string,) => {
+
+
+  
+
+  return `/api/v1/legal-requests/${requestId}/reassign`
+}
+
+export const reassignLegalRequest = async (requestId: string,
+    legalRequestReassignRequest: LegalRequestReassignRequest, options?: RequestInit): Promise<reassignLegalRequestResponse> => {
+  
+  return apiClient<reassignLegalRequestResponse>(getReassignLegalRequestUrl(requestId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      legalRequestReassignRequest,)
+  }
+);}
+  
+
+
+
+export const getReassignLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignLegalRequest>>, TError,{requestId: string;data: LegalRequestReassignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof reassignLegalRequest>>, TError,{requestId: string;data: LegalRequestReassignRequest}, TContext> => {
+
+const mutationKey = ['reassignLegalRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reassignLegalRequest>>, {requestId: string;data: LegalRequestReassignRequest}> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  reassignLegalRequest(requestId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReassignLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof reassignLegalRequest>>>
+    export type ReassignLegalRequestMutationBody = LegalRequestReassignRequest
+    export type ReassignLegalRequestMutationError = ErrorEnvelope
+
+    /**
+ * @summary Reassign Legal Request
+ */
+export const useReassignLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignLegalRequest>>, TError,{requestId: string;data: LegalRequestReassignRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof reassignLegalRequest>>,
+        TError,
+        {requestId: string;data: LegalRequestReassignRequest},
+        TContext
+      > => {
+      return useMutation(getReassignLegalRequestMutationOptions(options), queryClient);
     }
     /**
  * Mark a legal request as completed.
@@ -973,25 +1123,30 @@ export type completeLegalRequestResponse200 = {
   status: 200
 }
 
+export type completeLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type completeLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type completeLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type completeLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type completeLegalRequestResponseSuccess = (completeLegalRequestResponse200) & {
   headers: Headers;
 };
-export type completeLegalRequestResponseError = (completeLegalRequestResponse401 | completeLegalRequestResponse404 | completeLegalRequestResponse422) & {
+export type completeLegalRequestResponseError = (completeLegalRequestResponse400 | completeLegalRequestResponse401 | completeLegalRequestResponse404 | completeLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1002,7 +1157,7 @@ export const getCompleteLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/complete`
+  return `/api/v1/legal-requests/${requestId}/complete`
 }
 
 export const completeLegalRequest = async (requestId: string,
@@ -1021,16 +1176,16 @@ export const completeLegalRequest = async (requestId: string,
 
 
 
-export const getCompleteLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLegalRequest>>, TError,{requestId: string;data: LegalRequestCompleteRequest}, TContext>, }
+export const getCompleteLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLegalRequest>>, TError,{requestId: string;data: LegalRequestCompleteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof completeLegalRequest>>, TError,{requestId: string;data: LegalRequestCompleteRequest}, TContext> => {
 
 const mutationKey = ['completeLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1038,7 +1193,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeLegalRequest>>, {requestId: string;data: LegalRequestCompleteRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  completeLegalRequest(requestId,data,)
+          return  completeLegalRequest(requestId,data,requestOptions)
         }
 
 
@@ -1050,13 +1205,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CompleteLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof completeLegalRequest>>>
     export type CompleteLegalRequestMutationBody = LegalRequestCompleteRequest
-    export type CompleteLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CompleteLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Complete Legal Request
  */
-export const useCompleteLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLegalRequest>>, TError,{requestId: string;data: LegalRequestCompleteRequest}, TContext>, }
+export const useCompleteLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLegalRequest>>, TError,{requestId: string;data: LegalRequestCompleteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof completeLegalRequest>>,
         TError,
@@ -1074,25 +1229,30 @@ export type failLegalRequestResponse200 = {
   status: 200
 }
 
+export type failLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type failLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type failLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type failLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type failLegalRequestResponseSuccess = (failLegalRequestResponse200) & {
   headers: Headers;
 };
-export type failLegalRequestResponseError = (failLegalRequestResponse401 | failLegalRequestResponse404 | failLegalRequestResponse422) & {
+export type failLegalRequestResponseError = (failLegalRequestResponse400 | failLegalRequestResponse401 | failLegalRequestResponse404 | failLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1103,7 +1263,7 @@ export const getFailLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/fail`
+  return `/api/v1/legal-requests/${requestId}/fail`
 }
 
 export const failLegalRequest = async (requestId: string,
@@ -1122,16 +1282,16 @@ export const failLegalRequest = async (requestId: string,
 
 
 
-export const getFailLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof failLegalRequest>>, TError,{requestId: string;data: LegalRequestFailRequest}, TContext>, }
+export const getFailLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof failLegalRequest>>, TError,{requestId: string;data: LegalRequestFailRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof failLegalRequest>>, TError,{requestId: string;data: LegalRequestFailRequest}, TContext> => {
 
 const mutationKey = ['failLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1139,7 +1299,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof failLegalRequest>>, {requestId: string;data: LegalRequestFailRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  failLegalRequest(requestId,data,)
+          return  failLegalRequest(requestId,data,requestOptions)
         }
 
 
@@ -1151,13 +1311,13 @@ const {mutation: mutationOptions} = options ?
 
     export type FailLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof failLegalRequest>>>
     export type FailLegalRequestMutationBody = LegalRequestFailRequest
-    export type FailLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type FailLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Fail Legal Request
  */
-export const useFailLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof failLegalRequest>>, TError,{requestId: string;data: LegalRequestFailRequest}, TContext>, }
+export const useFailLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof failLegalRequest>>, TError,{requestId: string;data: LegalRequestFailRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof failLegalRequest>>,
         TError,
@@ -1175,25 +1335,30 @@ export type cancelLegalRequestResponse200 = {
   status: 200
 }
 
+export type cancelLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type cancelLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type cancelLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type cancelLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type cancelLegalRequestResponseSuccess = (cancelLegalRequestResponse200) & {
   headers: Headers;
 };
-export type cancelLegalRequestResponseError = (cancelLegalRequestResponse401 | cancelLegalRequestResponse404 | cancelLegalRequestResponse422) & {
+export type cancelLegalRequestResponseError = (cancelLegalRequestResponse400 | cancelLegalRequestResponse401 | cancelLegalRequestResponse404 | cancelLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1204,7 +1369,7 @@ export const getCancelLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/cancel`
+  return `/api/v1/legal-requests/${requestId}/cancel`
 }
 
 export const cancelLegalRequest = async (requestId: string, options?: RequestInit): Promise<cancelLegalRequestResponse> => {
@@ -1221,16 +1386,16 @@ export const cancelLegalRequest = async (requestId: string, options?: RequestIni
 
 
 
-export const getCancelLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getCancelLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof cancelLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['cancelLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1238,7 +1403,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  cancelLegalRequest(requestId,)
+          return  cancelLegalRequest(requestId,requestOptions)
         }
 
 
@@ -1250,13 +1415,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CancelLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof cancelLegalRequest>>>
     
-    export type CancelLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CancelLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Cancel Legal Request
  */
-export const useCancelLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const useCancelLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof cancelLegalRequest>>,
         TError,
@@ -1274,25 +1439,30 @@ export type unassignLegalRequestResponse200 = {
   status: 200
 }
 
+export type unassignLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type unassignLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type unassignLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type unassignLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type unassignLegalRequestResponseSuccess = (unassignLegalRequestResponse200) & {
   headers: Headers;
 };
-export type unassignLegalRequestResponseError = (unassignLegalRequestResponse401 | unassignLegalRequestResponse404 | unassignLegalRequestResponse422) & {
+export type unassignLegalRequestResponseError = (unassignLegalRequestResponse400 | unassignLegalRequestResponse401 | unassignLegalRequestResponse404 | unassignLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1303,7 +1473,7 @@ export const getUnassignLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/unassign`
+  return `/api/v1/legal-requests/${requestId}/unassign`
 }
 
 export const unassignLegalRequest = async (requestId: string, options?: RequestInit): Promise<unassignLegalRequestResponse> => {
@@ -1320,16 +1490,16 @@ export const unassignLegalRequest = async (requestId: string, options?: RequestI
 
 
 
-export const getUnassignLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unassignLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getUnassignLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unassignLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof unassignLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['unassignLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1337,7 +1507,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof unassignLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  unassignLegalRequest(requestId,)
+          return  unassignLegalRequest(requestId,requestOptions)
         }
 
 
@@ -1349,13 +1519,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UnassignLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof unassignLegalRequest>>>
     
-    export type UnassignLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type UnassignLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Unassign Legal Request
  */
-export const useUnassignLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unassignLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const useUnassignLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unassignLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof unassignLegalRequest>>,
         TError,
@@ -1373,25 +1543,30 @@ export type pickUpLegalRequestResponse200 = {
   status: 200
 }
 
+export type pickUpLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type pickUpLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type pickUpLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type pickUpLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type pickUpLegalRequestResponseSuccess = (pickUpLegalRequestResponse200) & {
   headers: Headers;
 };
-export type pickUpLegalRequestResponseError = (pickUpLegalRequestResponse401 | pickUpLegalRequestResponse404 | pickUpLegalRequestResponse422) & {
+export type pickUpLegalRequestResponseError = (pickUpLegalRequestResponse400 | pickUpLegalRequestResponse401 | pickUpLegalRequestResponse404 | pickUpLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1402,7 +1577,7 @@ export const getPickUpLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/pick-up`
+  return `/api/v1/legal-requests/${requestId}/pick-up`
 }
 
 export const pickUpLegalRequest = async (requestId: string, options?: RequestInit): Promise<pickUpLegalRequestResponse> => {
@@ -1419,16 +1594,16 @@ export const pickUpLegalRequest = async (requestId: string, options?: RequestIni
 
 
 
-export const getPickUpLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pickUpLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getPickUpLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pickUpLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof pickUpLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['pickUpLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1436,7 +1611,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof pickUpLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  pickUpLegalRequest(requestId,)
+          return  pickUpLegalRequest(requestId,requestOptions)
         }
 
 
@@ -1448,13 +1623,13 @@ const {mutation: mutationOptions} = options ?
 
     export type PickUpLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof pickUpLegalRequest>>>
     
-    export type PickUpLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type PickUpLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Pick Up Legal Request
  */
-export const usePickUpLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pickUpLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const usePickUpLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pickUpLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof pickUpLegalRequest>>,
         TError,
@@ -1472,25 +1647,30 @@ export type startLegalRequestResponse200 = {
   status: 200
 }
 
+export type startLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type startLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type startLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type startLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type startLegalRequestResponseSuccess = (startLegalRequestResponse200) & {
   headers: Headers;
 };
-export type startLegalRequestResponseError = (startLegalRequestResponse401 | startLegalRequestResponse404 | startLegalRequestResponse422) & {
+export type startLegalRequestResponseError = (startLegalRequestResponse400 | startLegalRequestResponse401 | startLegalRequestResponse404 | startLegalRequestResponse422) & {
   headers: Headers;
 };
 
@@ -1501,7 +1681,7 @@ export const getStartLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/start`
+  return `/api/v1/legal-requests/${requestId}/start`
 }
 
 export const startLegalRequest = async (requestId: string, options?: RequestInit): Promise<startLegalRequestResponse> => {
@@ -1518,16 +1698,16 @@ export const startLegalRequest = async (requestId: string, options?: RequestInit
 
 
 
-export const getStartLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getStartLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof startLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['startLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1535,7 +1715,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof startLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  startLegalRequest(requestId,)
+          return  startLegalRequest(requestId,requestOptions)
         }
 
 
@@ -1547,13 +1727,13 @@ const {mutation: mutationOptions} = options ?
 
     export type StartLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof startLegalRequest>>>
     
-    export type StartLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type StartLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Start Legal Request
  */
-export const useStartLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const useStartLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof startLegalRequest>>,
         TError,
@@ -1575,30 +1755,35 @@ export type executeLegalRequestResponse200 = {
   status: 200
 }
 
+export type executeLegalRequestResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
 export type executeLegalRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type executeLegalRequestResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type executeLegalRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type executeLegalRequestResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
 export type executeLegalRequestResponseSuccess = (executeLegalRequestResponse200) & {
   headers: Headers;
 };
-export type executeLegalRequestResponseError = (executeLegalRequestResponse401 | executeLegalRequestResponse404 | executeLegalRequestResponse422 | executeLegalRequestResponse429) & {
+export type executeLegalRequestResponseError = (executeLegalRequestResponse400 | executeLegalRequestResponse401 | executeLegalRequestResponse404 | executeLegalRequestResponse422 | executeLegalRequestResponse429) & {
   headers: Headers;
 };
 
@@ -1609,7 +1794,7 @@ export const getExecuteLegalRequestUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/execute`
+  return `/api/v1/legal-requests/${requestId}/execute`
 }
 
 export const executeLegalRequest = async (requestId: string, options?: RequestInit): Promise<executeLegalRequestResponse> => {
@@ -1626,16 +1811,16 @@ export const executeLegalRequest = async (requestId: string, options?: RequestIn
 
 
 
-export const getExecuteLegalRequestMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const getExecuteLegalRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof executeLegalRequest>>, TError,{requestId: string}, TContext> => {
 
 const mutationKey = ['executeLegalRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1643,7 +1828,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof executeLegalRequest>>, {requestId: string}> = (props) => {
           const {requestId} = props ?? {};
 
-          return  executeLegalRequest(requestId,)
+          return  executeLegalRequest(requestId,requestOptions)
         }
 
 
@@ -1655,13 +1840,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExecuteLegalRequestMutationResult = NonNullable<Awaited<ReturnType<typeof executeLegalRequest>>>
     
-    export type ExecuteLegalRequestMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type ExecuteLegalRequestMutationError = ErrorEnvelope
 
     /**
  * @summary Execute Legal Request
  */
-export const useExecuteLegalRequest = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeLegalRequest>>, TError,{requestId: string}, TContext>, }
+export const useExecuteLegalRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeLegalRequest>>, TError,{requestId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof executeLegalRequest>>,
         TError,
@@ -1680,17 +1865,17 @@ export type createCommentResponse200 = {
 }
 
 export type createCommentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createCommentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type createCommentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1708,7 +1893,7 @@ export const getCreateCommentUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/comments`
+  return `/api/v1/legal-requests/${requestId}/comments`
 }
 
 export const createComment = async (requestId: string,
@@ -1727,16 +1912,16 @@ export const createComment = async (requestId: string,
 
 
 
-export const getCreateCommentMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{requestId: string;data: LegalRequestCommentRequest}, TContext>, }
+export const getCreateCommentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{requestId: string;data: LegalRequestCommentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{requestId: string;data: LegalRequestCommentRequest}, TContext> => {
 
 const mutationKey = ['createComment'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1744,7 +1929,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createComment>>, {requestId: string;data: LegalRequestCommentRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  createComment(requestId,data,)
+          return  createComment(requestId,data,requestOptions)
         }
 
 
@@ -1756,13 +1941,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateCommentMutationResult = NonNullable<Awaited<ReturnType<typeof createComment>>>
     export type CreateCommentMutationBody = LegalRequestCommentRequest
-    export type CreateCommentMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type CreateCommentMutationError = ErrorEnvelope
 
     /**
  * @summary Create Comment
  */
-export const useCreateComment = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{requestId: string;data: LegalRequestCommentRequest}, TContext>, }
+export const useCreateComment = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{requestId: string;data: LegalRequestCommentRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createComment>>,
         TError,
@@ -1781,17 +1966,17 @@ export type listCommentsResponse200 = {
 }
 
 export type listCommentsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listCommentsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listCommentsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1809,7 +1994,7 @@ export const getListCommentsUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/comments`
+  return `/api/v1/legal-requests/${requestId}/comments`
 }
 
 export const listComments = async (requestId: string, options?: RequestInit): Promise<listCommentsResponse> => {
@@ -1829,21 +2014,21 @@ export const listComments = async (requestId: string, options?: RequestInit): Pr
 
 export const getListCommentsQueryKey = (requestId: MaybeRef<string>,) => {
     return [
-    'legal-requests',requestId,'comments'
+    'api','v1','legal-requests',requestId,'comments'
     ] as const;
     }
 
     
-export const getListCommentsQueryOptions = <TData = Awaited<ReturnType<typeof listComments>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>>, }
+export const getListCommentsQueryOptions = <TData = Awaited<ReturnType<typeof listComments>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListCommentsQueryKey(requestId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listComments>>> = ({ signal }) => listComments(unref(requestId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listComments>>> = ({ signal }) => listComments(unref(requestId), { signal, ...requestOptions });
 
       
 
@@ -1853,15 +2038,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListCommentsQueryResult = NonNullable<Awaited<ReturnType<typeof listComments>>>
-export type ListCommentsQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListCommentsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Comments
  */
 
-export function useListComments<TData = Awaited<ReturnType<typeof listComments>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>>, }
+export function useListComments<TData = Awaited<ReturnType<typeof listComments>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listComments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -1887,17 +2072,17 @@ export type deleteCommentResponse200 = {
 }
 
 export type deleteCommentResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteCommentResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteCommentResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1916,7 +2101,7 @@ export const getDeleteCommentUrl = (requestId: string,
 
   
 
-  return `/legal-requests/${requestId}/comments/${commentId}`
+  return `/api/v1/legal-requests/${requestId}/comments/${commentId}`
 }
 
 export const deleteComment = async (requestId: string,
@@ -1934,16 +2119,16 @@ export const deleteComment = async (requestId: string,
 
 
 
-export const getDeleteCommentMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{requestId: string;commentId: string}, TContext>, }
+export const getDeleteCommentMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{requestId: string;commentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{requestId: string;commentId: string}, TContext> => {
 
 const mutationKey = ['deleteComment'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1951,7 +2136,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteComment>>, {requestId: string;commentId: string}> = (props) => {
           const {requestId,commentId} = props ?? {};
 
-          return  deleteComment(requestId,commentId,)
+          return  deleteComment(requestId,commentId,requestOptions)
         }
 
 
@@ -1963,13 +2148,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteCommentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteComment>>>
     
-    export type DeleteCommentMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteCommentMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Comment
  */
-export const useDeleteComment = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{requestId: string;commentId: string}, TContext>, }
+export const useDeleteComment = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{requestId: string;commentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteComment>>,
         TError,
@@ -1988,17 +2173,17 @@ export type attachFileResponse200 = {
 }
 
 export type attachFileResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type attachFileResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type attachFileResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2016,7 +2201,7 @@ export const getAttachFileUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/attachments`
+  return `/api/v1/legal-requests/${requestId}/attachments`
 }
 
 export const attachFile = async (requestId: string,
@@ -2035,16 +2220,16 @@ export const attachFile = async (requestId: string,
 
 
 
-export const getAttachFileMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachFile>>, TError,{requestId: string;data: LegalRequestAttachRequest}, TContext>, }
+export const getAttachFileMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachFile>>, TError,{requestId: string;data: LegalRequestAttachRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof attachFile>>, TError,{requestId: string;data: LegalRequestAttachRequest}, TContext> => {
 
 const mutationKey = ['attachFile'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2052,7 +2237,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof attachFile>>, {requestId: string;data: LegalRequestAttachRequest}> = (props) => {
           const {requestId,data} = props ?? {};
 
-          return  attachFile(requestId,data,)
+          return  attachFile(requestId,data,requestOptions)
         }
 
 
@@ -2064,13 +2249,13 @@ const {mutation: mutationOptions} = options ?
 
     export type AttachFileMutationResult = NonNullable<Awaited<ReturnType<typeof attachFile>>>
     export type AttachFileMutationBody = LegalRequestAttachRequest
-    export type AttachFileMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type AttachFileMutationError = ErrorEnvelope
 
     /**
  * @summary Attach File
  */
-export const useAttachFile = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachFile>>, TError,{requestId: string;data: LegalRequestAttachRequest}, TContext>, }
+export const useAttachFile = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachFile>>, TError,{requestId: string;data: LegalRequestAttachRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof attachFile>>,
         TError,
@@ -2089,17 +2274,17 @@ export type listAttachmentsResponse200 = {
 }
 
 export type listAttachmentsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listAttachmentsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listAttachmentsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2117,7 +2302,7 @@ export const getListAttachmentsUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/attachments`
+  return `/api/v1/legal-requests/${requestId}/attachments`
 }
 
 export const listAttachments = async (requestId: string, options?: RequestInit): Promise<listAttachmentsResponse> => {
@@ -2137,21 +2322,21 @@ export const listAttachments = async (requestId: string, options?: RequestInit):
 
 export const getListAttachmentsQueryKey = (requestId: MaybeRef<string>,) => {
     return [
-    'legal-requests',requestId,'attachments'
+    'api','v1','legal-requests',requestId,'attachments'
     ] as const;
     }
 
     
-export const getListAttachmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttachments>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>>, }
+export const getListAttachmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListAttachmentsQueryKey(requestId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttachments>>> = ({ signal }) => listAttachments(unref(requestId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttachments>>> = ({ signal }) => listAttachments(unref(requestId), { signal, ...requestOptions });
 
       
 
@@ -2161,15 +2346,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListAttachmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAttachments>>>
-export type ListAttachmentsQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListAttachmentsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Attachments
  */
 
-export function useListAttachments<TData = Awaited<ReturnType<typeof listAttachments>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>>, }
+export function useListAttachments<TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2195,17 +2380,17 @@ export type detachFileResponse200 = {
 }
 
 export type detachFileResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type detachFileResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type detachFileResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2224,7 +2409,7 @@ export const getDetachFileUrl = (requestId: string,
 
   
 
-  return `/legal-requests/${requestId}/attachments/${attachmentId}`
+  return `/api/v1/legal-requests/${requestId}/attachments/${attachmentId}`
 }
 
 export const detachFile = async (requestId: string,
@@ -2242,16 +2427,16 @@ export const detachFile = async (requestId: string,
 
 
 
-export const getDetachFileMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detachFile>>, TError,{requestId: string;attachmentId: string}, TContext>, }
+export const getDetachFileMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detachFile>>, TError,{requestId: string;attachmentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof detachFile>>, TError,{requestId: string;attachmentId: string}, TContext> => {
 
 const mutationKey = ['detachFile'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2259,7 +2444,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof detachFile>>, {requestId: string;attachmentId: string}> = (props) => {
           const {requestId,attachmentId} = props ?? {};
 
-          return  detachFile(requestId,attachmentId,)
+          return  detachFile(requestId,attachmentId,requestOptions)
         }
 
 
@@ -2271,13 +2456,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DetachFileMutationResult = NonNullable<Awaited<ReturnType<typeof detachFile>>>
     
-    export type DetachFileMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DetachFileMutationError = ErrorEnvelope
 
     /**
  * @summary Detach File
  */
-export const useDetachFile = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detachFile>>, TError,{requestId: string;attachmentId: string}, TContext>, }
+export const useDetachFile = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detachFile>>, TError,{requestId: string;attachmentId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof detachFile>>,
         TError,
@@ -2296,17 +2481,17 @@ export type getActivityResponse200 = {
 }
 
 export type getActivityResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getActivityResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getActivityResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2324,7 +2509,7 @@ export const getGetActivityUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/activity`
+  return `/api/v1/legal-requests/${requestId}/activity`
 }
 
 export const getActivity = async (requestId: string, options?: RequestInit): Promise<getActivityResponse> => {
@@ -2344,21 +2529,21 @@ export const getActivity = async (requestId: string, options?: RequestInit): Pro
 
 export const getGetActivityQueryKey = (requestId: MaybeRef<string>,) => {
     return [
-    'legal-requests',requestId,'activity'
+    'api','v1','legal-requests',requestId,'activity'
     ] as const;
     }
 
     
-export const getGetActivityQueryOptions = <TData = Awaited<ReturnType<typeof getActivity>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActivity>>, TError, TData>>, }
+export const getGetActivityQueryOptions = <TData = Awaited<ReturnType<typeof getActivity>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActivity>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetActivityQueryKey(requestId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActivity>>> = ({ signal }) => getActivity(unref(requestId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActivity>>> = ({ signal }) => getActivity(unref(requestId), { signal, ...requestOptions });
 
       
 
@@ -2368,15 +2553,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetActivityQueryResult = NonNullable<Awaited<ReturnType<typeof getActivity>>>
-export type GetActivityQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetActivityQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Activity
  */
 
-export function useGetActivity<TData = Awaited<ReturnType<typeof getActivity>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActivity>>, TError, TData>>, }
+export function useGetActivity<TData = Awaited<ReturnType<typeof getActivity>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getActivity>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2402,17 +2587,17 @@ export type listLegalRequestStepsResponse200 = {
 }
 
 export type listLegalRequestStepsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type listLegalRequestStepsResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type listLegalRequestStepsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2430,7 +2615,7 @@ export const getListLegalRequestStepsUrl = (requestId: string,) => {
 
   
 
-  return `/legal-requests/${requestId}/steps`
+  return `/api/v1/legal-requests/${requestId}/steps`
 }
 
 export const listLegalRequestSteps = async (requestId: string, options?: RequestInit): Promise<listLegalRequestStepsResponse> => {
@@ -2450,21 +2635,21 @@ export const listLegalRequestSteps = async (requestId: string, options?: Request
 
 export const getListLegalRequestStepsQueryKey = (requestId: MaybeRef<string>,) => {
     return [
-    'legal-requests',requestId,'steps'
+    'api','v1','legal-requests',requestId,'steps'
     ] as const;
     }
 
     
-export const getListLegalRequestStepsQueryOptions = <TData = Awaited<ReturnType<typeof listLegalRequestSteps>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequestSteps>>, TError, TData>>, }
+export const getListLegalRequestStepsQueryOptions = <TData = Awaited<ReturnType<typeof listLegalRequestSteps>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequestSteps>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListLegalRequestStepsQueryKey(requestId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLegalRequestSteps>>> = ({ signal }) => listLegalRequestSteps(unref(requestId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLegalRequestSteps>>> = ({ signal }) => listLegalRequestSteps(unref(requestId), { signal, ...requestOptions });
 
       
 
@@ -2474,15 +2659,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListLegalRequestStepsQueryResult = NonNullable<Awaited<ReturnType<typeof listLegalRequestSteps>>>
-export type ListLegalRequestStepsQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type ListLegalRequestStepsQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Legal Request Steps
  */
 
-export function useListLegalRequestSteps<TData = Awaited<ReturnType<typeof listLegalRequestSteps>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequestSteps>>, TError, TData>>, }
+export function useListLegalRequestSteps<TData = Awaited<ReturnType<typeof listLegalRequestSteps>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLegalRequestSteps>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -2499,10 +2684,324 @@ export function useListLegalRequestSteps<TData = Awaited<ReturnType<typeof listL
 
 
 /**
- * Start a mammoth orchestration job for complex multi-step legal tasks.
+ * Invite a cross-org user as a collaborator on this request.
 
-Creates a job record and enqueues it for async processing.
-Poll /jobs/{job_id} for status, /jobs/{job_id}/result for completed result.
+Requires counsel+ on the owning org (same authorization as 'assign').
+Idempotent: re-inviting upserts the permission tier.
+ * @summary Invite Collaborator
+ */
+export type inviteCollaboratorResponse200 = {
+  data: LegalRequestCollaboratorResponse
+  status: 200
+}
+
+export type inviteCollaboratorResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type inviteCollaboratorResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type inviteCollaboratorResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type inviteCollaboratorResponseSuccess = (inviteCollaboratorResponse200) & {
+  headers: Headers;
+};
+export type inviteCollaboratorResponseError = (inviteCollaboratorResponse401 | inviteCollaboratorResponse404 | inviteCollaboratorResponse422) & {
+  headers: Headers;
+};
+
+export type inviteCollaboratorResponse = (inviteCollaboratorResponseSuccess | inviteCollaboratorResponseError)
+
+export const getInviteCollaboratorUrl = (requestId: string,) => {
+
+
+  
+
+  return `/api/v1/legal-requests/${requestId}/collaborators`
+}
+
+export const inviteCollaborator = async (requestId: string,
+    legalRequestCollaboratorInviteRequest: LegalRequestCollaboratorInviteRequest, options?: RequestInit): Promise<inviteCollaboratorResponse> => {
+  
+  return apiClient<inviteCollaboratorResponse>(getInviteCollaboratorUrl(requestId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      legalRequestCollaboratorInviteRequest,)
+  }
+);}
+  
+
+
+
+export const getInviteCollaboratorMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteCollaborator>>, TError,{requestId: string;data: LegalRequestCollaboratorInviteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteCollaborator>>, TError,{requestId: string;data: LegalRequestCollaboratorInviteRequest}, TContext> => {
+
+const mutationKey = ['inviteCollaborator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteCollaborator>>, {requestId: string;data: LegalRequestCollaboratorInviteRequest}> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  inviteCollaborator(requestId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InviteCollaboratorMutationResult = NonNullable<Awaited<ReturnType<typeof inviteCollaborator>>>
+    export type InviteCollaboratorMutationBody = LegalRequestCollaboratorInviteRequest
+    export type InviteCollaboratorMutationError = ErrorEnvelope
+
+    /**
+ * @summary Invite Collaborator
+ */
+export const useInviteCollaborator = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteCollaborator>>, TError,{requestId: string;data: LegalRequestCollaboratorInviteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof inviteCollaborator>>,
+        TError,
+        {requestId: string;data: LegalRequestCollaboratorInviteRequest},
+        TContext
+      > => {
+      return useMutation(getInviteCollaboratorMutationOptions(options), queryClient);
+    }
+    /**
+ * List collaborators on a request. Visible to anyone with request access.
+ * @summary List Collaborators
+ */
+export type listCollaboratorsResponse200 = {
+  data: LegalRequestCollaboratorListResponse
+  status: 200
+}
+
+export type listCollaboratorsResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type listCollaboratorsResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type listCollaboratorsResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type listCollaboratorsResponseSuccess = (listCollaboratorsResponse200) & {
+  headers: Headers;
+};
+export type listCollaboratorsResponseError = (listCollaboratorsResponse401 | listCollaboratorsResponse404 | listCollaboratorsResponse422) & {
+  headers: Headers;
+};
+
+export type listCollaboratorsResponse = (listCollaboratorsResponseSuccess | listCollaboratorsResponseError)
+
+export const getListCollaboratorsUrl = (requestId: string,) => {
+
+
+  
+
+  return `/api/v1/legal-requests/${requestId}/collaborators`
+}
+
+export const listCollaborators = async (requestId: string, options?: RequestInit): Promise<listCollaboratorsResponse> => {
+  
+  return apiClient<listCollaboratorsResponse>(getListCollaboratorsUrl(requestId),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getListCollaboratorsQueryKey = (requestId: MaybeRef<string>,) => {
+    return [
+    'api','v1','legal-requests',requestId,'collaborators'
+    ] as const;
+    }
+
+    
+export const getListCollaboratorsQueryOptions = <TData = Awaited<ReturnType<typeof listCollaborators>>, TError = ErrorEnvelope>(requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCollaborators>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getListCollaboratorsQueryKey(requestId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCollaborators>>> = ({ signal }) => listCollaborators(unref(requestId), { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: computed(() => !!(unref(requestId))), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCollaborators>>, TError, TData> 
+}
+
+export type ListCollaboratorsQueryResult = NonNullable<Awaited<ReturnType<typeof listCollaborators>>>
+export type ListCollaboratorsQueryError = ErrorEnvelope
+
+
+/**
+ * @summary List Collaborators
+ */
+
+export function useListCollaborators<TData = Awaited<ReturnType<typeof listCollaborators>>, TError = ErrorEnvelope>(
+ requestId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCollaborators>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCollaboratorsQueryOptions(requestId,options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * Revoke a collaborator from this request.
+
+Requires counsel+ on the owning org (same as 'assign').
+ * @summary Revoke Collaborator
+ */
+export type revokeCollaboratorResponse200 = {
+  data: OkResponse
+  status: 200
+}
+
+export type revokeCollaboratorResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type revokeCollaboratorResponse404 = {
+  data: ErrorEnvelope
+  status: 404
+}
+
+export type revokeCollaboratorResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type revokeCollaboratorResponseSuccess = (revokeCollaboratorResponse200) & {
+  headers: Headers;
+};
+export type revokeCollaboratorResponseError = (revokeCollaboratorResponse401 | revokeCollaboratorResponse404 | revokeCollaboratorResponse422) & {
+  headers: Headers;
+};
+
+export type revokeCollaboratorResponse = (revokeCollaboratorResponseSuccess | revokeCollaboratorResponseError)
+
+export const getRevokeCollaboratorUrl = (requestId: string,
+    collaboratorUserId: string,) => {
+
+
+  
+
+  return `/api/v1/legal-requests/${requestId}/collaborators/${collaboratorUserId}`
+}
+
+export const revokeCollaborator = async (requestId: string,
+    collaboratorUserId: string, options?: RequestInit): Promise<revokeCollaboratorResponse> => {
+  
+  return apiClient<revokeCollaboratorResponse>(getRevokeCollaboratorUrl(requestId,collaboratorUserId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+  
+
+
+
+export const getRevokeCollaboratorMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCollaborator>>, TError,{requestId: string;collaboratorUserId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeCollaborator>>, TError,{requestId: string;collaboratorUserId: string}, TContext> => {
+
+const mutationKey = ['revokeCollaborator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeCollaborator>>, {requestId: string;collaboratorUserId: string}> = (props) => {
+          const {requestId,collaboratorUserId} = props ?? {};
+
+          return  revokeCollaborator(requestId,collaboratorUserId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeCollaboratorMutationResult = NonNullable<Awaited<ReturnType<typeof revokeCollaborator>>>
+    
+    export type RevokeCollaboratorMutationError = ErrorEnvelope
+
+    /**
+ * @summary Revoke Collaborator
+ */
+export const useRevokeCollaborator = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCollaborator>>, TError,{requestId: string;collaboratorUserId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof revokeCollaborator>>,
+        TError,
+        {requestId: string;collaboratorUserId: string},
+        TContext
+      > => {
+      return useMutation(getRevokeCollaboratorMutationOptions(options), queryClient);
+    }
+    /**
+ * **Deprecated** — use ``POST /legal-requests/{id}/execute`` instead.
+
+This endpoint creates an untracked mammoth job (no step recording,
+no document auto-creation). Kept for backward compatibility only.
+ * @deprecated
  * @summary Mammoth Request
  */
 export type mammothRequestResponse200 = {
@@ -2511,17 +3010,17 @@ export type mammothRequestResponse200 = {
 }
 
 export type mammothRequestResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type mammothRequestResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
 export type mammothRequestResponse429 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 429
 }
 
@@ -2539,7 +3038,7 @@ export const getMammothRequestUrl = () => {
 
   
 
-  return `/request`
+  return `/api/v1/request`
 }
 
 export const mammothRequest = async (mammothRequest: MammothRequest, options?: RequestInit): Promise<mammothRequestResponse> => {
@@ -2557,16 +3056,16 @@ export const mammothRequest = async (mammothRequest: MammothRequest, options?: R
 
 
 
-export const getMammothRequestMutationOptions = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mammothRequest>>, TError,{data: MammothRequest}, TContext>, }
+export const getMammothRequestMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mammothRequest>>, TError,{data: MammothRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof mammothRequest>>, TError,{data: MammothRequest}, TContext> => {
 
 const mutationKey = ['mammothRequest'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -2574,7 +3073,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof mammothRequest>>, {data: MammothRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  mammothRequest(data,)
+          return  mammothRequest(data,requestOptions)
         }
 
 
@@ -2586,13 +3085,14 @@ const {mutation: mutationOptions} = options ?
 
     export type MammothRequestMutationResult = NonNullable<Awaited<ReturnType<typeof mammothRequest>>>
     export type MammothRequestMutationBody = MammothRequest
-    export type MammothRequestMutationError = AuthErrorResponse | HTTPValidationError | ErrorResponse
+    export type MammothRequestMutationError = ErrorEnvelope
 
     /**
+ * @deprecated
  * @summary Mammoth Request
  */
-export const useMammothRequest = <TError = AuthErrorResponse | HTTPValidationError | ErrorResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mammothRequest>>, TError,{data: MammothRequest}, TContext>, }
+export const useMammothRequest = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mammothRequest>>, TError,{data: MammothRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof mammothRequest>>,
         TError,
@@ -2602,7 +3102,8 @@ export const useMammothRequest = <TError = AuthErrorResponse | HTTPValidationErr
       return useMutation(getMammothRequestMutationOptions(options), queryClient);
     }
     /**
- * Get mammoth result. Prefer using /jobs/{id}/result directly.
+ * **Deprecated** — use ``GET /jobs/{id}/result`` or ``GET /legal-requests/{id}/steps`` instead.
+ * @deprecated
  * @summary Mammoth Result
  */
 export type mammothResultResponse200 = {
@@ -2611,17 +3112,17 @@ export type mammothResultResponse200 = {
 }
 
 export type mammothResultResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type mammothResultResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type mammothResultResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -2639,7 +3140,7 @@ export const getMammothResultUrl = (id: string,) => {
 
   
 
-  return `/request/${id}/result`
+  return `/api/v1/request/${id}/result`
 }
 
 export const mammothResult = async (id: string, options?: RequestInit): Promise<mammothResultResponse> => {
@@ -2659,21 +3160,21 @@ export const mammothResult = async (id: string, options?: RequestInit): Promise<
 
 export const getMammothResultQueryKey = (id: MaybeRef<string>,) => {
     return [
-    'request',id,'result'
+    'api','v1','request',id,'result'
     ] as const;
     }
 
     
-export const getMammothResultQueryOptions = <TData = Awaited<ReturnType<typeof mammothResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mammothResult>>, TError, TData>>, }
+export const getMammothResultQueryOptions = <TData = Awaited<ReturnType<typeof mammothResult>>, TError = ErrorEnvelope>(id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mammothResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getMammothResultQueryKey(id);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof mammothResult>>> = ({ signal }) => mammothResult(unref(id), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof mammothResult>>> = ({ signal }) => mammothResult(unref(id), { signal, ...requestOptions });
 
       
 
@@ -2683,15 +3184,16 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type MammothResultQueryResult = NonNullable<Awaited<ReturnType<typeof mammothResult>>>
-export type MammothResultQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type MammothResultQueryError = ErrorEnvelope
 
 
 /**
+ * @deprecated
  * @summary Mammoth Result
  */
 
-export function useMammothResult<TData = Awaited<ReturnType<typeof mammothResult>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mammothResult>>, TError, TData>>, }
+export function useMammothResult<TData = Awaited<ReturnType<typeof mammothResult>>, TError = ErrorEnvelope>(
+ id: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof mammothResult>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -26,10 +26,13 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  Entitlements200,
-  HTTPValidationError,
+  EntitlementsResponse,
+  ErrorEnvelope,
   MeResponse,
+  ProfileQuizRequest,
+  ProfileQuizResponse,
+  SwitchOrgRequest,
+  SwitchOrgResponse,
   UsageResponse,
   UserPreferencesRequest,
   UserPreferencesResponse
@@ -37,6 +40,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -49,12 +54,12 @@ export type meResponse200 = {
 }
 
 export type meResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type meResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -72,7 +77,7 @@ export const getMeUrl = () => {
 
   
 
-  return `/me`
+  return `/api/v1/me`
 }
 
 export const me = async ( options?: RequestInit): Promise<meResponse> => {
@@ -92,21 +97,21 @@ export const me = async ( options?: RequestInit): Promise<meResponse> => {
 
 export const getMeQueryKey = () => {
     return [
-    'me'
+    'api','v1','me'
     ] as const;
     }
 
     
-export const getMeQueryOptions = <TData = Awaited<ReturnType<typeof me>>, TError = AuthErrorResponse | HTTPValidationError>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof me>>, TError, TData>>, }
+export const getMeQueryOptions = <TData = Awaited<ReturnType<typeof me>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof me>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getMeQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof me>>> = ({ signal }) => me({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof me>>> = ({ signal }) => me({ signal, ...requestOptions });
 
       
 
@@ -116,15 +121,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type MeQueryResult = NonNullable<Awaited<ReturnType<typeof me>>>
-export type MeQueryError = AuthErrorResponse | HTTPValidationError
+export type MeQueryError = ErrorEnvelope
 
 
 /**
  * @summary Me
  */
 
-export function useMe<TData = Awaited<ReturnType<typeof me>>, TError = AuthErrorResponse | HTTPValidationError>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof me>>, TError, TData>>, }
+export function useMe<TData = Awaited<ReturnType<typeof me>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof me>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -150,12 +155,12 @@ export type updatePreferencesResponse200 = {
 }
 
 export type updatePreferencesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type updatePreferencesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -173,7 +178,7 @@ export const getUpdatePreferencesUrl = () => {
 
   
 
-  return `/me/preferences`
+  return `/api/v1/me/preferences`
 }
 
 export const updatePreferences = async (userPreferencesRequest: UserPreferencesRequest, options?: RequestInit): Promise<updatePreferencesResponse> => {
@@ -191,16 +196,16 @@ export const updatePreferences = async (userPreferencesRequest: UserPreferencesR
 
 
 
-export const getUpdatePreferencesMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePreferences>>, TError,{data: UserPreferencesRequest}, TContext>, }
+export const getUpdatePreferencesMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePreferences>>, TError,{data: UserPreferencesRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updatePreferences>>, TError,{data: UserPreferencesRequest}, TContext> => {
 
 const mutationKey = ['updatePreferences'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -208,7 +213,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePreferences>>, {data: UserPreferencesRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  updatePreferences(data,)
+          return  updatePreferences(data,requestOptions)
         }
 
 
@@ -220,13 +225,13 @@ const {mutation: mutationOptions} = options ?
 
     export type UpdatePreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updatePreferences>>>
     export type UpdatePreferencesMutationBody = UserPreferencesRequest
-    export type UpdatePreferencesMutationError = AuthErrorResponse | HTTPValidationError
+    export type UpdatePreferencesMutationError = ErrorEnvelope
 
     /**
  * @summary Update Preferences
  */
-export const useUpdatePreferences = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePreferences>>, TError,{data: UserPreferencesRequest}, TContext>, }
+export const useUpdatePreferences = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePreferences>>, TError,{data: UserPreferencesRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof updatePreferences>>,
         TError,
@@ -236,20 +241,115 @@ export const useUpdatePreferences = <TError = AuthErrorResponse | HTTPValidation
       return useMutation(getUpdatePreferencesMutationOptions(options), queryClient);
     }
     /**
+ * Store onboarding quiz answers as learner profile memory facets.
+ * @summary Profile Quiz
+ */
+export type profileQuizResponse200 = {
+  data: ProfileQuizResponse
+  status: 200
+}
+
+export type profileQuizResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type profileQuizResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type profileQuizResponseSuccess = (profileQuizResponse200) & {
+  headers: Headers;
+};
+export type profileQuizResponseError = (profileQuizResponse401 | profileQuizResponse422) & {
+  headers: Headers;
+};
+
+export type profileQuizResponse = (profileQuizResponseSuccess | profileQuizResponseError)
+
+export const getProfileQuizUrl = () => {
+
+
+  
+
+  return `/api/v1/me/profile-quiz`
+}
+
+export const profileQuiz = async (profileQuizRequest: ProfileQuizRequest, options?: RequestInit): Promise<profileQuizResponse> => {
+  
+  return apiClient<profileQuizResponse>(getProfileQuizUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      profileQuizRequest,)
+  }
+);}
+  
+
+
+
+export const getProfileQuizMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof profileQuiz>>, TError,{data: ProfileQuizRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof profileQuiz>>, TError,{data: ProfileQuizRequest}, TContext> => {
+
+const mutationKey = ['profileQuiz'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof profileQuiz>>, {data: ProfileQuizRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  profileQuiz(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProfileQuizMutationResult = NonNullable<Awaited<ReturnType<typeof profileQuiz>>>
+    export type ProfileQuizMutationBody = ProfileQuizRequest
+    export type ProfileQuizMutationError = ErrorEnvelope
+
+    /**
+ * @summary Profile Quiz
+ */
+export const useProfileQuiz = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof profileQuiz>>, TError,{data: ProfileQuizRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof profileQuiz>>,
+        TError,
+        {data: ProfileQuizRequest},
+        TContext
+      > => {
+      return useMutation(getProfileQuizMutationOptions(options), queryClient);
+    }
+    /**
  * @summary Entitlements
  */
 export type entitlementsResponse200 = {
-  data: Entitlements200
+  data: EntitlementsResponse
   status: 200
 }
 
 export type entitlementsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type entitlementsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -267,7 +367,7 @@ export const getEntitlementsUrl = () => {
 
   
 
-  return `/entitlements`
+  return `/api/v1/entitlements`
 }
 
 export const entitlements = async ( options?: RequestInit): Promise<entitlementsResponse> => {
@@ -287,21 +387,21 @@ export const entitlements = async ( options?: RequestInit): Promise<entitlements
 
 export const getEntitlementsQueryKey = () => {
     return [
-    'entitlements'
+    'api','v1','entitlements'
     ] as const;
     }
 
     
-export const getEntitlementsQueryOptions = <TData = Awaited<ReturnType<typeof entitlements>>, TError = AuthErrorResponse | HTTPValidationError>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof entitlements>>, TError, TData>>, }
+export const getEntitlementsQueryOptions = <TData = Awaited<ReturnType<typeof entitlements>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof entitlements>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getEntitlementsQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof entitlements>>> = ({ signal }) => entitlements({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof entitlements>>> = ({ signal }) => entitlements({ signal, ...requestOptions });
 
       
 
@@ -311,15 +411,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type EntitlementsQueryResult = NonNullable<Awaited<ReturnType<typeof entitlements>>>
-export type EntitlementsQueryError = AuthErrorResponse | HTTPValidationError
+export type EntitlementsQueryError = ErrorEnvelope
 
 
 /**
  * @summary Entitlements
  */
 
-export function useEntitlements<TData = Awaited<ReturnType<typeof entitlements>>, TError = AuthErrorResponse | HTTPValidationError>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof entitlements>>, TError, TData>>, }
+export function useEntitlements<TData = Awaited<ReturnType<typeof entitlements>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof entitlements>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -336,46 +436,39 @@ export function useEntitlements<TData = Awaited<ReturnType<typeof entitlements>>
 
 
 /**
- * Stub usage endpoint (Phase 1.1).
-
-Backing store will be Redis quota counters + persistence later.
- * @summary Usage
+ * Return real-time quota consumption for the current org.
+ * @summary Get Usage
  */
-export type usageResponse200 = {
+export type getUsageResponse200 = {
   data: UsageResponse
   status: 200
 }
 
-export type usageResponse401 = {
-  data: AuthErrorResponse
+export type getUsageResponse401 = {
+  data: ErrorEnvelope
   status: 401
 }
 
-export type usageResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type usageResponseSuccess = (usageResponse200) & {
+export type getUsageResponseSuccess = (getUsageResponse200) & {
   headers: Headers;
 };
-export type usageResponseError = (usageResponse401 | usageResponse422) & {
+export type getUsageResponseError = (getUsageResponse401) & {
   headers: Headers;
 };
 
-export type usageResponse = (usageResponseSuccess | usageResponseError)
+export type getUsageResponse = (getUsageResponseSuccess | getUsageResponseError)
 
-export const getUsageUrl = () => {
+export const getGetUsageUrl = () => {
 
 
   
 
-  return `/usage`
+  return `/api/v1/usage`
 }
 
-export const usage = async ( options?: RequestInit): Promise<usageResponse> => {
+export const getUsage = async ( options?: RequestInit): Promise<getUsageResponse> => {
   
-  return apiClient<usageResponse>(getUsageUrl(),
+  return apiClient<getUsageResponse>(getGetUsageUrl(),
   {      
     ...options,
     method: 'GET'
@@ -388,45 +481,45 @@ export const usage = async ( options?: RequestInit): Promise<usageResponse> => {
 
 
 
-export const getUsageQueryKey = () => {
+export const getGetUsageQueryKey = () => {
     return [
-    'usage'
+    'api','v1','usage'
     ] as const;
     }
 
     
-export const getUsageQueryOptions = <TData = Awaited<ReturnType<typeof usage>>, TError = AuthErrorResponse | HTTPValidationError>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof usage>>, TError, TData>>, }
+export const getGetUsageQueryOptions = <TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  getUsageQueryKey();
+  const queryKey =  getGetUsageQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof usage>>> = ({ signal }) => usage({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsage>>> = ({ signal }) => getUsage({ signal, ...requestOptions });
 
       
 
       
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof usage>>, TError, TData> 
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData> 
 }
 
-export type UsageQueryResult = NonNullable<Awaited<ReturnType<typeof usage>>>
-export type UsageQueryError = AuthErrorResponse | HTTPValidationError
+export type GetUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getUsage>>>
+export type GetUsageQueryError = ErrorEnvelope
 
 
 /**
- * @summary Usage
+ * @summary Get Usage
  */
 
-export function useUsage<TData = Awaited<ReturnType<typeof usage>>, TError = AuthErrorResponse | HTTPValidationError>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof usage>>, TError, TData>>, }
+export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsage>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getUsageQueryOptions(options)
+  const queryOptions = getGetUsageQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -438,3 +531,98 @@ export function useUsage<TData = Awaited<ReturnType<typeof usage>>, TError = Aut
 
 
 
+/**
+ * @summary Switch Org
+ */
+export type switchOrgResponse200 = {
+  data: SwitchOrgResponse
+  status: 200
+}
+
+export type switchOrgResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type switchOrgResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type switchOrgResponseSuccess = (switchOrgResponse200) & {
+  headers: Headers;
+};
+export type switchOrgResponseError = (switchOrgResponse401 | switchOrgResponse422) & {
+  headers: Headers;
+};
+
+export type switchOrgResponse = (switchOrgResponseSuccess | switchOrgResponseError)
+
+export const getSwitchOrgUrl = () => {
+
+
+  
+
+  return `/api/v1/me/switch-org`
+}
+
+export const switchOrg = async (switchOrgRequest: SwitchOrgRequest, options?: RequestInit): Promise<switchOrgResponse> => {
+  
+  return apiClient<switchOrgResponse>(getSwitchOrgUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      switchOrgRequest,)
+  }
+);}
+  
+
+
+
+export const getSwitchOrgMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof switchOrg>>, TError,{data: SwitchOrgRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof switchOrg>>, TError,{data: SwitchOrgRequest}, TContext> => {
+
+const mutationKey = ['switchOrg'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof switchOrg>>, {data: SwitchOrgRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  switchOrg(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SwitchOrgMutationResult = NonNullable<Awaited<ReturnType<typeof switchOrg>>>
+    export type SwitchOrgMutationBody = SwitchOrgRequest
+    export type SwitchOrgMutationError = ErrorEnvelope
+
+    /**
+ * @summary Switch Org
+ */
+export const useSwitchOrg = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof switchOrg>>, TError,{data: SwitchOrgRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof switchOrg>>,
+        TError,
+        {data: SwitchOrgRequest},
+        TContext
+      > => {
+      return useMutation(getSwitchOrgMutationOptions(options), queryClient);
+    }
+    

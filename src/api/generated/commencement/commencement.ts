@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,16 +16,15 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AddCommencementBody,
-  AuthErrorResponse,
   CommencementExtractRequest,
   CommencementExtractResponse,
-  HTTPValidationError,
-  OkResponse
+  ErrorEnvelope
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -41,19 +40,24 @@ export type extractCommencementResponse200 = {
 }
 
 export type extractCommencementResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractCommencementResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractCommencementResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractCommencementResponseSuccess = (extractCommencementResponse200) & {
   headers: Headers;
 };
-export type extractCommencementResponseError = (extractCommencementResponse401 | extractCommencementResponse422) & {
+export type extractCommencementResponseError = (extractCommencementResponse401 | extractCommencementResponse422 | extractCommencementResponse429) & {
   headers: Headers;
 };
 
@@ -64,7 +68,7 @@ export const getExtractCommencementUrl = () => {
 
   
 
-  return `/commencement/extract`
+  return `/api/v1/commencement/extract`
 }
 
 export const extractCommencement = async (commencementExtractRequest: CommencementExtractRequest, options?: RequestInit): Promise<extractCommencementResponse> => {
@@ -82,16 +86,16 @@ export const extractCommencement = async (commencementExtractRequest: Commenceme
 
 
 
-export const getExtractCommencementMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractCommencement>>, TError,{data: CommencementExtractRequest}, TContext>, }
+export const getExtractCommencementMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractCommencement>>, TError,{data: CommencementExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractCommencement>>, TError,{data: CommencementExtractRequest}, TContext> => {
 
 const mutationKey = ['extractCommencement'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -99,7 +103,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractCommencement>>, {data: CommencementExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractCommencement(data,)
+          return  extractCommencement(data,requestOptions)
         }
 
 
@@ -111,13 +115,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractCommencementMutationResult = NonNullable<Awaited<ReturnType<typeof extractCommencement>>>
     export type ExtractCommencementMutationBody = CommencementExtractRequest
-    export type ExtractCommencementMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractCommencementMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Commencement
  */
-export const useExtractCommencement = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractCommencement>>, TError,{data: CommencementExtractRequest}, TContext>, }
+export const useExtractCommencement = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractCommencement>>, TError,{data: CommencementExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractCommencement>>,
         TError,
@@ -125,100 +129,5 @@ export const useExtractCommencement = <TError = AuthErrorResponse | HTTPValidati
         TContext
       > => {
       return useMutation(getExtractCommencementMutationOptions(options), queryClient);
-    }
-    /**
- * Store a commencement record (placeholder — storage TBD).
- * @summary Add Commencement
- */
-export type addCommencementResponse200 = {
-  data: OkResponse
-  status: 200
-}
-
-export type addCommencementResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type addCommencementResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type addCommencementResponseSuccess = (addCommencementResponse200) & {
-  headers: Headers;
-};
-export type addCommencementResponseError = (addCommencementResponse401 | addCommencementResponse422) & {
-  headers: Headers;
-};
-
-export type addCommencementResponse = (addCommencementResponseSuccess | addCommencementResponseError)
-
-export const getAddCommencementUrl = () => {
-
-
-  
-
-  return `/commencement`
-}
-
-export const addCommencement = async (addCommencementBody: AddCommencementBody, options?: RequestInit): Promise<addCommencementResponse> => {
-  
-  return apiClient<addCommencementResponse>(getAddCommencementUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      addCommencementBody,)
-  }
-);}
-  
-
-
-
-export const getAddCommencementMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addCommencement>>, TError,{data: AddCommencementBody}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof addCommencement>>, TError,{data: AddCommencementBody}, TContext> => {
-
-const mutationKey = ['addCommencement'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addCommencement>>, {data: AddCommencementBody}> = (props) => {
-          const {data} = props ?? {};
-
-          return  addCommencement(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type AddCommencementMutationResult = NonNullable<Awaited<ReturnType<typeof addCommencement>>>
-    export type AddCommencementMutationBody = AddCommencementBody
-    export type AddCommencementMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Add Commencement
- */
-export const useAddCommencement = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addCommencement>>, TError,{data: AddCommencementBody}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof addCommencement>>,
-        TError,
-        {data: AddCommencementBody},
-        TContext
-      > => {
-      return useMutation(getAddCommencementMutationOptions(options), queryClient);
     }
     

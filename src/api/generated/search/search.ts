@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -22,6 +22,7 @@ import type {
 } from '@tanstack/vue-query';
 
 import {
+  computed,
   unref
 } from 'vue';
 import type {
@@ -29,8 +30,7 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   LegalSearchDetectParams,
   LegalSearchRequest,
   LegalSearchResponse,
@@ -62,6 +62,8 @@ interface TypedResponse<T> extends Response {
 
 
 
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 /**
@@ -74,7 +76,7 @@ export type searchSummaryPromptTypesResponse200 = {
 }
 
 export type searchSummaryPromptTypesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -92,7 +94,7 @@ export const getSearchSummaryPromptTypesUrl = () => {
 
   
 
-  return `/search/summary/prompt-types`
+  return `/api/v1/search/summary/prompt-types`
 }
 
 export const searchSummaryPromptTypes = async ( options?: RequestInit): Promise<searchSummaryPromptTypesResponse> => {
@@ -112,21 +114,21 @@ export const searchSummaryPromptTypes = async ( options?: RequestInit): Promise<
 
 export const getSearchSummaryPromptTypesQueryKey = () => {
     return [
-    'search','summary','prompt-types'
+    'api','v1','search','summary','prompt-types'
     ] as const;
     }
 
     
-export const getSearchSummaryPromptTypesQueryOptions = <TData = Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError, TData>>, }
+export const getSearchSummaryPromptTypesQueryOptions = <TData = Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getSearchSummaryPromptTypesQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchSummaryPromptTypes>>> = ({ signal }) => searchSummaryPromptTypes({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchSummaryPromptTypes>>> = ({ signal }) => searchSummaryPromptTypes({ signal, ...requestOptions });
 
       
 
@@ -136,15 +138,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type SearchSummaryPromptTypesQueryResult = NonNullable<Awaited<ReturnType<typeof searchSummaryPromptTypes>>>
-export type SearchSummaryPromptTypesQueryError = AuthErrorResponse
+export type SearchSummaryPromptTypesQueryError = ErrorEnvelope
 
 
 /**
  * @summary Search Summary Prompt Types
  */
 
-export function useSearchSummaryPromptTypes<TData = Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError, TData>>, }
+export function useSearchSummaryPromptTypes<TData = Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSummaryPromptTypes>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -178,12 +180,12 @@ export type legalSearchKeywordResponse200 = {
 }
 
 export type legalSearchKeywordResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchKeywordResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -201,7 +203,7 @@ export const getLegalSearchKeywordUrl = () => {
 
   
 
-  return `/search/keyword`
+  return `/api/v1/search/keyword`
 }
 
 export const legalSearchKeyword = async (legalSearchRequest: LegalSearchRequest, options?: RequestInit): Promise<legalSearchKeywordResponse> => {
@@ -219,16 +221,16 @@ export const legalSearchKeyword = async (legalSearchRequest: LegalSearchRequest,
 
 
 
-export const getLegalSearchKeywordMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchKeyword>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const getLegalSearchKeywordMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchKeyword>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof legalSearchKeyword>>, TError,{data: LegalSearchRequest}, TContext> => {
 
 const mutationKey = ['legalSearchKeyword'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -236,7 +238,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof legalSearchKeyword>>, {data: LegalSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  legalSearchKeyword(data,)
+          return  legalSearchKeyword(data,requestOptions)
         }
 
 
@@ -248,13 +250,13 @@ const {mutation: mutationOptions} = options ?
 
     export type LegalSearchKeywordMutationResult = NonNullable<Awaited<ReturnType<typeof legalSearchKeyword>>>
     export type LegalSearchKeywordMutationBody = LegalSearchRequest
-    export type LegalSearchKeywordMutationError = AuthErrorResponse | HTTPValidationError
+    export type LegalSearchKeywordMutationError = ErrorEnvelope
 
     /**
  * @summary Legal Search Keyword
  */
-export const useLegalSearchKeyword = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchKeyword>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const useLegalSearchKeyword = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchKeyword>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof legalSearchKeyword>>,
         TError,
@@ -278,12 +280,12 @@ export type legalSearchSemanticResponse200 = {
 }
 
 export type legalSearchSemanticResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchSemanticResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -301,7 +303,7 @@ export const getLegalSearchSemanticUrl = () => {
 
   
 
-  return `/search/semantic`
+  return `/api/v1/search/semantic`
 }
 
 export const legalSearchSemantic = async (legalSearchRequest: LegalSearchRequest, options?: RequestInit): Promise<legalSearchSemanticResponse> => {
@@ -319,16 +321,16 @@ export const legalSearchSemantic = async (legalSearchRequest: LegalSearchRequest
 
 
 
-export const getLegalSearchSemanticMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchSemantic>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const getLegalSearchSemanticMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchSemantic>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof legalSearchSemantic>>, TError,{data: LegalSearchRequest}, TContext> => {
 
 const mutationKey = ['legalSearchSemantic'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -336,7 +338,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof legalSearchSemantic>>, {data: LegalSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  legalSearchSemantic(data,)
+          return  legalSearchSemantic(data,requestOptions)
         }
 
 
@@ -348,13 +350,13 @@ const {mutation: mutationOptions} = options ?
 
     export type LegalSearchSemanticMutationResult = NonNullable<Awaited<ReturnType<typeof legalSearchSemantic>>>
     export type LegalSearchSemanticMutationBody = LegalSearchRequest
-    export type LegalSearchSemanticMutationError = AuthErrorResponse | HTTPValidationError
+    export type LegalSearchSemanticMutationError = ErrorEnvelope
 
     /**
  * @summary Legal Search Semantic
  */
-export const useLegalSearchSemantic = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchSemantic>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const useLegalSearchSemantic = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchSemantic>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof legalSearchSemantic>>,
         TError,
@@ -382,12 +384,12 @@ export type legalSearchBooleanResponse200 = {
 }
 
 export type legalSearchBooleanResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchBooleanResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -405,7 +407,7 @@ export const getLegalSearchBooleanUrl = () => {
 
   
 
-  return `/search/boolean`
+  return `/api/v1/search/boolean`
 }
 
 export const legalSearchBoolean = async (legalSearchRequest: LegalSearchRequest, options?: RequestInit): Promise<legalSearchBooleanResponse> => {
@@ -423,16 +425,16 @@ export const legalSearchBoolean = async (legalSearchRequest: LegalSearchRequest,
 
 
 
-export const getLegalSearchBooleanMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchBoolean>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const getLegalSearchBooleanMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchBoolean>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof legalSearchBoolean>>, TError,{data: LegalSearchRequest}, TContext> => {
 
 const mutationKey = ['legalSearchBoolean'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -440,7 +442,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof legalSearchBoolean>>, {data: LegalSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  legalSearchBoolean(data,)
+          return  legalSearchBoolean(data,requestOptions)
         }
 
 
@@ -452,13 +454,13 @@ const {mutation: mutationOptions} = options ?
 
     export type LegalSearchBooleanMutationResult = NonNullable<Awaited<ReturnType<typeof legalSearchBoolean>>>
     export type LegalSearchBooleanMutationBody = LegalSearchRequest
-    export type LegalSearchBooleanMutationError = AuthErrorResponse | HTTPValidationError
+    export type LegalSearchBooleanMutationError = ErrorEnvelope
 
     /**
  * @summary Legal Search Boolean
  */
-export const useLegalSearchBoolean = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchBoolean>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const useLegalSearchBoolean = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchBoolean>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof legalSearchBoolean>>,
         TError,
@@ -484,12 +486,12 @@ export type legalSearchProximityResponse200 = {
 }
 
 export type legalSearchProximityResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchProximityResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -507,7 +509,7 @@ export const getLegalSearchProximityUrl = () => {
 
   
 
-  return `/search/proximity`
+  return `/api/v1/search/proximity`
 }
 
 export const legalSearchProximity = async (proximitySearchRequest: ProximitySearchRequest, options?: RequestInit): Promise<legalSearchProximityResponse> => {
@@ -525,16 +527,16 @@ export const legalSearchProximity = async (proximitySearchRequest: ProximitySear
 
 
 
-export const getLegalSearchProximityMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchProximity>>, TError,{data: ProximitySearchRequest}, TContext>, }
+export const getLegalSearchProximityMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchProximity>>, TError,{data: ProximitySearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof legalSearchProximity>>, TError,{data: ProximitySearchRequest}, TContext> => {
 
 const mutationKey = ['legalSearchProximity'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -542,7 +544,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof legalSearchProximity>>, {data: ProximitySearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  legalSearchProximity(data,)
+          return  legalSearchProximity(data,requestOptions)
         }
 
 
@@ -554,13 +556,13 @@ const {mutation: mutationOptions} = options ?
 
     export type LegalSearchProximityMutationResult = NonNullable<Awaited<ReturnType<typeof legalSearchProximity>>>
     export type LegalSearchProximityMutationBody = ProximitySearchRequest
-    export type LegalSearchProximityMutationError = AuthErrorResponse | HTTPValidationError
+    export type LegalSearchProximityMutationError = ErrorEnvelope
 
     /**
  * @summary Legal Search Proximity
  */
-export const useLegalSearchProximity = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchProximity>>, TError,{data: ProximitySearchRequest}, TContext>, }
+export const useLegalSearchProximity = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchProximity>>, TError,{data: ProximitySearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof legalSearchProximity>>,
         TError,
@@ -589,12 +591,12 @@ export type legalSearchAutoResponse200 = {
 }
 
 export type legalSearchAutoResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchAutoResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -612,7 +614,7 @@ export const getLegalSearchAutoUrl = () => {
 
   
 
-  return `/search/auto`
+  return `/api/v1/search/auto`
 }
 
 export const legalSearchAuto = async (legalSearchRequest: LegalSearchRequest, options?: RequestInit): Promise<legalSearchAutoResponse> => {
@@ -630,16 +632,16 @@ export const legalSearchAuto = async (legalSearchRequest: LegalSearchRequest, op
 
 
 
-export const getLegalSearchAutoMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchAuto>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const getLegalSearchAutoMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchAuto>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof legalSearchAuto>>, TError,{data: LegalSearchRequest}, TContext> => {
 
 const mutationKey = ['legalSearchAuto'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -647,7 +649,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof legalSearchAuto>>, {data: LegalSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  legalSearchAuto(data,)
+          return  legalSearchAuto(data,requestOptions)
         }
 
 
@@ -659,13 +661,13 @@ const {mutation: mutationOptions} = options ?
 
     export type LegalSearchAutoMutationResult = NonNullable<Awaited<ReturnType<typeof legalSearchAuto>>>
     export type LegalSearchAutoMutationBody = LegalSearchRequest
-    export type LegalSearchAutoMutationError = AuthErrorResponse | HTTPValidationError
+    export type LegalSearchAutoMutationError = ErrorEnvelope
 
     /**
  * @summary Legal Search Auto
  */
-export const useLegalSearchAuto = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchAuto>>, TError,{data: LegalSearchRequest}, TContext>, }
+export const useLegalSearchAuto = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof legalSearchAuto>>, TError,{data: LegalSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof legalSearchAuto>>,
         TError,
@@ -688,12 +690,12 @@ export type searchUnifiedResponse200 = {
 }
 
 export type searchUnifiedResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchUnifiedResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -711,7 +713,7 @@ export const getSearchUnifiedUrl = () => {
 
   
 
-  return `/search/unified`
+  return `/api/v1/search/unified`
 }
 
 export const searchUnified = async (unifiedSearchRequest: UnifiedSearchRequest, options?: RequestInit): Promise<searchUnifiedResponse> => {
@@ -729,16 +731,16 @@ export const searchUnified = async (unifiedSearchRequest: UnifiedSearchRequest, 
 
 
 
-export const getSearchUnifiedMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchUnified>>, TError,{data: UnifiedSearchRequest}, TContext>, }
+export const getSearchUnifiedMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchUnified>>, TError,{data: UnifiedSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchUnified>>, TError,{data: UnifiedSearchRequest}, TContext> => {
 
 const mutationKey = ['searchUnified'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -746,7 +748,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchUnified>>, {data: UnifiedSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchUnified(data,)
+          return  searchUnified(data,requestOptions)
         }
 
 
@@ -758,13 +760,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchUnifiedMutationResult = NonNullable<Awaited<ReturnType<typeof searchUnified>>>
     export type SearchUnifiedMutationBody = UnifiedSearchRequest
-    export type SearchUnifiedMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchUnifiedMutationError = ErrorEnvelope
 
     /**
  * @summary Search Unified
  */
-export const useSearchUnified = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchUnified>>, TError,{data: UnifiedSearchRequest}, TContext>, }
+export const useSearchUnified = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchUnified>>, TError,{data: UnifiedSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchUnified>>,
         TError,
@@ -787,12 +789,12 @@ export type legalSearchDetectResponse200 = {
 }
 
 export type legalSearchDetectResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type legalSearchDetectResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -817,7 +819,7 @@ export const getLegalSearchDetectUrl = (params: LegalSearchDetectParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/search/detect?${stringifiedParams}` : `/search/detect`
+  return stringifiedParams.length > 0 ? `/api/v1/search/detect?${stringifiedParams}` : `/api/v1/search/detect`
 }
 
 export const legalSearchDetect = async (params: LegalSearchDetectParams, options?: RequestInit): Promise<legalSearchDetectResponse> => {
@@ -837,21 +839,21 @@ export const legalSearchDetect = async (params: LegalSearchDetectParams, options
 
 export const getLegalSearchDetectQueryKey = (params?: MaybeRef<LegalSearchDetectParams>,) => {
     return [
-    'search','detect', ...(params ? [params] : [])
+    'api','v1','search','detect', ...(params ? [params] : [])
     ] as const;
     }
 
     
-export const getLegalSearchDetectQueryOptions = <TData = Awaited<ReturnType<typeof legalSearchDetect>>, TError = AuthErrorResponse | HTTPValidationError>(params: MaybeRef<LegalSearchDetectParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof legalSearchDetect>>, TError, TData>>, }
+export const getLegalSearchDetectQueryOptions = <TData = Awaited<ReturnType<typeof legalSearchDetect>>, TError = ErrorEnvelope>(params: MaybeRef<LegalSearchDetectParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof legalSearchDetect>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getLegalSearchDetectQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof legalSearchDetect>>> = ({ signal }) => legalSearchDetect(unref(params), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof legalSearchDetect>>> = ({ signal }) => legalSearchDetect(unref(params), { signal, ...requestOptions });
 
       
 
@@ -861,15 +863,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type LegalSearchDetectQueryResult = NonNullable<Awaited<ReturnType<typeof legalSearchDetect>>>
-export type LegalSearchDetectQueryError = AuthErrorResponse | HTTPValidationError
+export type LegalSearchDetectQueryError = ErrorEnvelope
 
 
 /**
  * @summary Legal Search Detect
  */
 
-export function useLegalSearchDetect<TData = Awaited<ReturnType<typeof legalSearchDetect>>, TError = AuthErrorResponse | HTTPValidationError>(
- params: MaybeRef<LegalSearchDetectParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof legalSearchDetect>>, TError, TData>>, }
+export function useLegalSearchDetect<TData = Awaited<ReturnType<typeof legalSearchDetect>>, TError = ErrorEnvelope>(
+ params: MaybeRef<LegalSearchDetectParams>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof legalSearchDetect>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -895,12 +897,12 @@ export type searchWebResponse200 = {
 }
 
 export type searchWebResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchWebResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -918,7 +920,7 @@ export const getSearchWebUrl = () => {
 
   
 
-  return `/search/web`
+  return `/api/v1/search/web`
 }
 
 export const searchWeb = async (webSearchRequest: WebSearchRequest, options?: RequestInit): Promise<searchWebResponse> => {
@@ -936,16 +938,16 @@ export const searchWeb = async (webSearchRequest: WebSearchRequest, options?: Re
 
 
 
-export const getSearchWebMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchWeb>>, TError,{data: WebSearchRequest}, TContext>, }
+export const getSearchWebMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchWeb>>, TError,{data: WebSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchWeb>>, TError,{data: WebSearchRequest}, TContext> => {
 
 const mutationKey = ['searchWeb'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -953,7 +955,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchWeb>>, {data: WebSearchRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchWeb(data,)
+          return  searchWeb(data,requestOptions)
         }
 
 
@@ -965,13 +967,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchWebMutationResult = NonNullable<Awaited<ReturnType<typeof searchWeb>>>
     export type SearchWebMutationBody = WebSearchRequest
-    export type SearchWebMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchWebMutationError = ErrorEnvelope
 
     /**
  * @summary Search Web
  */
-export const useSearchWeb = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchWeb>>, TError,{data: WebSearchRequest}, TContext>, }
+export const useSearchWeb = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchWeb>>, TError,{data: WebSearchRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchWeb>>,
         TError,
@@ -992,12 +994,12 @@ export type searchBriefcaseResponse200 = {
 }
 
 export type searchBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1015,7 +1017,7 @@ export const getSearchBriefcaseUrl = () => {
 
   
 
-  return `/search/briefcase`
+  return `/api/v1/search/briefcase`
 }
 
 export const searchBriefcase = async (searchQueryRequest: SearchQueryRequest, options?: RequestInit): Promise<searchBriefcaseResponse> => {
@@ -1033,16 +1035,16 @@ export const searchBriefcase = async (searchQueryRequest: SearchQueryRequest, op
 
 
 
-export const getSearchBriefcaseMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchBriefcase>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const getSearchBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchBriefcase>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchBriefcase>>, TError,{data: SearchQueryRequest}, TContext> => {
 
 const mutationKey = ['searchBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1050,7 +1052,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchBriefcase>>, {data: SearchQueryRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchBriefcase(data,)
+          return  searchBriefcase(data,requestOptions)
         }
 
 
@@ -1062,13 +1064,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof searchBriefcase>>>
     export type SearchBriefcaseMutationBody = SearchQueryRequest
-    export type SearchBriefcaseMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Search Briefcase
  */
-export const useSearchBriefcase = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchBriefcase>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const useSearchBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchBriefcase>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchBriefcase>>,
         TError,
@@ -1089,12 +1091,12 @@ export type searchPlaybookResponse200 = {
 }
 
 export type searchPlaybookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchPlaybookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1112,7 +1114,7 @@ export const getSearchPlaybookUrl = () => {
 
   
 
-  return `/search/playbook`
+  return `/api/v1/search/playbook`
 }
 
 export const searchPlaybook = async (searchQueryRequest: SearchQueryRequest, options?: RequestInit): Promise<searchPlaybookResponse> => {
@@ -1130,16 +1132,16 @@ export const searchPlaybook = async (searchQueryRequest: SearchQueryRequest, opt
 
 
 
-export const getSearchPlaybookMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchPlaybook>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const getSearchPlaybookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchPlaybook>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchPlaybook>>, TError,{data: SearchQueryRequest}, TContext> => {
 
 const mutationKey = ['searchPlaybook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1147,7 +1149,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchPlaybook>>, {data: SearchQueryRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchPlaybook(data,)
+          return  searchPlaybook(data,requestOptions)
         }
 
 
@@ -1159,13 +1161,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchPlaybookMutationResult = NonNullable<Awaited<ReturnType<typeof searchPlaybook>>>
     export type SearchPlaybookMutationBody = SearchQueryRequest
-    export type SearchPlaybookMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchPlaybookMutationError = ErrorEnvelope
 
     /**
  * @summary Search Playbook
  */
-export const useSearchPlaybook = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchPlaybook>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const useSearchPlaybook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchPlaybook>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchPlaybook>>,
         TError,
@@ -1186,12 +1188,12 @@ export type searchClausesResponse200 = {
 }
 
 export type searchClausesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchClausesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1209,7 +1211,7 @@ export const getSearchClausesUrl = () => {
 
   
 
-  return `/search/clauses`
+  return `/api/v1/search/clauses`
 }
 
 export const searchClauses = async (searchQueryRequest: SearchQueryRequest, options?: RequestInit): Promise<searchClausesResponse> => {
@@ -1227,16 +1229,16 @@ export const searchClauses = async (searchQueryRequest: SearchQueryRequest, opti
 
 
 
-export const getSearchClausesMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchClauses>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const getSearchClausesMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchClauses>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchClauses>>, TError,{data: SearchQueryRequest}, TContext> => {
 
 const mutationKey = ['searchClauses'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1244,7 +1246,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchClauses>>, {data: SearchQueryRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchClauses(data,)
+          return  searchClauses(data,requestOptions)
         }
 
 
@@ -1256,13 +1258,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchClausesMutationResult = NonNullable<Awaited<ReturnType<typeof searchClauses>>>
     export type SearchClausesMutationBody = SearchQueryRequest
-    export type SearchClausesMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchClausesMutationError = ErrorEnvelope
 
     /**
  * @summary Search Clauses
  */
-export const useSearchClauses = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchClauses>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const useSearchClauses = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchClauses>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchClauses>>,
         TError,
@@ -1283,12 +1285,12 @@ export type searchChatsResponse200 = {
 }
 
 export type searchChatsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchChatsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1306,7 +1308,7 @@ export const getSearchChatsUrl = () => {
 
   
 
-  return `/search/chats`
+  return `/api/v1/search/chats`
 }
 
 export const searchChats = async (searchQueryRequest: SearchQueryRequest, options?: RequestInit): Promise<searchChatsResponse> => {
@@ -1324,16 +1326,16 @@ export const searchChats = async (searchQueryRequest: SearchQueryRequest, option
 
 
 
-export const getSearchChatsMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchChats>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const getSearchChatsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchChats>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchChats>>, TError,{data: SearchQueryRequest}, TContext> => {
 
 const mutationKey = ['searchChats'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1341,7 +1343,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchChats>>, {data: SearchQueryRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchChats(data,)
+          return  searchChats(data,requestOptions)
         }
 
 
@@ -1353,13 +1355,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchChatsMutationResult = NonNullable<Awaited<ReturnType<typeof searchChats>>>
     export type SearchChatsMutationBody = SearchQueryRequest
-    export type SearchChatsMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchChatsMutationError = ErrorEnvelope
 
     /**
  * @summary Search Chats
  */
-export const useSearchChats = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchChats>>, TError,{data: SearchQueryRequest}, TContext>, }
+export const useSearchChats = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchChats>>, TError,{data: SearchQueryRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchChats>>,
         TError,
@@ -1380,6 +1382,11 @@ Supports `complexity` for audience-appropriate tone.
 - `results_cherry`: `{context: ...}`, `{question: ...}`, `{answer: ...}` (legacy)
 
 If `Accept: text/event-stream`, wraps in SSE framing; otherwise NDJSON.
+
+**Terminal events:** every successful stream ends with
+``{type: "done", value: "completed"}``. On mid-stream failure the stream
+instead ends with ``{type: "error", value: {code, message}}`` and NO
+`done`. Error `code` is one of the stable values in ``StreamErrorCode``.
  * @summary Search Summary
  */
 export type searchSummaryResponse200ApplicationJson = {
@@ -1393,12 +1400,12 @@ export type searchSummaryResponse200ApplicationXNdjson = {
 }
 
 export type searchSummaryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchSummaryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1423,7 +1430,7 @@ export const getSearchSummaryUrl = (params?: SearchSummaryParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/search/summary?${stringifiedParams}` : `/search/summary`
+  return stringifiedParams.length > 0 ? `/api/v1/search/summary?${stringifiedParams}` : `/api/v1/search/summary`
 }
 
 export const searchSummary = async (searchSummaryRequest: SearchSummaryRequest,
@@ -1442,16 +1449,16 @@ export const searchSummary = async (searchSummaryRequest: SearchSummaryRequest,
 
 
 
-export const getSearchSummaryMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSummary>>, TError,{data: SearchSummaryRequest;params?: SearchSummaryParams}, TContext>, }
+export const getSearchSummaryMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSummary>>, TError,{data: SearchSummaryRequest;params?: SearchSummaryParams}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchSummary>>, TError,{data: SearchSummaryRequest;params?: SearchSummaryParams}, TContext> => {
 
 const mutationKey = ['searchSummary'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1459,7 +1466,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchSummary>>, {data: SearchSummaryRequest;params?: SearchSummaryParams}> = (props) => {
           const {data,params} = props ?? {};
 
-          return  searchSummary(data,params,)
+          return  searchSummary(data,params,requestOptions)
         }
 
 
@@ -1471,13 +1478,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof searchSummary>>>
     export type SearchSummaryMutationBody = SearchSummaryRequest
-    export type SearchSummaryMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchSummaryMutationError = ErrorEnvelope
 
     /**
  * @summary Search Summary
  */
-export const useSearchSummary = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSummary>>, TError,{data: SearchSummaryRequest;params?: SearchSummaryParams}, TContext>, }
+export const useSearchSummary = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSummary>>, TError,{data: SearchSummaryRequest;params?: SearchSummaryParams}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchSummary>>,
         TError,
@@ -1498,12 +1505,12 @@ export type searchSuggestionsResponse200 = {
 }
 
 export type searchSuggestionsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchSuggestionsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1528,7 +1535,7 @@ export const getSearchSuggestionsUrl = (params?: SearchSuggestionsParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/search/suggestions?${stringifiedParams}` : `/search/suggestions`
+  return stringifiedParams.length > 0 ? `/api/v1/search/suggestions?${stringifiedParams}` : `/api/v1/search/suggestions`
 }
 
 export const searchSuggestions = async (searchSuggestionsRequest: SearchSuggestionsRequest,
@@ -1547,16 +1554,16 @@ export const searchSuggestions = async (searchSuggestionsRequest: SearchSuggesti
 
 
 
-export const getSearchSuggestionsMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSuggestions>>, TError,{data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}, TContext>, }
+export const getSearchSuggestionsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSuggestions>>, TError,{data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchSuggestions>>, TError,{data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}, TContext> => {
 
 const mutationKey = ['searchSuggestions'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1564,7 +1571,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchSuggestions>>, {data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}> = (props) => {
           const {data,params} = props ?? {};
 
-          return  searchSuggestions(data,params,)
+          return  searchSuggestions(data,params,requestOptions)
         }
 
 
@@ -1576,13 +1583,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchSuggestionsMutationResult = NonNullable<Awaited<ReturnType<typeof searchSuggestions>>>
     export type SearchSuggestionsMutationBody = SearchSuggestionsRequest
-    export type SearchSuggestionsMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchSuggestionsMutationError = ErrorEnvelope
 
     /**
  * @summary Search Suggestions
  */
-export const useSearchSuggestions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSuggestions>>, TError,{data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}, TContext>, }
+export const useSearchSuggestions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchSuggestions>>, TError,{data: SearchSuggestionsRequest;params?: SearchSuggestionsParams}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchSuggestions>>,
         TError,
@@ -1603,12 +1610,12 @@ export type searchRelateResponse200 = {
 }
 
 export type searchRelateResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchRelateResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1626,7 +1633,7 @@ export const getSearchRelateUrl = () => {
 
   
 
-  return `/search/relate`
+  return `/api/v1/search/relate`
 }
 
 export const searchRelate = async (searchRelateRequest: SearchRelateRequest, options?: RequestInit): Promise<searchRelateResponse> => {
@@ -1644,16 +1651,16 @@ export const searchRelate = async (searchRelateRequest: SearchRelateRequest, opt
 
 
 
-export const getSearchRelateMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchRelate>>, TError,{data: SearchRelateRequest}, TContext>, }
+export const getSearchRelateMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchRelate>>, TError,{data: SearchRelateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchRelate>>, TError,{data: SearchRelateRequest}, TContext> => {
 
 const mutationKey = ['searchRelate'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1661,7 +1668,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchRelate>>, {data: SearchRelateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchRelate(data,)
+          return  searchRelate(data,requestOptions)
         }
 
 
@@ -1673,13 +1680,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchRelateMutationResult = NonNullable<Awaited<ReturnType<typeof searchRelate>>>
     export type SearchRelateMutationBody = SearchRelateRequest
-    export type SearchRelateMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchRelateMutationError = ErrorEnvelope
 
     /**
  * @summary Search Relate
  */
-export const useSearchRelate = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchRelate>>, TError,{data: SearchRelateRequest}, TContext>, }
+export const useSearchRelate = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchRelate>>, TError,{data: SearchRelateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchRelate>>,
         TError,
@@ -1701,12 +1708,12 @@ export type searchCiteResponse200 = {
 }
 
 export type searchCiteResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type searchCiteResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -1724,7 +1731,7 @@ export const getSearchCiteUrl = () => {
 
   
 
-  return `/search/cite`
+  return `/api/v1/search/cite`
 }
 
 export const searchCite = async (searchCiteRequest: SearchCiteRequest, options?: RequestInit): Promise<searchCiteResponse> => {
@@ -1742,16 +1749,16 @@ export const searchCite = async (searchCiteRequest: SearchCiteRequest, options?:
 
 
 
-export const getSearchCiteMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchCite>>, TError,{data: SearchCiteRequest}, TContext>, }
+export const getSearchCiteMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchCite>>, TError,{data: SearchCiteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof searchCite>>, TError,{data: SearchCiteRequest}, TContext> => {
 
 const mutationKey = ['searchCite'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -1759,7 +1766,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchCite>>, {data: SearchCiteRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  searchCite(data,)
+          return  searchCite(data,requestOptions)
         }
 
 
@@ -1771,13 +1778,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SearchCiteMutationResult = NonNullable<Awaited<ReturnType<typeof searchCite>>>
     export type SearchCiteMutationBody = SearchCiteRequest
-    export type SearchCiteMutationError = AuthErrorResponse | HTTPValidationError
+    export type SearchCiteMutationError = ErrorEnvelope
 
     /**
  * @summary Search Cite
  */
-export const useSearchCite = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchCite>>, TError,{data: SearchCiteRequest}, TContext>, }
+export const useSearchCite = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchCite>>, TError,{data: SearchCiteRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof searchCite>>,
         TError,

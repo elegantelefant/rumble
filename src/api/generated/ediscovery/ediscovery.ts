@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation
@@ -16,7 +16,6 @@ import type {
 } from '@tanstack/vue-query';
 
 import type {
-  AuthErrorResponse,
   EdiscoveryEmailsResponse,
   EdiscoveryEntitiesResponse,
   EdiscoveryExtractRequest,
@@ -24,12 +23,14 @@ import type {
   EdiscoveryPhonesResponse,
   EdiscoverySalientResponse,
   EdiscoveryTextResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -43,19 +44,24 @@ export type extractTextEndpointResponse200 = {
 }
 
 export type extractTextEndpointResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractTextEndpointResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractTextEndpointResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractTextEndpointResponseSuccess = (extractTextEndpointResponse200) & {
   headers: Headers;
 };
-export type extractTextEndpointResponseError = (extractTextEndpointResponse401 | extractTextEndpointResponse422) & {
+export type extractTextEndpointResponseError = (extractTextEndpointResponse401 | extractTextEndpointResponse422 | extractTextEndpointResponse429) & {
   headers: Headers;
 };
 
@@ -66,7 +72,7 @@ export const getExtractTextEndpointUrl = () => {
 
   
 
-  return `/ediscovery/extract/text`
+  return `/api/v1/ediscovery/extract/text`
 }
 
 export const extractTextEndpoint = async (ediscoveryExtractRequest: EdiscoveryExtractRequest, options?: RequestInit): Promise<extractTextEndpointResponse> => {
@@ -84,16 +90,16 @@ export const extractTextEndpoint = async (ediscoveryExtractRequest: EdiscoveryEx
 
 
 
-export const getExtractTextEndpointMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractTextEndpoint>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const getExtractTextEndpointMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractTextEndpoint>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractTextEndpoint>>, TError,{data: EdiscoveryExtractRequest}, TContext> => {
 
 const mutationKey = ['extractTextEndpoint'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -101,7 +107,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractTextEndpoint>>, {data: EdiscoveryExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractTextEndpoint(data,)
+          return  extractTextEndpoint(data,requestOptions)
         }
 
 
@@ -113,13 +119,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractTextEndpointMutationResult = NonNullable<Awaited<ReturnType<typeof extractTextEndpoint>>>
     export type ExtractTextEndpointMutationBody = EdiscoveryExtractRequest
-    export type ExtractTextEndpointMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractTextEndpointMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Text Endpoint
  */
-export const useExtractTextEndpoint = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractTextEndpoint>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const useExtractTextEndpoint = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractTextEndpoint>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractTextEndpoint>>,
         TError,
@@ -138,19 +144,24 @@ export type extractEntitiesResponse200 = {
 }
 
 export type extractEntitiesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractEntitiesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractEntitiesResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractEntitiesResponseSuccess = (extractEntitiesResponse200) & {
   headers: Headers;
 };
-export type extractEntitiesResponseError = (extractEntitiesResponse401 | extractEntitiesResponse422) & {
+export type extractEntitiesResponseError = (extractEntitiesResponse401 | extractEntitiesResponse422 | extractEntitiesResponse429) & {
   headers: Headers;
 };
 
@@ -161,7 +172,7 @@ export const getExtractEntitiesUrl = () => {
 
   
 
-  return `/ediscovery/extract/entities`
+  return `/api/v1/ediscovery/extract/entities`
 }
 
 export const extractEntities = async (ediscoveryExtractRequest: EdiscoveryExtractRequest, options?: RequestInit): Promise<extractEntitiesResponse> => {
@@ -179,16 +190,16 @@ export const extractEntities = async (ediscoveryExtractRequest: EdiscoveryExtrac
 
 
 
-export const getExtractEntitiesMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEntities>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const getExtractEntitiesMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEntities>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractEntities>>, TError,{data: EdiscoveryExtractRequest}, TContext> => {
 
 const mutationKey = ['extractEntities'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -196,7 +207,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractEntities>>, {data: EdiscoveryExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractEntities(data,)
+          return  extractEntities(data,requestOptions)
         }
 
 
@@ -208,13 +219,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractEntitiesMutationResult = NonNullable<Awaited<ReturnType<typeof extractEntities>>>
     export type ExtractEntitiesMutationBody = EdiscoveryExtractRequest
-    export type ExtractEntitiesMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractEntitiesMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Entities
  */
-export const useExtractEntities = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEntities>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const useExtractEntities = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEntities>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractEntities>>,
         TError,
@@ -233,19 +244,24 @@ export type extractEmailsResponse200 = {
 }
 
 export type extractEmailsResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractEmailsResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractEmailsResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractEmailsResponseSuccess = (extractEmailsResponse200) & {
   headers: Headers;
 };
-export type extractEmailsResponseError = (extractEmailsResponse401 | extractEmailsResponse422) & {
+export type extractEmailsResponseError = (extractEmailsResponse401 | extractEmailsResponse422 | extractEmailsResponse429) & {
   headers: Headers;
 };
 
@@ -256,7 +272,7 @@ export const getExtractEmailsUrl = () => {
 
   
 
-  return `/ediscovery/extract/emails`
+  return `/api/v1/ediscovery/extract/emails`
 }
 
 export const extractEmails = async (ediscoveryExtractRequest: EdiscoveryExtractRequest, options?: RequestInit): Promise<extractEmailsResponse> => {
@@ -274,16 +290,16 @@ export const extractEmails = async (ediscoveryExtractRequest: EdiscoveryExtractR
 
 
 
-export const getExtractEmailsMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEmails>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const getExtractEmailsMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEmails>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractEmails>>, TError,{data: EdiscoveryExtractRequest}, TContext> => {
 
 const mutationKey = ['extractEmails'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -291,7 +307,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractEmails>>, {data: EdiscoveryExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractEmails(data,)
+          return  extractEmails(data,requestOptions)
         }
 
 
@@ -303,13 +319,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractEmailsMutationResult = NonNullable<Awaited<ReturnType<typeof extractEmails>>>
     export type ExtractEmailsMutationBody = EdiscoveryExtractRequest
-    export type ExtractEmailsMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractEmailsMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Emails
  */
-export const useExtractEmails = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEmails>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const useExtractEmails = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractEmails>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractEmails>>,
         TError,
@@ -328,19 +344,24 @@ export type extractPhonesResponse200 = {
 }
 
 export type extractPhonesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractPhonesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractPhonesResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractPhonesResponseSuccess = (extractPhonesResponse200) & {
   headers: Headers;
 };
-export type extractPhonesResponseError = (extractPhonesResponse401 | extractPhonesResponse422) & {
+export type extractPhonesResponseError = (extractPhonesResponse401 | extractPhonesResponse422 | extractPhonesResponse429) & {
   headers: Headers;
 };
 
@@ -351,7 +372,7 @@ export const getExtractPhonesUrl = () => {
 
   
 
-  return `/ediscovery/extract/phones`
+  return `/api/v1/ediscovery/extract/phones`
 }
 
 export const extractPhones = async (ediscoveryExtractRequest: EdiscoveryExtractRequest, options?: RequestInit): Promise<extractPhonesResponse> => {
@@ -369,16 +390,16 @@ export const extractPhones = async (ediscoveryExtractRequest: EdiscoveryExtractR
 
 
 
-export const getExtractPhonesMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractPhones>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const getExtractPhonesMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractPhones>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractPhones>>, TError,{data: EdiscoveryExtractRequest}, TContext> => {
 
 const mutationKey = ['extractPhones'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -386,7 +407,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractPhones>>, {data: EdiscoveryExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractPhones(data,)
+          return  extractPhones(data,requestOptions)
         }
 
 
@@ -398,13 +419,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractPhonesMutationResult = NonNullable<Awaited<ReturnType<typeof extractPhones>>>
     export type ExtractPhonesMutationBody = EdiscoveryExtractRequest
-    export type ExtractPhonesMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractPhonesMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Phones
  */
-export const useExtractPhones = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractPhones>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const useExtractPhones = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractPhones>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractPhones>>,
         TError,
@@ -423,19 +444,24 @@ export type extractSalientResponse200 = {
 }
 
 export type extractSalientResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type extractSalientResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type extractSalientResponse429 = {
+  data: ErrorEnvelope
+  status: 429
 }
 
 export type extractSalientResponseSuccess = (extractSalientResponse200) & {
   headers: Headers;
 };
-export type extractSalientResponseError = (extractSalientResponse401 | extractSalientResponse422) & {
+export type extractSalientResponseError = (extractSalientResponse401 | extractSalientResponse422 | extractSalientResponse429) & {
   headers: Headers;
 };
 
@@ -446,7 +472,7 @@ export const getExtractSalientUrl = () => {
 
   
 
-  return `/ediscovery/extract/salient`
+  return `/api/v1/ediscovery/extract/salient`
 }
 
 export const extractSalient = async (ediscoveryExtractRequest: EdiscoveryExtractRequest, options?: RequestInit): Promise<extractSalientResponse> => {
@@ -464,16 +490,16 @@ export const extractSalient = async (ediscoveryExtractRequest: EdiscoveryExtract
 
 
 
-export const getExtractSalientMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractSalient>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const getExtractSalientMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractSalient>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractSalient>>, TError,{data: EdiscoveryExtractRequest}, TContext> => {
 
 const mutationKey = ['extractSalient'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -481,7 +507,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractSalient>>, {data: EdiscoveryExtractRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  extractSalient(data,)
+          return  extractSalient(data,requestOptions)
         }
 
 
@@ -493,13 +519,13 @@ const {mutation: mutationOptions} = options ?
 
     export type ExtractSalientMutationResult = NonNullable<Awaited<ReturnType<typeof extractSalient>>>
     export type ExtractSalientMutationBody = EdiscoveryExtractRequest
-    export type ExtractSalientMutationError = AuthErrorResponse | HTTPValidationError
+    export type ExtractSalientMutationError = ErrorEnvelope
 
     /**
  * @summary Extract Salient
  */
-export const useExtractSalient = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractSalient>>, TError,{data: EdiscoveryExtractRequest}, TContext>, }
+export const useExtractSalient = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractSalient>>, TError,{data: EdiscoveryExtractRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof extractSalient>>,
         TError,
@@ -509,7 +535,11 @@ export const useExtractSalient = <TError = AuthErrorResponse | HTTPValidationErr
       return useMutation(getExtractSalientMutationOptions(options), queryClient);
     }
     /**
- * Build document graph from eDiscovery results (placeholder — graph storage TBD).
+ * Build document graph from eDiscovery results (NOT IMPLEMENTED).
+
+Returns 501 — graph storage is not wired and the payload shape is untyped.
+Add `require_quota` and a real graph repo when wiring up. Tracked as
+BE.C195 / BE.C265 in the deprecations log.
  * @summary Ediscovery Graph
  */
 export type ediscoveryGraphResponse200 = {
@@ -518,19 +548,24 @@ export type ediscoveryGraphResponse200 = {
 }
 
 export type ediscoveryGraphResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type ediscoveryGraphResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type ediscoveryGraphResponse501 = {
+  data: void
+  status: 501
 }
 
 export type ediscoveryGraphResponseSuccess = (ediscoveryGraphResponse200) & {
   headers: Headers;
 };
-export type ediscoveryGraphResponseError = (ediscoveryGraphResponse401 | ediscoveryGraphResponse422) & {
+export type ediscoveryGraphResponseError = (ediscoveryGraphResponse401 | ediscoveryGraphResponse422 | ediscoveryGraphResponse501) & {
   headers: Headers;
 };
 
@@ -541,7 +576,7 @@ export const getEdiscoveryGraphUrl = () => {
 
   
 
-  return `/ediscovery/graph`
+  return `/api/v1/ediscovery/graph`
 }
 
 export const ediscoveryGraph = async (ediscoveryGraphBody: EdiscoveryGraphBody, options?: RequestInit): Promise<ediscoveryGraphResponse> => {
@@ -559,16 +594,16 @@ export const ediscoveryGraph = async (ediscoveryGraphBody: EdiscoveryGraphBody, 
 
 
 
-export const getEdiscoveryGraphMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ediscoveryGraph>>, TError,{data: EdiscoveryGraphBody}, TContext>, }
+export const getEdiscoveryGraphMutationOptions = <TError = ErrorEnvelope | void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ediscoveryGraph>>, TError,{data: EdiscoveryGraphBody}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof ediscoveryGraph>>, TError,{data: EdiscoveryGraphBody}, TContext> => {
 
 const mutationKey = ['ediscoveryGraph'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -576,7 +611,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof ediscoveryGraph>>, {data: EdiscoveryGraphBody}> = (props) => {
           const {data} = props ?? {};
 
-          return  ediscoveryGraph(data,)
+          return  ediscoveryGraph(data,requestOptions)
         }
 
 
@@ -588,13 +623,13 @@ const {mutation: mutationOptions} = options ?
 
     export type EdiscoveryGraphMutationResult = NonNullable<Awaited<ReturnType<typeof ediscoveryGraph>>>
     export type EdiscoveryGraphMutationBody = EdiscoveryGraphBody
-    export type EdiscoveryGraphMutationError = AuthErrorResponse | HTTPValidationError
+    export type EdiscoveryGraphMutationError = ErrorEnvelope | void
 
     /**
  * @summary Ediscovery Graph
  */
-export const useEdiscoveryGraph = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ediscoveryGraph>>, TError,{data: EdiscoveryGraphBody}, TContext>, }
+export const useEdiscoveryGraph = <TError = ErrorEnvelope | void,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ediscoveryGraph>>, TError,{data: EdiscoveryGraphBody}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof ediscoveryGraph>>,
         TError,

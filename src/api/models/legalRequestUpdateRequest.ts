@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { LegalRequestPriority } from './legalRequestPriority';
 
@@ -15,5 +15,7 @@ export interface LegalRequestUpdateRequest {
   description?: string | null;
   category?: string | null;
   priority?: LegalRequestPriority | null;
-  due_at?: string | null;
+  /** Deadline for the request. Accepts an ISO date (`YYYY-MM-DD`) or a full ISO date-time. Date-only values are coerced to 23:59:59 Asia/Singapore (end-of-day local). */
+  dueAt?: string | null;
+  restricted?: boolean | null;
 }

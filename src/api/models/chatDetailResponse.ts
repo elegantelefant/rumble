@@ -3,16 +3,17 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { ChatDetailResponseMessagesItem } from './chatDetailResponseMessagesItem';
+import type { ChatMessage } from './chatMessage';
 
 export interface ChatDetailResponse {
   id: string;
   title?: string | null;
-  briefcase_id?: string | null;
-  exclude_from_memory?: boolean;
-  created_at: string;
-  updated_at?: string | null;
-  messages?: ChatDetailResponseMessagesItem[];
+  briefcaseId?: string | null;
+  legisIds?: string[];
+  excludeFromMemory?: boolean;
+  createdAt: string;
+  updatedAt?: string | null;
+  messages?: ChatMessage[];
 }

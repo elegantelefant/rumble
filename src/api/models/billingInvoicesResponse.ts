@@ -3,11 +3,10 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
-import type { BillingInvoicesResponseInvoicesItem } from './billingInvoicesResponseInvoicesItem';
+import type { InvoiceItem } from './invoiceItem';
 
 export interface BillingInvoicesResponse {
-  status?: 'placeholder';
-  invoices?: BillingInvoicesResponseInvoicesItem[];
+  invoices: InvoiceItem[];
 }

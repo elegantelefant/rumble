@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -26,9 +26,7 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   OkResponse,
   WebhookCreateRequest,
   WebhookCreateResponse,
@@ -37,6 +35,8 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -50,7 +50,7 @@ export type listWebhooksResponse200 = {
 }
 
 export type listWebhooksResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
@@ -68,7 +68,7 @@ export const getListWebhooksUrl = () => {
 
   
 
-  return `/webhooks`
+  return `/api/v1/webhooks`
 }
 
 export const listWebhooks = async ( options?: RequestInit): Promise<listWebhooksResponse> => {
@@ -88,21 +88,21 @@ export const listWebhooks = async ( options?: RequestInit): Promise<listWebhooks
 
 export const getListWebhooksQueryKey = () => {
     return [
-    'webhooks'
+    'api','v1','webhooks'
     ] as const;
     }
 
     
-export const getListWebhooksQueryOptions = <TData = Awaited<ReturnType<typeof listWebhooks>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhooks>>, TError, TData>>, }
+export const getListWebhooksQueryOptions = <TData = Awaited<ReturnType<typeof listWebhooks>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhooks>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getListWebhooksQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWebhooks>>> = ({ signal }) => listWebhooks({ signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWebhooks>>> = ({ signal }) => listWebhooks({ signal, ...requestOptions });
 
       
 
@@ -112,15 +112,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type ListWebhooksQueryResult = NonNullable<Awaited<ReturnType<typeof listWebhooks>>>
-export type ListWebhooksQueryError = AuthErrorResponse
+export type ListWebhooksQueryError = ErrorEnvelope
 
 
 /**
  * @summary List Webhooks
  */
 
-export function useListWebhooks<TData = Awaited<ReturnType<typeof listWebhooks>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhooks>>, TError, TData>>, }
+export function useListWebhooks<TData = Awaited<ReturnType<typeof listWebhooks>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWebhooks>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -141,6 +141,12 @@ export function useListWebhooks<TData = Awaited<ReturnType<typeof listWebhooks>>
 
 Returns a signing secret that must be stored securely.
 The secret is only shown once and cannot be retrieved later.
+
+Admits service-principal API keys per ADR-0003: webhook registration is
+org-scoped (CI systems / integrations), so a user identity is not required.
+
+`event_type` is now narrowed to `Literal["job.completed", "job.failed"]`
+at the schema level (BE.C106), so the spec advertises the enum.
  * @summary Create Webhook
  */
 export type createWebhookResponse200 = {
@@ -149,12 +155,12 @@ export type createWebhookResponse200 = {
 }
 
 export type createWebhookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type createWebhookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -172,7 +178,7 @@ export const getCreateWebhookUrl = () => {
 
   
 
-  return `/webhooks`
+  return `/api/v1/webhooks`
 }
 
 export const createWebhook = async (webhookCreateRequest: WebhookCreateRequest, options?: RequestInit): Promise<createWebhookResponse> => {
@@ -190,16 +196,16 @@ export const createWebhook = async (webhookCreateRequest: WebhookCreateRequest, 
 
 
 
-export const getCreateWebhookMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWebhook>>, TError,{data: WebhookCreateRequest}, TContext>, }
+export const getCreateWebhookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWebhook>>, TError,{data: WebhookCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createWebhook>>, TError,{data: WebhookCreateRequest}, TContext> => {
 
 const mutationKey = ['createWebhook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -207,7 +213,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWebhook>>, {data: WebhookCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  createWebhook(data,)
+          return  createWebhook(data,requestOptions)
         }
 
 
@@ -219,13 +225,13 @@ const {mutation: mutationOptions} = options ?
 
     export type CreateWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof createWebhook>>>
     export type CreateWebhookMutationBody = WebhookCreateRequest
-    export type CreateWebhookMutationError = AuthErrorResponse | HTTPValidationError
+    export type CreateWebhookMutationError = ErrorEnvelope
 
     /**
  * @summary Create Webhook
  */
-export const useCreateWebhook = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWebhook>>, TError,{data: WebhookCreateRequest}, TContext>, }
+export const useCreateWebhook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWebhook>>, TError,{data: WebhookCreateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof createWebhook>>,
         TError,
@@ -244,17 +250,17 @@ export type deleteWebhookResponse200 = {
 }
 
 export type deleteWebhookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteWebhookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteWebhookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -272,7 +278,7 @@ export const getDeleteWebhookUrl = (id: string,) => {
 
   
 
-  return `/webhooks/${id}`
+  return `/api/v1/webhooks/${id}`
 }
 
 export const deleteWebhook = async (id: string, options?: RequestInit): Promise<deleteWebhookResponse> => {
@@ -289,16 +295,16 @@ export const deleteWebhook = async (id: string, options?: RequestInit): Promise<
 
 
 
-export const getDeleteWebhookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWebhook>>, TError,{id: string}, TContext>, }
+export const getDeleteWebhookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteWebhook>>, TError,{id: string}, TContext> => {
 
 const mutationKey = ['deleteWebhook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -306,7 +312,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteWebhook>>, {id: string}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteWebhook(id,)
+          return  deleteWebhook(id,requestOptions)
         }
 
 
@@ -318,13 +324,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof deleteWebhook>>>
     
-    export type DeleteWebhookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteWebhookMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Webhook
  */
-export const useDeleteWebhook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWebhook>>, TError,{id: string}, TContext>, }
+export const useDeleteWebhook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteWebhook>>,
         TError,
@@ -343,17 +349,17 @@ export type enableWebhookResponse200 = {
 }
 
 export type enableWebhookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type enableWebhookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type enableWebhookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -371,7 +377,7 @@ export const getEnableWebhookUrl = (id: string,) => {
 
   
 
-  return `/webhooks/${id}/enable`
+  return `/api/v1/webhooks/${id}/enable`
 }
 
 export const enableWebhook = async (id: string, options?: RequestInit): Promise<enableWebhookResponse> => {
@@ -388,16 +394,16 @@ export const enableWebhook = async (id: string, options?: RequestInit): Promise<
 
 
 
-export const getEnableWebhookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enableWebhook>>, TError,{id: string}, TContext>, }
+export const getEnableWebhookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enableWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof enableWebhook>>, TError,{id: string}, TContext> => {
 
 const mutationKey = ['enableWebhook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -405,7 +411,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof enableWebhook>>, {id: string}> = (props) => {
           const {id} = props ?? {};
 
-          return  enableWebhook(id,)
+          return  enableWebhook(id,requestOptions)
         }
 
 
@@ -417,13 +423,13 @@ const {mutation: mutationOptions} = options ?
 
     export type EnableWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof enableWebhook>>>
     
-    export type EnableWebhookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type EnableWebhookMutationError = ErrorEnvelope
 
     /**
  * @summary Enable Webhook
  */
-export const useEnableWebhook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enableWebhook>>, TError,{id: string}, TContext>, }
+export const useEnableWebhook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enableWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof enableWebhook>>,
         TError,
@@ -442,17 +448,17 @@ export type disableWebhookResponse200 = {
 }
 
 export type disableWebhookResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type disableWebhookResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type disableWebhookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -470,7 +476,7 @@ export const getDisableWebhookUrl = (id: string,) => {
 
   
 
-  return `/webhooks/${id}/disable`
+  return `/api/v1/webhooks/${id}/disable`
 }
 
 export const disableWebhook = async (id: string, options?: RequestInit): Promise<disableWebhookResponse> => {
@@ -487,16 +493,16 @@ export const disableWebhook = async (id: string, options?: RequestInit): Promise
 
 
 
-export const getDisableWebhookMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableWebhook>>, TError,{id: string}, TContext>, }
+export const getDisableWebhookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof disableWebhook>>, TError,{id: string}, TContext> => {
 
 const mutationKey = ['disableWebhook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -504,7 +510,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof disableWebhook>>, {id: string}> = (props) => {
           const {id} = props ?? {};
 
-          return  disableWebhook(id,)
+          return  disableWebhook(id,requestOptions)
         }
 
 
@@ -516,13 +522,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DisableWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof disableWebhook>>>
     
-    export type DisableWebhookMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DisableWebhookMutationError = ErrorEnvelope
 
     /**
  * @summary Disable Webhook
  */
-export const useDisableWebhook = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableWebhook>>, TError,{id: string}, TContext>, }
+export const useDisableWebhook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableWebhook>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof disableWebhook>>,
         TError,

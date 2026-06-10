@@ -3,9 +3,10 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { DocumentResponseContent } from './documentResponseContent';
+import type { DocumentResponseDownloadUrls } from './documentResponseDownloadUrls';
 
 /**
  * Full document representation.
@@ -13,20 +14,22 @@ import type { DocumentResponseContent } from './documentResponseContent';
 export interface DocumentResponse {
   id: string;
   title?: string | null;
-  document_type?: string | null;
+  documentType?: string | null;
   status: string;
-  briefcase_id?: string | null;
+  briefcaseId?: string | null;
   /** Document content as TipTap/ProseMirror JSON. */
   content?: DocumentResponseContent;
-  source_workflow?: string | null;
-  source_file_id?: string | null;
-  job_id?: string | null;
-  legal_request_id?: string | null;
+  sourceWorkflow?: string | null;
+  sourceFileId?: string | null;
+  jobId?: string | null;
+  legalRequestId?: string | null;
   prompt?: string | null;
   error?: string | null;
-  requires_review?: boolean;
-  reviewed_at?: string | null;
-  reviewed_by?: string | null;
-  created_at: string;
-  updated_at: string;
+  requiresReview?: boolean;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Per-format presigned download URLs, e.g. {"pdf": "...", "docx": "..."} */
+  downloadUrls?: DocumentResponseDownloadUrls;
 }

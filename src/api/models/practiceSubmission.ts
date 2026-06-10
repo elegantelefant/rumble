@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 
 export interface PracticeSubmission {
@@ -16,7 +16,7 @@ export interface PracticeSubmission {
    * What the submitter was asked to do (e.g. 'Draft a non-compete clause for Singapore').
    * @minLength 1
    */
-  task_description: string;
+  taskDescription: string;
   /** Submitter's level for rubric calibration (e.g. 'student', '3_PQE', 'senior'). */
   level?: string;
 }

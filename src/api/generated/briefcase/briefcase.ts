@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -30,18 +30,18 @@ import type {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
   BriefcaseInvalidateRequest,
   BriefcaseSummarizeRequest,
   BriefcaseSummaryResponse,
   DocumentFacets,
-  ErrorResponse,
-  HTTPValidationError,
+  ErrorEnvelope,
   OkResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
+
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -67,12 +67,12 @@ export type summarizeBriefcaseResponse200 = {
 }
 
 export type summarizeBriefcaseResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type summarizeBriefcaseResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -90,7 +90,7 @@ export const getSummarizeBriefcaseUrl = () => {
 
   
 
-  return `/briefcase/summarize`
+  return `/api/v1/briefcase/summarize`
 }
 
 export const summarizeBriefcase = async (briefcaseSummarizeRequest: BriefcaseSummarizeRequest, options?: RequestInit): Promise<summarizeBriefcaseResponse> => {
@@ -108,16 +108,16 @@ export const summarizeBriefcase = async (briefcaseSummarizeRequest: BriefcaseSum
 
 
 
-export const getSummarizeBriefcaseMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summarizeBriefcase>>, TError,{data: BriefcaseSummarizeRequest}, TContext>, }
+export const getSummarizeBriefcaseMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summarizeBriefcase>>, TError,{data: BriefcaseSummarizeRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof summarizeBriefcase>>, TError,{data: BriefcaseSummarizeRequest}, TContext> => {
 
 const mutationKey = ['summarizeBriefcase'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -125,7 +125,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof summarizeBriefcase>>, {data: BriefcaseSummarizeRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  summarizeBriefcase(data,)
+          return  summarizeBriefcase(data,requestOptions)
         }
 
 
@@ -137,13 +137,13 @@ const {mutation: mutationOptions} = options ?
 
     export type SummarizeBriefcaseMutationResult = NonNullable<Awaited<ReturnType<typeof summarizeBriefcase>>>
     export type SummarizeBriefcaseMutationBody = BriefcaseSummarizeRequest
-    export type SummarizeBriefcaseMutationError = AuthErrorResponse | HTTPValidationError
+    export type SummarizeBriefcaseMutationError = ErrorEnvelope
 
     /**
  * @summary Summarize Briefcase
  */
-export const useSummarizeBriefcase = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summarizeBriefcase>>, TError,{data: BriefcaseSummarizeRequest}, TContext>, }
+export const useSummarizeBriefcase = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof summarizeBriefcase>>, TError,{data: BriefcaseSummarizeRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof summarizeBriefcase>>,
         TError,
@@ -162,17 +162,17 @@ export type getDocumentSummaryResponse200 = {
 }
 
 export type getDocumentSummaryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type getDocumentSummaryResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type getDocumentSummaryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -190,7 +190,7 @@ export const getGetDocumentSummaryUrl = (docId: string,) => {
 
   
 
-  return `/briefcase/summaries/${docId}`
+  return `/api/v1/briefcase/summaries/${docId}`
 }
 
 export const getDocumentSummary = async (docId: string, options?: RequestInit): Promise<getDocumentSummaryResponse> => {
@@ -210,21 +210,21 @@ export const getDocumentSummary = async (docId: string, options?: RequestInit): 
 
 export const getGetDocumentSummaryQueryKey = (docId: MaybeRef<string>,) => {
     return [
-    'briefcase','summaries',docId
+    'api','v1','briefcase','summaries',docId
     ] as const;
     }
 
     
-export const getGetDocumentSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDocumentSummary>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(docId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentSummary>>, TError, TData>>, }
+export const getGetDocumentSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDocumentSummary>>, TError = ErrorEnvelope>(docId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentSummary>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
 ) => {
 
-const {query: queryOptions} = options ?? {};
+const {query: queryOptions, request: requestOptions} = options ?? {};
 
   const queryKey =  getGetDocumentSummaryQueryKey(docId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentSummary>>> = ({ signal }) => getDocumentSummary(unref(docId), { signal });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentSummary>>> = ({ signal }) => getDocumentSummary(unref(docId), { signal, ...requestOptions });
 
       
 
@@ -234,15 +234,15 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetDocumentSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getDocumentSummary>>>
-export type GetDocumentSummaryQueryError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+export type GetDocumentSummaryQueryError = ErrorEnvelope
 
 
 /**
  * @summary Get Document Summary
  */
 
-export function useGetDocumentSummary<TData = Awaited<ReturnType<typeof getDocumentSummary>>, TError = AuthErrorResponse | ErrorResponse | HTTPValidationError>(
- docId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentSummary>>, TError, TData>>, }
+export function useGetDocumentSummary<TData = Awaited<ReturnType<typeof getDocumentSummary>>, TError = ErrorEnvelope>(
+ docId: MaybeRef<string>, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDocumentSummary>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient 
  ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
@@ -268,17 +268,17 @@ export type deleteDocumentSummaryResponse200 = {
 }
 
 export type deleteDocumentSummaryResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type deleteDocumentSummaryResponse404 = {
-  data: ErrorResponse
+  data: ErrorEnvelope
   status: 404
 }
 
 export type deleteDocumentSummaryResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -296,7 +296,7 @@ export const getDeleteDocumentSummaryUrl = (docId: string,) => {
 
   
 
-  return `/briefcase/summaries/${docId}`
+  return `/api/v1/briefcase/summaries/${docId}`
 }
 
 export const deleteDocumentSummary = async (docId: string, options?: RequestInit): Promise<deleteDocumentSummaryResponse> => {
@@ -313,16 +313,16 @@ export const deleteDocumentSummary = async (docId: string, options?: RequestInit
 
 
 
-export const getDeleteDocumentSummaryMutationOptions = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentSummary>>, TError,{docId: string}, TContext>, }
+export const getDeleteDocumentSummaryMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentSummary>>, TError,{docId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentSummary>>, TError,{docId: string}, TContext> => {
 
 const mutationKey = ['deleteDocumentSummary'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -330,7 +330,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDocumentSummary>>, {docId: string}> = (props) => {
           const {docId} = props ?? {};
 
-          return  deleteDocumentSummary(docId,)
+          return  deleteDocumentSummary(docId,requestOptions)
         }
 
 
@@ -342,13 +342,13 @@ const {mutation: mutationOptions} = options ?
 
     export type DeleteDocumentSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDocumentSummary>>>
     
-    export type DeleteDocumentSummaryMutationError = AuthErrorResponse | ErrorResponse | HTTPValidationError
+    export type DeleteDocumentSummaryMutationError = ErrorEnvelope
 
     /**
  * @summary Delete Document Summary
  */
-export const useDeleteDocumentSummary = <TError = AuthErrorResponse | ErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentSummary>>, TError,{docId: string}, TContext>, }
+export const useDeleteDocumentSummary = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocumentSummary>>, TError,{docId: string}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof deleteDocumentSummary>>,
         TError,
@@ -367,12 +367,12 @@ export type invalidateSummariesResponse200 = {
 }
 
 export type invalidateSummariesResponse401 = {
-  data: AuthErrorResponse
+  data: ErrorEnvelope
   status: 401
 }
 
 export type invalidateSummariesResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
 }
 
@@ -390,7 +390,7 @@ export const getInvalidateSummariesUrl = () => {
 
   
 
-  return `/briefcase/summaries/invalidate`
+  return `/api/v1/briefcase/summaries/invalidate`
 }
 
 export const invalidateSummaries = async (briefcaseInvalidateRequest: BriefcaseInvalidateRequest, options?: RequestInit): Promise<invalidateSummariesResponse> => {
@@ -408,16 +408,16 @@ export const invalidateSummaries = async (briefcaseInvalidateRequest: BriefcaseI
 
 
 
-export const getInvalidateSummariesMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invalidateSummaries>>, TError,{data: BriefcaseInvalidateRequest}, TContext>, }
+export const getInvalidateSummariesMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invalidateSummaries>>, TError,{data: BriefcaseInvalidateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof invalidateSummaries>>, TError,{data: BriefcaseInvalidateRequest}, TContext> => {
 
 const mutationKey = ['invalidateSummaries'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -425,7 +425,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof invalidateSummaries>>, {data: BriefcaseInvalidateRequest}> = (props) => {
           const {data} = props ?? {};
 
-          return  invalidateSummaries(data,)
+          return  invalidateSummaries(data,requestOptions)
         }
 
 
@@ -437,13 +437,13 @@ const {mutation: mutationOptions} = options ?
 
     export type InvalidateSummariesMutationResult = NonNullable<Awaited<ReturnType<typeof invalidateSummaries>>>
     export type InvalidateSummariesMutationBody = BriefcaseInvalidateRequest
-    export type InvalidateSummariesMutationError = AuthErrorResponse | HTTPValidationError
+    export type InvalidateSummariesMutationError = ErrorEnvelope
 
     /**
  * @summary Invalidate Summaries
  */
-export const useInvalidateSummaries = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invalidateSummaries>>, TError,{data: BriefcaseInvalidateRequest}, TContext>, }
+export const useInvalidateSummaries = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof invalidateSummaries>>, TError,{data: BriefcaseInvalidateRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof invalidateSummaries>>,
         TError,

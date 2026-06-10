@@ -3,16 +3,13 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
+import type { WebhookCreateRequestEventType } from './webhookCreateRequestEventType';
 
 export interface WebhookCreateRequest {
   /** Event type to subscribe to */
-  event_type: string;
-  /**
-   * URL to POST events to
-   * @minLength 1
-   * @maxLength 2083
-   */
-  target_url: string;
+  eventType: WebhookCreateRequestEventType;
+  /** URL to POST events to */
+  targetUrl: string;
 }

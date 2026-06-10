@@ -3,7 +3,7 @@
  * Do not edit manually.
  * elefant-api
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.4.0
  */
 import {
   useMutation,
@@ -26,395 +26,23 @@ import {
 } from 'vue';
 
 import type {
-  AuthErrorResponse,
+  BillingCancelRequest,
+  BillingCancelResponse,
+  BillingCheckoutRequest,
   BillingCheckoutResponse,
   BillingInvoicesResponse,
+  BillingPortalRequest,
   BillingPortalResponse,
+  BillingPricesResponse,
   BillingSubscriptionResponse,
-  HTTPValidationError,
-  PatchPayload
+  ErrorEnvelope,
+  WebhookStatusResponse
 } from '../../models';
 
 import { apiClient } from '../../client';
 
 
-
-
-/**
- * @summary Billing Checkout
- */
-export type billingCheckoutResponse200 = {
-  data: BillingCheckoutResponse
-  status: 200
-}
-
-export type billingCheckoutResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type billingCheckoutResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type billingCheckoutResponseSuccess = (billingCheckoutResponse200) & {
-  headers: Headers;
-};
-export type billingCheckoutResponseError = (billingCheckoutResponse401 | billingCheckoutResponse422) & {
-  headers: Headers;
-};
-
-export type billingCheckoutResponse = (billingCheckoutResponseSuccess | billingCheckoutResponseError)
-
-export const getBillingCheckoutUrl = () => {
-
-
-  
-
-  return `/billing/checkout`
-}
-
-export const billingCheckout = async (patchPayload: PatchPayload, options?: RequestInit): Promise<billingCheckoutResponse> => {
-  
-  return apiClient<billingCheckoutResponse>(getBillingCheckoutUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchPayload,)
-  }
-);}
-  
-
-
-
-export const getBillingCheckoutMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: PatchPayload}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: PatchPayload}, TContext> => {
-
-const mutationKey = ['billingCheckout'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof billingCheckout>>, {data: PatchPayload}> = (props) => {
-          const {data} = props ?? {};
-
-          return  billingCheckout(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type BillingCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof billingCheckout>>>
-    export type BillingCheckoutMutationBody = PatchPayload
-    export type BillingCheckoutMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Billing Checkout
- */
-export const useBillingCheckout = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: PatchPayload}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof billingCheckout>>,
-        TError,
-        {data: PatchPayload},
-        TContext
-      > => {
-      return useMutation(getBillingCheckoutMutationOptions(options), queryClient);
-    }
-    /**
- * @summary Billing Portal
- */
-export type billingPortalResponse200 = {
-  data: BillingPortalResponse
-  status: 200
-}
-
-export type billingPortalResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type billingPortalResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type billingPortalResponseSuccess = (billingPortalResponse200) & {
-  headers: Headers;
-};
-export type billingPortalResponseError = (billingPortalResponse401 | billingPortalResponse422) & {
-  headers: Headers;
-};
-
-export type billingPortalResponse = (billingPortalResponseSuccess | billingPortalResponseError)
-
-export const getBillingPortalUrl = () => {
-
-
-  
-
-  return `/billing/portal`
-}
-
-export const billingPortal = async (patchPayload: PatchPayload, options?: RequestInit): Promise<billingPortalResponse> => {
-  
-  return apiClient<billingPortalResponse>(getBillingPortalUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchPayload,)
-  }
-);}
-  
-
-
-
-export const getBillingPortalMutationOptions = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: PatchPayload}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: PatchPayload}, TContext> => {
-
-const mutationKey = ['billingPortal'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof billingPortal>>, {data: PatchPayload}> = (props) => {
-          const {data} = props ?? {};
-
-          return  billingPortal(data,)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type BillingPortalMutationResult = NonNullable<Awaited<ReturnType<typeof billingPortal>>>
-    export type BillingPortalMutationBody = PatchPayload
-    export type BillingPortalMutationError = AuthErrorResponse | HTTPValidationError
-
-    /**
- * @summary Billing Portal
- */
-export const useBillingPortal = <TError = AuthErrorResponse | HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: PatchPayload}, TContext>, }
- , queryClient?: QueryClient): UseMutationReturnType<
-        Awaited<ReturnType<typeof billingPortal>>,
-        TError,
-        {data: PatchPayload},
-        TContext
-      > => {
-      return useMutation(getBillingPortalMutationOptions(options), queryClient);
-    }
-    /**
- * @summary Billing Subscription
- */
-export type billingSubscriptionResponse200 = {
-  data: BillingSubscriptionResponse
-  status: 200
-}
-
-export type billingSubscriptionResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type billingSubscriptionResponseSuccess = (billingSubscriptionResponse200) & {
-  headers: Headers;
-};
-export type billingSubscriptionResponseError = (billingSubscriptionResponse401) & {
-  headers: Headers;
-};
-
-export type billingSubscriptionResponse = (billingSubscriptionResponseSuccess | billingSubscriptionResponseError)
-
-export const getBillingSubscriptionUrl = () => {
-
-
-  
-
-  return `/billing/subscription`
-}
-
-export const billingSubscription = async ( options?: RequestInit): Promise<billingSubscriptionResponse> => {
-  
-  return apiClient<billingSubscriptionResponse>(getBillingSubscriptionUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-  
-
-
-
-
-export const getBillingSubscriptionQueryKey = () => {
-    return [
-    'billing','subscription'
-    ] as const;
-    }
-
-    
-export const getBillingSubscriptionQueryOptions = <TData = Awaited<ReturnType<typeof billingSubscription>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  getBillingSubscriptionQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof billingSubscription>>> = ({ signal }) => billingSubscription({ signal });
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData> 
-}
-
-export type BillingSubscriptionQueryResult = NonNullable<Awaited<ReturnType<typeof billingSubscription>>>
-export type BillingSubscriptionQueryError = AuthErrorResponse
-
-
-/**
- * @summary Billing Subscription
- */
-
-export function useBillingSubscription<TData = Awaited<ReturnType<typeof billingSubscription>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getBillingSubscriptionQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
-
-  return query;
-}
-
-
-
-
-/**
- * @summary Billing Invoices
- */
-export type billingInvoicesResponse200 = {
-  data: BillingInvoicesResponse
-  status: 200
-}
-
-export type billingInvoicesResponse401 = {
-  data: AuthErrorResponse
-  status: 401
-}
-
-export type billingInvoicesResponseSuccess = (billingInvoicesResponse200) & {
-  headers: Headers;
-};
-export type billingInvoicesResponseError = (billingInvoicesResponse401) & {
-  headers: Headers;
-};
-
-export type billingInvoicesResponse = (billingInvoicesResponseSuccess | billingInvoicesResponseError)
-
-export const getBillingInvoicesUrl = () => {
-
-
-  
-
-  return `/billing/invoices`
-}
-
-export const billingInvoices = async ( options?: RequestInit): Promise<billingInvoicesResponse> => {
-  
-  return apiClient<billingInvoicesResponse>(getBillingInvoicesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-  
-
-
-
-
-export const getBillingInvoicesQueryKey = () => {
-    return [
-    'billing','invoices'
-    ] as const;
-    }
-
-    
-export const getBillingInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof billingInvoices>>, TError = AuthErrorResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  getBillingInvoicesQueryKey();
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof billingInvoices>>> = ({ signal }) => billingInvoices({ signal });
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData> 
-}
-
-export type BillingInvoicesQueryResult = NonNullable<Awaited<ReturnType<typeof billingInvoices>>>
-export type BillingInvoicesQueryError = AuthErrorResponse
-
-
-/**
- * @summary Billing Invoices
- */
-
-export function useBillingInvoices<TData = Awaited<ReturnType<typeof billingInvoices>>, TError = AuthErrorResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getBillingInvoicesQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
-
-  return query;
-}
-
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
@@ -423,22 +51,45 @@ export function useBillingInvoices<TData = Awaited<ReturnType<typeof billingInvo
 
 - Verifies signature if STRIPE_WEBHOOK_SECRET is configured.
 - Handles subscription events by upserting `public.stripe_subscriptions`.
+
+Runs under the ``elefant_admin`` (BYPASSRLS) session because Stripe
+does not (and cannot) supply a JWT — PR-14 transitively threaded
+``get_current_user`` through every tenant-bound repo factory, which
+would have 401'd the webhook. The admin session lets the handler
+look up org_id from ``stripe_customer_id`` and then pin
+``app.current_org_id`` so the audit/entitlements writes that follow
+record the right tenant.
  * @summary Stripe Webhook
  */
 export type stripeWebhookResponse200 = {
-  data: unknown
+  data: WebhookStatusResponse
   status: 200
 }
 
+export type stripeWebhookResponse400 = {
+  data: ErrorEnvelope
+  status: 400
+}
+
+export type stripeWebhookResponse410 = {
+  data: ErrorEnvelope
+  status: 410
+}
+
 export type stripeWebhookResponse422 = {
-  data: HTTPValidationError
+  data: ErrorEnvelope
   status: 422
+}
+
+export type stripeWebhookResponse500 = {
+  data: ErrorEnvelope
+  status: 500
 }
 
 export type stripeWebhookResponseSuccess = (stripeWebhookResponse200) & {
   headers: Headers;
 };
-export type stripeWebhookResponseError = (stripeWebhookResponse422) & {
+export type stripeWebhookResponseError = (stripeWebhookResponse400 | stripeWebhookResponse410 | stripeWebhookResponse422 | stripeWebhookResponse500) & {
   headers: Headers;
 };
 
@@ -466,16 +117,16 @@ export const stripeWebhook = async ( options?: RequestInit): Promise<stripeWebho
 
 
 
-export const getStripeWebhookMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stripeWebhook>>, TError,void, TContext>, }
+export const getStripeWebhookMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stripeWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
 ): UseMutationOptions<Awaited<ReturnType<typeof stripeWebhook>>, TError,void, TContext> => {
 
 const mutationKey = ['stripeWebhook'];
-const {mutation: mutationOptions} = options ?
+const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
       : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+      : {mutation: { mutationKey, }, request: undefined};
 
       
 
@@ -483,7 +134,7 @@ const {mutation: mutationOptions} = options ?
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof stripeWebhook>>, void> = () => {
           
 
-          return  stripeWebhook()
+          return  stripeWebhook(requestOptions)
         }
 
 
@@ -495,13 +146,13 @@ const {mutation: mutationOptions} = options ?
 
     export type StripeWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof stripeWebhook>>>
     
-    export type StripeWebhookMutationError = HTTPValidationError
+    export type StripeWebhookMutationError = ErrorEnvelope
 
     /**
  * @summary Stripe Webhook
  */
-export const useStripeWebhook = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stripeWebhook>>, TError,void, TContext>, }
+export const useStripeWebhook = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stripeWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof apiClient>}
  , queryClient?: QueryClient): UseMutationReturnType<
         Awaited<ReturnType<typeof stripeWebhook>>,
         TError,
@@ -510,4 +161,581 @@ export const useStripeWebhook = <TError = HTTPValidationError,
       > => {
       return useMutation(getStripeWebhookMutationOptions(options), queryClient);
     }
+    /**
+ * Current subscription, read from the cutover-appropriate source.
+
+- settings.billing.webhook_deactivated == False (default): reads from
+  public.stripe_subscriptions (kept in sync by the v4 webhook).
+- settings.billing.webhook_deactivated == True: reads from
+  web.subscription (kept in sync by BetterAuth). See
+  agent_docs/2026-04-14-webhook-deactivation-runbook.md.
+ * @summary Billing Subscription
+ */
+export type billingSubscriptionResponse200 = {
+  data: BillingSubscriptionResponse
+  status: 200
+}
+
+export type billingSubscriptionResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type billingSubscriptionResponseSuccess = (billingSubscriptionResponse200) & {
+  headers: Headers;
+};
+export type billingSubscriptionResponseError = (billingSubscriptionResponse401) & {
+  headers: Headers;
+};
+
+export type billingSubscriptionResponse = (billingSubscriptionResponseSuccess | billingSubscriptionResponseError)
+
+export const getBillingSubscriptionUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/subscription`
+}
+
+export const billingSubscription = async ( options?: RequestInit): Promise<billingSubscriptionResponse> => {
+  
+  return apiClient<billingSubscriptionResponse>(getBillingSubscriptionUrl(),
+  {      
+    ...options,
+    method: 'GET'
     
+    
+  }
+);}
+  
+
+
+
+
+export const getBillingSubscriptionQueryKey = () => {
+    return [
+    'api','v1','billing','subscription'
+    ] as const;
+    }
+
+    
+export const getBillingSubscriptionQueryOptions = <TData = Awaited<ReturnType<typeof billingSubscription>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getBillingSubscriptionQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof billingSubscription>>> = ({ signal }) => billingSubscription({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData> 
+}
+
+export type BillingSubscriptionQueryResult = NonNullable<Awaited<ReturnType<typeof billingSubscription>>>
+export type BillingSubscriptionQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Billing Subscription
+ */
+
+export function useBillingSubscription<TData = Awaited<ReturnType<typeof billingSubscription>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingSubscription>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getBillingSubscriptionQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * Fetch recent invoices from Stripe API.
+ * @summary Billing Invoices
+ */
+export type billingInvoicesResponse200 = {
+  data: BillingInvoicesResponse
+  status: 200
+}
+
+export type billingInvoicesResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type billingInvoicesResponseSuccess = (billingInvoicesResponse200) & {
+  headers: Headers;
+};
+export type billingInvoicesResponseError = (billingInvoicesResponse401) & {
+  headers: Headers;
+};
+
+export type billingInvoicesResponse = (billingInvoicesResponseSuccess | billingInvoicesResponseError)
+
+export const getBillingInvoicesUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/invoices`
+}
+
+export const billingInvoices = async ( options?: RequestInit): Promise<billingInvoicesResponse> => {
+  
+  return apiClient<billingInvoicesResponse>(getBillingInvoicesUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getBillingInvoicesQueryKey = () => {
+    return [
+    'api','v1','billing','invoices'
+    ] as const;
+    }
+
+    
+export const getBillingInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof billingInvoices>>, TError = ErrorEnvelope>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getBillingInvoicesQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof billingInvoices>>> = ({ signal }) => billingInvoices({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData> 
+}
+
+export type BillingInvoicesQueryResult = NonNullable<Awaited<ReturnType<typeof billingInvoices>>>
+export type BillingInvoicesQueryError = ErrorEnvelope
+
+
+/**
+ * @summary Billing Invoices
+ */
+
+export function useBillingInvoices<TData = Awaited<ReturnType<typeof billingInvoices>>, TError = ErrorEnvelope>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingInvoices>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getBillingInvoicesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
+/**
+ * Create a Stripe Checkout session for a new subscription.
+ * @summary Billing Checkout
+ */
+export type billingCheckoutResponse200 = {
+  data: BillingCheckoutResponse
+  status: 200
+}
+
+export type billingCheckoutResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type billingCheckoutResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type billingCheckoutResponseSuccess = (billingCheckoutResponse200) & {
+  headers: Headers;
+};
+export type billingCheckoutResponseError = (billingCheckoutResponse401 | billingCheckoutResponse422) & {
+  headers: Headers;
+};
+
+export type billingCheckoutResponse = (billingCheckoutResponseSuccess | billingCheckoutResponseError)
+
+export const getBillingCheckoutUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/checkout`
+}
+
+export const billingCheckout = async (billingCheckoutRequest: BillingCheckoutRequest, options?: RequestInit): Promise<billingCheckoutResponse> => {
+  
+  return apiClient<billingCheckoutResponse>(getBillingCheckoutUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      billingCheckoutRequest,)
+  }
+);}
+  
+
+
+
+export const getBillingCheckoutMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: BillingCheckoutRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: BillingCheckoutRequest}, TContext> => {
+
+const mutationKey = ['billingCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof billingCheckout>>, {data: BillingCheckoutRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  billingCheckout(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BillingCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof billingCheckout>>>
+    export type BillingCheckoutMutationBody = BillingCheckoutRequest
+    export type BillingCheckoutMutationError = ErrorEnvelope
+
+    /**
+ * @summary Billing Checkout
+ */
+export const useBillingCheckout = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCheckout>>, TError,{data: BillingCheckoutRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof billingCheckout>>,
+        TError,
+        {data: BillingCheckoutRequest},
+        TContext
+      > => {
+      return useMutation(getBillingCheckoutMutationOptions(options), queryClient);
+    }
+    /**
+ * Create a Stripe Customer Portal session.
+ * @summary Billing Portal
+ */
+export type billingPortalResponse200 = {
+  data: BillingPortalResponse
+  status: 200
+}
+
+export type billingPortalResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type billingPortalResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type billingPortalResponseSuccess = (billingPortalResponse200) & {
+  headers: Headers;
+};
+export type billingPortalResponseError = (billingPortalResponse401 | billingPortalResponse422) & {
+  headers: Headers;
+};
+
+export type billingPortalResponse = (billingPortalResponseSuccess | billingPortalResponseError)
+
+export const getBillingPortalUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/portal`
+}
+
+export const billingPortal = async (billingPortalRequest: BillingPortalRequest, options?: RequestInit): Promise<billingPortalResponse> => {
+  
+  return apiClient<billingPortalResponse>(getBillingPortalUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      billingPortalRequest,)
+  }
+);}
+  
+
+
+
+export const getBillingPortalMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: BillingPortalRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: BillingPortalRequest}, TContext> => {
+
+const mutationKey = ['billingPortal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof billingPortal>>, {data: BillingPortalRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  billingPortal(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BillingPortalMutationResult = NonNullable<Awaited<ReturnType<typeof billingPortal>>>
+    export type BillingPortalMutationBody = BillingPortalRequest
+    export type BillingPortalMutationError = ErrorEnvelope
+
+    /**
+ * @summary Billing Portal
+ */
+export const useBillingPortal = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingPortal>>, TError,{data: BillingPortalRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof billingPortal>>,
+        TError,
+        {data: BillingPortalRequest},
+        TContext
+      > => {
+      return useMutation(getBillingPortalMutationOptions(options), queryClient);
+    }
+    /**
+ * Cancel the current subscription (at period end, or immediately).
+ * @summary Billing Cancel
+ */
+export type billingCancelResponse200 = {
+  data: BillingCancelResponse
+  status: 200
+}
+
+export type billingCancelResponse401 = {
+  data: ErrorEnvelope
+  status: 401
+}
+
+export type billingCancelResponse422 = {
+  data: ErrorEnvelope
+  status: 422
+}
+
+export type billingCancelResponseSuccess = (billingCancelResponse200) & {
+  headers: Headers;
+};
+export type billingCancelResponseError = (billingCancelResponse401 | billingCancelResponse422) & {
+  headers: Headers;
+};
+
+export type billingCancelResponse = (billingCancelResponseSuccess | billingCancelResponseError)
+
+export const getBillingCancelUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/subscription/cancel`
+}
+
+export const billingCancel = async (billingCancelRequest: BillingCancelRequest, options?: RequestInit): Promise<billingCancelResponse> => {
+  
+  return apiClient<billingCancelResponse>(getBillingCancelUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      billingCancelRequest,)
+  }
+);}
+  
+
+
+
+export const getBillingCancelMutationOptions = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCancel>>, TError,{data: BillingCancelRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+): UseMutationOptions<Awaited<ReturnType<typeof billingCancel>>, TError,{data: BillingCancelRequest}, TContext> => {
+
+const mutationKey = ['billingCancel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof billingCancel>>, {data: BillingCancelRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  billingCancel(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BillingCancelMutationResult = NonNullable<Awaited<ReturnType<typeof billingCancel>>>
+    export type BillingCancelMutationBody = BillingCancelRequest
+    export type BillingCancelMutationError = ErrorEnvelope
+
+    /**
+ * @summary Billing Cancel
+ */
+export const useBillingCancel = <TError = ErrorEnvelope,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof billingCancel>>, TError,{data: BillingCancelRequest}, TContext>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient): UseMutationReturnType<
+        Awaited<ReturnType<typeof billingCancel>>,
+        TError,
+        {data: BillingCancelRequest},
+        TContext
+      > => {
+      return useMutation(getBillingCancelMutationOptions(options), queryClient);
+    }
+    /**
+ * Public: live plan prices from Stripe, so the pricing page can't drift.
+
+Display only — reads the same Stripe Price object the charge uses. Cached for
+STRIPE_PRICE_CACHE_TTL_SECONDS to avoid hitting Stripe per pageview. Plans
+whose Stripe Price is unconfigured or unreachable are omitted; the FE falls
+back to its hardcoded constant for those. No auth (registered in
+settings.app.public_paths).
+ * @summary Billing Prices
+ */
+export type billingPricesResponse200 = {
+  data: BillingPricesResponse
+  status: 200
+}
+
+export type billingPricesResponseSuccess = (billingPricesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type billingPricesResponse = (billingPricesResponseSuccess)
+
+export const getBillingPricesUrl = () => {
+
+
+  
+
+  return `/api/v1/billing/prices`
+}
+
+export const billingPrices = async ( options?: RequestInit): Promise<billingPricesResponse> => {
+  
+  return apiClient<billingPricesResponse>(getBillingPricesUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
+
+
+
+export const getBillingPricesQueryKey = () => {
+    return [
+    'api','v1','billing','prices'
+    ] as const;
+    }
+
+    
+export const getBillingPricesQueryOptions = <TData = Awaited<ReturnType<typeof billingPrices>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingPrices>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getBillingPricesQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof billingPrices>>> = ({ signal }) => billingPrices({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof billingPrices>>, TError, TData> 
+}
+
+export type BillingPricesQueryResult = NonNullable<Awaited<ReturnType<typeof billingPrices>>>
+export type BillingPricesQueryError = unknown
+
+
+/**
+ * @summary Billing Prices
+ */
+
+export function useBillingPrices<TData = Awaited<ReturnType<typeof billingPrices>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof billingPrices>>, TError, TData>>, request?: SecondParameter<typeof apiClient>}
+ , queryClient?: QueryClient 
+ ): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getBillingPricesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>;
+
+  return query;
+}
+
+
+
+
