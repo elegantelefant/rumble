@@ -22,5 +22,8 @@
     "types": ["vitest/globals"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+  /* Generated orval client; exempt from authored-code lint (noUnusedLocals)
+     since orval can emit unused imports. Types still resolve when imported. */
+  "exclude": ["src/api/generated"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
