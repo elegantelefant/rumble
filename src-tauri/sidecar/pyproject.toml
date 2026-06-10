@@ -44,3 +44,5 @@ type-mappings = ["string+ulid=string"]
 # no camelCase aliases (FastAPI would otherwise serialize responses by alias).
 snake-case-field = true
 no-alias = true
+# Deterministic output so the contract-drift CI gate doesn't trip on a timestamp.
+disable-timestamp = true
