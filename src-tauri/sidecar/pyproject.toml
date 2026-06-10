@@ -35,3 +35,7 @@ input = "../../openapi.json"
 output = "models/generated.py"
 output-model-type = "pydantic_v2.BaseModel"
 target-python-version = "3.12"
+# Spec marks ULID ids as string/format=ulid. Without this, datamodel-codegen
+# emits `from ulid import ULID`, a non-Pydantic type that breaks schema build.
+# Map it to a pattern-constrained str instead.
+type-mappings = ["string+ulid=string"]
