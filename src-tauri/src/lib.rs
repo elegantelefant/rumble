@@ -20,37 +20,10 @@ const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
-/// Paths that only the cloud API can handle (billing, auth, search, etc.).
-const CLOUD_ONLY_PREFIXES: &[&str] = &[
-    "/billing",
-    "/auth",
-    "/users",
-    "/organizations",
-    "/notifications",
-    "/webhooks",
-    "/whoami",
-    "/me",
-    "/search",
-    "/briefcase",
-    "/documents",
-    "/files",
-    "/corpus",
-    "/graph",
-    "/playbooks",
-    "/clause-databases",
-    "/legal-requests",
-    "/pipelines",
-    "/entitlements",
-    "/usage",
-    "/commencement",
-    "/reading-list",
-    "/model-performance",
-    "/memories",
-    "/memory",
-    "/orchestrate",
-    "/citations",
-    "/internal",
-];
+/// Prefix that identifies a cloud API route. Every versioned cloud endpoint
+/// lives under `/api/v1/`; the local sidecar serves un-prefixed paths
+/// (`/chats`, `/research`, `/health`, ...).
+const CLOUD_PATH_PREFIX: &str = "/api/v1/";
 
 // --- App state ---
 
@@ -71,7 +44,7 @@ struct AppState {
 
 impl AppState {
     /// Route a request path to the correct backend URL.
-    /// Premium mode: always cloud. Ollama/BYOK: cloud-only paths go to cloud,
+    /// Premium mode: always cloud. Ollama/BYOK: `/api/v1/` paths go to cloud,
     /// everything else goes to the local sidecar.
     fn resolve_url(&self, path: &str) -> Result<String, String> {
         let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner());
@@ -79,11 +52,7 @@ impl AppState {
             return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
         }
 
-        let is_cloud_only = CLOUD_ONLY_PREFIXES
-            .iter()
-            .any(|prefix| path == *prefix || path.starts_with(&format!("{}/", prefix)));
-
-        if is_cloud_only {
+        if path.starts_with(CLOUD_PATH_PREFIX) {
             return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
         }
 
@@ -609,33 +578,29 @@ mod tests {
             "https://api.elefant.com/chats"
         );
         assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
+            state.resolve_url("/api/v1/billing/subscription").unwrap(),
+            "https://api.elefant.com/api/v1/billing/subscription"
         );
     }
 
     #[test]
-    fn ollama_routes_cloud_only_to_cloud() {
+    fn ollama_routes_api_v1_to_cloud() {
         let state = make_state(BackendMode::Ollama, Some(11435));
         assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
+            state.resolve_url("/api/v1/billing/subscription").unwrap(),
+            "https://api.elefant.com/api/v1/billing/subscription"
         );
         assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
+            state.resolve_url("/api/v1/search").unwrap(),
+            "https://api.elefant.com/api/v1/search"
         );
         assert_eq!(
-            state.resolve_url("/search").unwrap(),
-            "https://api.elefant.com/search"
+            state.resolve_url("/api/v1/auth/login").unwrap(),
+            "https://api.elefant.com/api/v1/auth/login"
         );
         assert_eq!(
-            state.resolve_url("/auth/login").unwrap(),
-            "https://api.elefant.com/auth/login"
-        );
-        assert_eq!(
-            state.resolve_url("/users").unwrap(),
-            "https://api.elefant.com/users"
+            state.resolve_url("/api/v1/users").unwrap(),
+            "https://api.elefant.com/api/v1/users"
         );
     }
 
@@ -645,6 +610,14 @@ mod tests {
         assert_eq!(
             state.resolve_url("/health").unwrap(),
             "http://127.0.0.1:11435/health"
+        );
+        assert_eq!(
+            state.resolve_url("/ready").unwrap(),
+            "http://127.0.0.1:11435/ready"
+        );
+        assert_eq!(
+            state.resolve_url("/research").unwrap(),
+            "http://127.0.0.1:11435/research"
         );
         assert_eq!(
             state.resolve_url("/chats").unwrap(),
@@ -672,8 +645,8 @@ mod tests {
     fn byok_routes_same_as_ollama() {
         let state = make_state(BackendMode::Byok, Some(8080));
         assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
+            state.resolve_url("/api/v1/billing/subscription").unwrap(),
+            "https://api.elefant.com/api/v1/billing/subscription"
         );
         assert_eq!(
             state.resolve_url("/chats").unwrap(),
@@ -697,64 +670,36 @@ mod tests {
     }
 
     #[test]
-    fn ollama_no_sidecar_still_routes_cloud_only() {
+    fn ollama_no_sidecar_still_routes_api_v1_to_cloud() {
         let state = make_state(BackendMode::Ollama, None);
         assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
+            state.resolve_url("/api/v1/billing").unwrap(),
+            "https://api.elefant.com/api/v1/billing"
         );
     }
 
     #[test]
-    fn cloud_only_prefix_no_false_positive() {
+    fn unprefixed_billing_does_not_route_to_cloud() {
+        // After the 0.4.0 migration only `/api/v1/...` is a cloud route.
+        // A bare `/billing` is not a sidecar route the client uses, but the
+        // rule must not misclassify it as cloud just because it once was.
         let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/me").unwrap(),
-            "https://api.elefant.com/me"
-        );
-        assert_eq!(
-            state.resolve_url("/models").unwrap(),
-            "http://127.0.0.1:11435/models"
-        );
-    }
-
-    #[test]
-    fn every_cloud_only_prefix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let result = state.resolve_url(prefix).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                prefix,
-                result
-            );
-        }
-    }
-
-    #[test]
-    fn every_cloud_only_prefix_with_suffix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let path = format!("{}/sub-path", prefix);
-            let result = state.resolve_url(&path).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                path,
-                result
-            );
-        }
-    }
-
-    #[test]
-    fn partial_prefix_does_not_falsely_match() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        // "/billing_extra" contains "/billing" as a substring but should NOT match
-        let result = state.resolve_url("/billing_extra").unwrap();
+        let result = state.resolve_url("/billing").unwrap();
         assert!(
             result.starts_with("http://127.0.0.1:11435"),
-            "/billing_extra should NOT route to cloud, got: {}",
+            "/billing should NOT route to cloud, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn api_v1_prefix_only_matches_at_start() {
+        // A sidecar path that merely contains "/api/v1/" later must not match.
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let result = state.resolve_url("/research/api/v1/result").unwrap();
+        assert!(
+            result.starts_with("http://127.0.0.1:11435"),
+            "/research/api/v1/result should route to sidecar, got: {}",
             result
         );
     }
