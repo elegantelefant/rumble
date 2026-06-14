@@ -1,0 +1,5 @@
+# ABOUTME: Pins the Rust toolchain so the Tauri build is reproducible across dev and CI.
+# ABOUTME: rustup honours this for every cargo/rustc invocation in the repo (overrides CI's @stable install).
+[toolchain]
+channel = "1.90.0"
+components = ["rustfmt", "clippy"]
