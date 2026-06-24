@@ -751,6 +751,84 @@ mod tests {
         assert_eq!(json["modified"], "2025-01-01 00:00:00");
     }
 
+    // --- /api/v1 cloud contract deserialization (0.4.0) ---
+    //
+    // The proxy forwards cloud responses as serde_json::Value, but the contract
+    // these structs encode is what the client ultimately depends on. A breaking
+    // rename/removal in the spec shows up here as a serde deserialization error —
+    // the Tauri-side drift signal. The committed spec is pinned byte-identical to
+    // the backend SoT and guarded by the openapi-version-bump gate.
+
+    #[test]
+    fn cloud_api_v1_contract_bodies_deserialize() {
+        use serde::Deserialize;
+
+        // Success bodies are camelCase.
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct JobCreated {
+            job_id: String,
+            poll_url: String,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct JobStatus {
+            #[serde(rename = "type")]
+            kind: String,
+            status: String,
+            created_at: String,
+            id: String,
+        }
+        // Error bodies are snake_case (ErrorEnvelope).
+        #[derive(Deserialize)]
+        struct ErrorEnvelope {
+            upstream_status: i64,
+            message: String,
+        }
+
+        let created: JobCreated = serde_json::from_str(
+            r#"{"jobId":"job-1","status":"queued","pollUrl":"/api/v1/jobs/job-1"}"#,
+        )
+        .expect("create response must deserialize");
+        assert_eq!(created.job_id, "job-1");
+        assert_eq!(created.poll_url, "/api/v1/jobs/job-1");
+
+        let status: JobStatus = serde_json::from_str(
+            r#"{"id":"job-1","type":"draft","status":"completed","createdAt":"2026-06-24T00:00:00Z","cancelRequested":false}"#,
+        )
+        .expect("job status must deserialize (unknown fields ignored)");
+        assert_eq!(status.id, "job-1");
+        assert_eq!(status.kind, "draft");
+        assert_eq!(status.status, "completed");
+        assert_eq!(status.created_at, "2026-06-24T00:00:00Z");
+
+        let err: ErrorEnvelope = serde_json::from_str(
+            r#"{"error":true,"upstream_status":404,"error_class":"NotFound","code":"not_found","message":"job missing"}"#,
+        )
+        .expect("ErrorEnvelope must deserialize");
+        assert_eq!(err.upstream_status, 404);
+        assert_eq!(err.message, "job missing");
+
+        // Drift: a renamed required field (jobId -> job_id) must fail to deserialize.
+        let drifted: Result<JobCreated, _> =
+            serde_json::from_str(r#"{"job_id":"x","pollUrl":"/p"}"#);
+        assert!(drifted.is_err(), "snake_case jobId drift must fail deserialization");
+    }
+
+    #[test]
+    fn cloud_contract_field_tokens_present_in_committed_spec() {
+        // Bind the structs above to the vendored spec: if the contract renames a
+        // field these structs read, this tripwire fails alongside the serde test.
+        let spec_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../openapi.json");
+        let spec = std::fs::read_to_string(spec_path).expect("read openapi.json");
+        for token in ["\"jobId\"", "\"pollUrl\"", "\"createdAt\"", "\"upstream_status\""] {
+            assert!(
+                spec.contains(token),
+                "contract field {token} missing from openapi.json — Tauri structs would drift"
+            );
+        }
+    }
+
     // --- scan_folder ---
 
     fn home_tempdir() -> tempfile::TempDir {
