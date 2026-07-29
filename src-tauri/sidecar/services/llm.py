@@ -54,8 +54,9 @@ async def _build_agent(
     api_key: str | None = None,
 ) -> Agent:
     """Build a PydanticAI agent for the given provider config."""
-    if api_key:
-        provider = OpenAIProvider(api_key=api_key)
+    resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
+    if resolved_api_key:
+        provider = OpenAIProvider(api_key=resolved_api_key)
         model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
         resolved = model_name or await _resolve_ollama_model()
