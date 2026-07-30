@@ -67,6 +67,13 @@ struct AppState {
     http: Client,
     sidecar_port: Mutex<Option<u16>>,
     sidecar_child: Mutex<Option<CommandChild>>,
+    secret: String,
+}
+
+/// Whether a resolved URL points at our own local sidecar (as opposed to
+/// the cloud API) — used to decide whether to attach the shared secret.
+fn is_sidecar_url(url: &str) -> bool {
+    url.starts_with("http://127.0.0.1:")
 }
 
 impl AppState {
@@ -167,6 +174,7 @@ async fn make_http_request(
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
     auth_token: Option<&str>,
+    secret_header: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let mut builder = match method.to_uppercase().as_str() {
         "GET" => http.get(url),
@@ -179,6 +187,10 @@ async fn make_http_request(
 
     if let Some(token) = auth_token {
         builder = builder.bearer_auth(token);
+    }
+
+    if let Some(secret) = secret_header {
+        builder = builder.header("X-Rumble-Secret", secret);
     }
 
     if let Some(serde_json::Value::Object(map)) = params {
@@ -231,7 +243,14 @@ async fn api_call(
             None
         }
     };
-    make_http_request(&state.http, &url, &method, body, params, token.as_deref()).await
+    // Only attach the shared secret when talking to our own local sidecar —
+    // never send it to the cloud API.
+    let secret = if is_sidecar_url(&url) {
+        Some(state.secret.as_str())
+    } else {
+        None
+    };
+    make_http_request(&state.http, &url, &method, body, params, token.as_deref(), secret).await
 }
 
 // --- Keychain helpers ---
@@ -350,11 +369,11 @@ async fn find_available_port() -> Result<u16, String> {
     Ok(port)
 }
 
-async fn poll_health(http: &Client, port: u16) -> Result<(), String> {
+async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{}/health", port);
     for attempt in 1..=HEALTH_POLL_ATTEMPTS {
         tokio::time::sleep(std::time::Duration::from_millis(HEALTH_POLL_INTERVAL_MS)).await;
-        match http.get(&url).send().await {
+        match http.get(&url).header("X-Rumble-Secret", secret).send().await {
             Ok(resp) if resp.status().is_success() => {
                 println!("[sidecar] healthy on port {} (attempt {})", port, attempt);
                 return Ok(());
@@ -394,6 +413,8 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
             &port.to_string(),
             "--data-dir",
             &data_dir.to_string_lossy(),
+            "--secret",
+            &state.secret,
         ]);
 
     let (mut rx, child) = sidecar_cmd
@@ -412,6 +433,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     // Read stdout in a background task, looking for PORT: confirmation
     let port_clone = port;
     let http_clone = state.http.clone();
+    let secret_clone = state.secret.clone();
     let state_handle = app.app_handle().clone();
     tauri::async_runtime::spawn(async move {
         let mut port_confirmed = false;
@@ -424,7 +446,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         if let Some(port_str) = trimmed.strip_prefix("PORT:") {
                             if let Ok(p) = port_str.parse::<u16>() {
                                 println!("[sidecar] reported port {}", p);
-                                match poll_health(&http_clone, p).await {
+                                match poll_health(&http_clone, p, &secret_clone).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();
                                         let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
@@ -481,6 +503,7 @@ async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value,
     let mut result = serde_json::json!({
         "running": running,
         "port": port,
+        "secret": state.secret,
     });
 
     if let Some(p) = port {
@@ -533,6 +556,7 @@ pub fn run() {
                 .expect("failed to build HTTP client"),
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),
+            secret: uuid::Uuid::new_v4().to_string(),
         })
         .setup(|app| {
             let handle = app.handle();
@@ -596,6 +620,7 @@ mod tests {
             http: Client::new(),
             sidecar_port: Mutex::new(port),
             sidecar_child: Mutex::new(None),
+            secret: "test-secret".to_string(),
         }
     }
 
@@ -884,7 +909,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/data", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"ok": true}));
     }
 
@@ -901,7 +926,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items", server.uri());
-        let result = make_http_request(&http, &url, "POST", Some(payload), None, None).await;
+        let result = make_http_request(&http, &url, "POST", Some(payload), None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"id": "1"}));
     }
 
@@ -916,7 +941,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "PUT", None, None, None).await;
+        let result = make_http_request(&http, &url, "PUT", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"updated": true}));
     }
 
@@ -931,7 +956,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "PATCH", None, None, None).await;
+        let result = make_http_request(&http, &url, "PATCH", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"patched": true}));
     }
 
@@ -946,14 +971,14 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "DELETE", None, None, None).await;
+        let result = make_http_request(&http, &url, "DELETE", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"deleted": true}));
     }
 
     #[tokio::test]
     async fn http_unsupported_method_returns_error() {
         let http = Client::new();
-        let result = make_http_request(&http, "http://localhost", "TRACE", None, None, None).await;
+        let result = make_http_request(&http, "http://localhost", "TRACE", None, None, None, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unsupported HTTP method"));
     }
@@ -972,7 +997,7 @@ mod tests {
         let http = Client::new();
         let url = format!("{}/search", server.uri());
         let params = serde_json::json!({"foo": "bar", "n": 42});
-        let result = make_http_request(&http, &url, "GET", None, Some(params), None).await;
+        let result = make_http_request(&http, &url, "GET", None, Some(params), None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"found": true}));
     }
 
@@ -989,7 +1014,7 @@ mod tests {
         let http = Client::new();
         let url = format!("{}/secure", server.uri());
         let result =
-            make_http_request(&http, &url, "GET", None, None, Some("test-token")).await;
+            make_http_request(&http, &url, "GET", None, None, Some("test-token"), None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"auth": true}));
     }
 
@@ -1005,7 +1030,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/open", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({"open": true}));
         // Verify the mock was hit (no auth header required)
     }
@@ -1021,7 +1046,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/missing", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
         let err = result.unwrap_err();
         assert!(err.contains("API error 404"), "got: {}", err);
         assert!(err.contains("not found"), "got: {}", err);
@@ -1038,7 +1063,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/crash", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
         let err = result.unwrap_err();
         assert!(err.contains("API error 500"), "got: {}", err);
         assert!(err.contains("internal failure"), "got: {}", err);
@@ -1049,7 +1074,7 @@ mod tests {
         let http = Client::new();
         // Use a port that's almost certainly not listening
         let result =
-            make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None).await;
+            make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None, None).await;
         assert!(result.is_err());
     }
 
@@ -1064,7 +1089,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "DELETE", None, None, None).await;
+        let result = make_http_request(&http, &url, "DELETE", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({}));
     }
 

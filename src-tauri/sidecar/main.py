@@ -19,9 +19,10 @@ def cli():
     parser = argparse.ArgumentParser(description="Rumble sidecar server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--data-dir", type=str, default=None, help="Directory for SQLite DB")
+    parser.add_argument("--secret", type=str, default=None, help="Shared secret required on all requests (supplied by Tauri host)")
     args = parser.parse_args()
 
-    app = create_app(data_dir=args.data_dir)
+    app = create_app(data_dir=args.data_dir, secret=args.secret)
 
     config = uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
     server = uvicorn.Server(config)
