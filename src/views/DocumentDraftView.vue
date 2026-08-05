@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 
@@ -116,10 +117,24 @@ async function generateDraft() {
   }
 }
 
-function exportDraft(format: "word" | "pdf") {
-  // TODO: invoke("draft_export", { format })
-  toasts.addToast(`Exported draft as ${format.toUpperCase()}.`, "info");
-  void format;
+async function exportDraft(format: "word" | "pdf") {
+  if (!draftResult.value) {
+    toasts.addToast("Generate a draft before exporting.", "info");
+    return;
+  }
+
+  if (format === "pdf") {
+    toasts.addToast("PDF export is coming soon.", "info");
+    return;
+  }
+
+  try {
+    await invoke("export_draft_docx", { text: draftResult.value });
+    toasts.addToast("Draft exported as Word document.", "success");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to export draft.";
+    toasts.addToast(message, "error");
+  }
 }
 </script>
 

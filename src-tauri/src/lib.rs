@@ -14,6 +14,8 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use trash::delete;
 use walkdir::WalkDir;
+use docx_rs::{Docx, Paragraph, Run};
+use tauri_plugin_dialog::DialogExt;
 
 const SERVICE_NAME: &str = "elefant-rumble";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
@@ -553,6 +555,45 @@ fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
         })
 }
 
+// --- Document export ---
+
+#[tauri::command]
+async fn export_draft_docx(app: AppHandle, text: String) -> Result<(), String> {
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("Word Document", &["docx"])
+        .set_file_name("draft.docx")
+        .blocking_save_file();
+
+    let Some(path) = path else {
+        // User cancelled the dialog — not an error.
+        return Ok(());
+    };
+
+    let path = path
+        .into_path()
+        .map_err(|e| format!("invalid save path: {}", e))?;
+
+    let file = std::fs::File::create(&path).map_err(|e| format!("failed to create file: {}", e))?;
+
+    let mut docx = Docx::new();
+    for line in text.lines() {
+        let paragraph = if line.trim().is_empty() {
+            Paragraph::new()
+        } else {
+            Paragraph::new().add_run(Run::new().add_text(line))
+        };
+        docx = docx.add_paragraph(paragraph);
+    }
+
+    docx.build()
+        .pack(file)
+        .map_err(|e| format!("failed to write docx: {}", e))?;
+
+    Ok(())
+}
+
 // --- App entry ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -560,6 +601,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             mode: Mutex::new(BackendMode::Ollama),
             http: Client::builder()
@@ -609,6 +651,8 @@ pub fn run() {
             // Sidecar
             sidecar_status,
             sidecar_secret,
+            // Document export
+            export_draft_docx,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
