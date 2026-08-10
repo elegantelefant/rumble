@@ -5,6 +5,7 @@ import json
 import re
 
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
 from models.generated import (
     ChatTitleRequest,
@@ -48,10 +49,20 @@ def _parse_llm_json(raw: str) -> dict:
 
 
 def _safe_construct(model_class, data: dict):
-    """Construct a Pydantic model, dropping unknown keys to survive extra='forbid'."""
+    """Construct a Pydantic model, dropping unknown keys to survive extra='forbid'.
+
+    Raises a clean 502 (rather than an unhandled 500) if the LLM's JSON is
+    missing required fields or has values of the wrong type.
+    """
     known_fields = set(model_class.model_fields.keys())
     filtered = {k: v for k, v in data.items() if k in known_fields}
-    return model_class(**filtered)
+    try:
+        return model_class(**filtered)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM response did not match expected shape: {exc}",
+        ) from exc
 
 
 @router.post("/clarify", response_model=ClarifyResponse)
