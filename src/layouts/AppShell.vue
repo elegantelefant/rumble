@@ -28,6 +28,27 @@ const paletteCommands = [
     label: "Start a new draft",
     action: () => router.push("/draft"),
   },
+  {
+    id: "research",
+    label: "Go to Research",
+    action: () => router.push("/research"),
+  },
+  {
+    id: "translation",
+    label: "Go to Translation",
+    action: () => router.push("/translation"),
+  },
+  {
+    id: "evidence",
+    label: "Go to Evidence Review",
+    action: () => router.push("/evidence"),
+  },
+  {
+    id: "settings",
+    label: "Go to Settings",
+    shortcut: ",",
+    action: () => router.push("/settings"),
+  },
 ];
 
 function handleNavigate(path: string) {
