@@ -39,7 +39,12 @@ provide(TOAST_KEY, { addToast });
 
 <template>
   <slot />
-  <div class="fixed right-4 bottom-4 z-[1000] flex w-80 flex-col gap-3 pointer-events-none">
+  <div
+    class="fixed right-4 bottom-4 z-[1000] flex w-80 flex-col gap-3 pointer-events-none"
+    role="status"
+    aria-live="polite"
+    aria-atomic="false"
+  >
     <transition-group name="toast">
       <div
         v-for="toast in toasts"

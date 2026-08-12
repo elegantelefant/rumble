@@ -105,6 +105,13 @@ describe("ToastProvider", () => {
     expect(toastEl.classes()).toContain("bg-[var(--success)]")
   })
 
+  it("has an aria-live region for screen reader announcements", () => {
+    const wrapper = mountProvider()
+    const region = wrapper.find('[role="status"]')
+    expect(region.exists()).toBe(true)
+    expect(region.attributes("aria-live")).toBe("polite")
+  })
+
   it("applies correct CSS class for error type", async () => {
     const ErrorConsumer = defineComponent({
       setup() {
