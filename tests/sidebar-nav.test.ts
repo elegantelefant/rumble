@@ -3,9 +3,11 @@
 
 import { mount } from "@vue/test-utils"
 import SidebarNav from "../src/modules/navigation/SidebarNav.vue"
+import { currentUser } from "../src/composables/user"
 
 beforeEach(() => {
   vi.clearAllMocks()
+  currentUser.value.version = "Rumble v1.2.3-test"
 })
 
 function mountSidebar(activePath = "/review") {
@@ -111,6 +113,6 @@ describe("SidebarNav", () => {
 
   it("displays version info", () => {
     const wrapper = mountSidebar()
-    expect(wrapper.text()).toContain("Rumble v0.1.0a")
+    expect(wrapper.text()).toContain("Rumble v1.2.3-test")
   })
 })
