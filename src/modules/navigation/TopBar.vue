@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { currentUser } from "../../composables/user";
 
 const emit = defineEmits<{
@@ -13,6 +14,15 @@ const confidentialityMessage = computed(() =>
     ? "Local & Confidential"
     : "Chats retained locally; remote agents may assist on request.",
 );
+
+onMounted(async () => {
+  try {
+    const mode = await invoke<string>("get_backend_mode");
+    confidentialityState.value = mode === "premium" ? "hybrid" : "local";
+  } catch (error) {
+    console.error("Failed to read backend mode:", error);
+  }
+});
 
 const initials = computed(() =>
   currentUser.value.name

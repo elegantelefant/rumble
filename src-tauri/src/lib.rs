@@ -336,9 +336,9 @@ fn delete_api_key(provider: String) -> Result<(), String> {
 // --- Backend mode commands ---
 
 #[tauri::command]
-fn get_backend_mode(state: State<'_, AppState>) -> String {
+fn get_backend_mode(state: State<'_, AppState>) -> BackendMode {
     let mode = state.mode.lock().unwrap_or_else(|e| e.into_inner());
-    serde_json::to_string(&*mode).unwrap_or_else(|_| "\"premium\"".to_string())
+    mode.clone()
 }
 
 #[tauri::command]
