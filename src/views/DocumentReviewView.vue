@@ -276,7 +276,7 @@ const workflowSteps = [
   {
     title: "Chat in the workspace",
     detail:
-      "Follow-up questions stay threaded with the document. Responses cite page-level references.",
+      "Follow-up questions stay threaded with the document, with the full text kept in context.",
   },
   {
     title: "Return via dashboard",
