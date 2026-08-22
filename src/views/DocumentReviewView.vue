@@ -104,7 +104,7 @@ async function registerFile(file: File) {
 
 function handleFiles(files: FileList | null) {
   if (!files) return;
-  for (const file of Array.from(files).filter((f) => /\.(pdf|docx|txt)$/i.test(f.name))) {
+  for (const file of Array.from(files).filter((f) => /\.(txt|md)$/i.test(f.name))) {
     registerFile(file);
   }
 }
@@ -263,6 +263,34 @@ async function askQuestion() {
   }
 }
 
+function exportSession() {
+  const session = activeSession.value;
+  if (!session) return;
+
+  const lines = [
+    `Document: ${session.file.name}`,
+    `Exported: ${new Date().toLocaleString()}`,
+    "",
+    "=== Initial review summary ===",
+    session.summary || "(no summary)",
+    "",
+    "=== Conversation ===",
+    ...session.messages.map(
+      (m) => `[${m.timestamp}] ${m.role === "user" ? "You" : "Elefant Assistant"}: ${m.content}`,
+    ),
+  ];
+
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${session.file.name.replace(/\.[^.]+$/, "")}-session.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+
+  toasts.addToast("Session exported.", "success");
+}
+
 const workflowSteps = [
   {
     title: "Drop or browse for documents",
@@ -336,14 +364,14 @@ const workflowSteps = [
             @drop="handleDrop"
           >
             <div class="text-base font-medium">Drop files here or browse</div>
-            <p class="text-xs text-[var(--primary-600)]">PDF, DOCX, TXT supported. Files never leave this device.</p>
+            <p class="text-xs text-[var(--primary-600)]">TXT and MD supported. Files never leave this device.</p>
             <div class="flex flex-wrap items-center justify-center gap-3">
               <button class="btn-primary" type="button" @click="triggerFilePicker">Browse Files</button>
               <input
                 ref="fileInputRef"
                 type="file"
                 class="hidden"
-                accept=".pdf,.docx,.txt"
+                accept=".txt,.md"
                 multiple
                 @change="handleInputChange"
               />
@@ -465,7 +493,7 @@ const workflowSteps = [
               <span v-if="isSyncingBackend" class="flex items-center gap-2 text-xs text-[var(--primary-500)]">
                 <span class="spinner"></span> Syncing with backend...
               </span>
-              <button class="btn-secondary text-xs" type="button">
+              <button class="btn-secondary text-xs" type="button" @click="exportSession">
                 Export Session
               </button>
             </div>
