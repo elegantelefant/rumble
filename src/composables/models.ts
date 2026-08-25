@@ -1,6 +1,7 @@
 // ABOUTME: Shared model inventory composable for all views that need model selection.
-// ABOUTME: Single source of truth for available models and provider availability state.
+// ABOUTME: Loads real models from the sidecar's /models endpoint, with a static fallback.
 import { computed, ref } from "vue";
+import { listModels } from "../api/sidecar";
 
 export type ModelOption = {
   id: string;
@@ -9,22 +10,41 @@ export type ModelOption = {
   available: boolean;
 };
 
-const models = ref<ModelOption[]>([
+// Used until /models responds, and as a fallback if the sidecar is unreachable.
+const FALLBACK_MODELS: ModelOption[] = [
   { id: "elefant-local", label: "Ollama · Elefant Legal Blend", provider: "Local", available: true },
-  { id: "gpt-4.1-mini", label: "GPT-4.1 mini", provider: "OpenAI", available: false },
-  { id: "sonnet-3.5", label: "Claude 3.5 Sonnet", provider: "Anthropic", available: false },
-]);
+];
+
+const models = ref<ModelOption[]>([...FALLBACK_MODELS]);
+const loaded = ref(false);
+const loading = ref(false);
 
 export function useModels() {
   const availableModels = computed(() => models.value.filter((m) => m.available));
 
-  function setAvailability(providerId: string, available: boolean) {
-    for (const m of models.value) {
-      if (m.provider.toLowerCase() === providerId.toLowerCase()) {
-        m.available = available;
+  async function loadModels(force = false) {
+    if (loading.value || (loaded.value && !force)) return;
+    loading.value = true;
+    try {
+      const response = await listModels();
+      if (response.models.length) {
+        models.value = response.models.map((m) => ({
+          id: m.id,
+          label: m.name,
+          provider: m.provider,
+          available: true,
+        }));
+      } else {
+        models.value = [];
       }
+      loaded.value = true;
+    } catch (error) {
+      console.error("Failed to load models from sidecar:", error);
+      models.value = [...FALLBACK_MODELS];
+    } finally {
+      loading.value = false;
     }
   }
 
-  return { models, availableModels, setAvailability };
+  return { models, availableModels, loadModels, loading, loaded };
 }

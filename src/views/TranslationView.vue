@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: "TranslationView" });
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { translate } from "../api/sidecar";
 import { useModels } from "../composables/models";
@@ -27,7 +27,18 @@ const selectedModel = ref("elefant-local");
 const showApiDocs = ref(false);
 const isTranslating = ref(false);
 
-const { models: modelOptions } = useModels();
+const { models: modelOptions, loadModels } = useModels();
+
+// Models load asynchronously from the sidecar; pick a default once they arrive.
+watch(modelOptions, (list) => {
+  if (!selectedModel.value || !list.some((m) => m.id === selectedModel.value)) {
+    selectedModel.value = list.find((m) => m.available)?.id ?? "";
+  }
+}, { immediate: true });
+
+onMounted(() => {
+  void loadModels();
+});
 
 const jobs = ref<TranslationJob[]>([
   {
