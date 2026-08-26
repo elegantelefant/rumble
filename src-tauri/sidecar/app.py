@@ -1,5 +1,6 @@
 # ABOUTME: FastAPI application factory for the rumble sidecar.
 # ABOUTME: Wires up lifespan (DB init/close), shared-secret auth, and route modules.
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -30,7 +31,8 @@ def create_app(data_dir: str | None = None, secret: str | None = None) -> FastAP
         # --secret) — leave auth open, matching prior behavior.
         if app.state.secret is None:
             return await call_next(request)
-        if request.headers.get(SECRET_HEADER) != app.state.secret:
+        provided = request.headers.get(SECRET_HEADER) or ""
+        if not secrets.compare_digest(provided, app.state.secret):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "missing or invalid shared secret"},

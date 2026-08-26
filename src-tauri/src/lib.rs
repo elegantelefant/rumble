@@ -16,6 +16,7 @@ use trash::delete;
 use walkdir::WalkDir;
 
 const SERVICE_NAME: &str = "elefant-rumble";
+const SECRET_HEADER: &str = "X-Rumble-Secret";
 const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
@@ -190,7 +191,7 @@ async fn make_http_request(
     }
 
     if let Some(secret) = secret_header {
-        builder = builder.header("X-Rumble-Secret", secret);
+        builder = builder.header(SECRET_HEADER, secret);
     }
 
     if let Some(serde_json::Value::Object(map)) = params {
@@ -373,7 +374,7 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
     let url = format!("http://127.0.0.1:{}/health", port);
     for attempt in 1..=HEALTH_POLL_ATTEMPTS {
         tokio::time::sleep(std::time::Duration::from_millis(HEALTH_POLL_INTERVAL_MS)).await;
-        match http.get(&url).header("X-Rumble-Secret", secret).send().await {
+        match http.get(&url).header(SECRET_HEADER, secret).send().await {
             Ok(resp) if resp.status().is_success() => {
                 println!("[sidecar] healthy on port {} (attempt {})", port, attempt);
                 return Ok(());
