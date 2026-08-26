@@ -30,11 +30,13 @@ async function fillAndGenerate(wrapper: ReturnType<typeof mountDraft>) {
   await flushPromises()
 }
 
+const mockAddToast = vi.fn()
+
 function mountDraft() {
   return mount(DocumentDraftView, {
     global: {
       provide: {
-        [TOAST_KEY as symbol]: { addToast: vi.fn() },
+        [TOAST_KEY as symbol]: { addToast: mockAddToast },
       },
     },
   })
@@ -176,5 +178,6 @@ describe("DocumentDraftView export", () => {
     await flushPromises()
 
     expect(invoke).toHaveBeenCalledWith("export_draft_docx", { text: "Sample draft text." })
+    expect(mockAddToast).toHaveBeenCalledWith("save cancelled", "error")
   })
 })
