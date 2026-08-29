@@ -27,8 +27,8 @@ describe("BriefcasesView", () => {
     const { wrapper, addToast } = mountBriefcases()
     await wrapper.find("button.btn-primary").trigger("click")
     expect(addToast).toHaveBeenCalledWith(
-      "You're on the Briefcases waitlist — we'll email you at launch.",
-      "success",
+      "Noted — the waitlist isn't live yet, but we'll announce Briefcases here when it launches.",
+      "info",
     )
   })
 
@@ -36,7 +36,7 @@ describe("BriefcasesView", () => {
     const { wrapper } = mountBriefcases()
     const button = wrapper.find("button.btn-primary")
     await button.trigger("click")
-    expect(wrapper.text()).toContain("You're on the list")
+    expect(wrapper.text()).toContain("Noted")
     expect(button.attributes("disabled")).toBeDefined()
   })
 

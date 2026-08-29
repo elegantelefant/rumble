@@ -8,7 +8,7 @@ const joined = ref(false);
 function joinWaitlist() {
   if (joined.value) return;
   joined.value = true;
-  toasts.addToast("You're on the Briefcases waitlist — we'll email you at launch.", "success");
+  toasts.addToast("Noted — the waitlist isn't live yet, but we'll announce Briefcases here when it launches.", "info");
 }
 </script>
 
@@ -30,7 +30,7 @@ function joinWaitlist() {
         Premium Feature — $10/month after launch
       </div>
       <button class="btn-primary w-full" :disabled="joined" @click="joinWaitlist">
-        {{ joined ? "You're on the list" : "Join Waitlist" }}
+        {{ joined ? "Noted" : "Join Waitlist" }}
       </button>
     </section>
 
