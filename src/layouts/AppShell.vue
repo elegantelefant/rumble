@@ -15,7 +15,6 @@ const paletteCommands = [
   {
     id: "review",
     label: "Go to Document Review",
-    shortcut: "R",
     action: () => router.push("/review"),
   },
   {
@@ -39,14 +38,8 @@ const paletteCommands = [
     action: () => router.push("/translation"),
   },
   {
-    id: "evidence",
-    label: "Go to Evidence Review",
-    action: () => router.push("/evidence"),
-  },
-  {
     id: "settings",
     label: "Go to Settings",
-    shortcut: ",",
     action: () => router.push("/settings"),
   },
 ];
