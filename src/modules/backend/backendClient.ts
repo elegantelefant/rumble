@@ -1,5 +1,5 @@
-// ABOUTME: shared mock backend client for rumble front-end.
-// ABOUTME: documents expectations for real invoke handlers and provides stubs.
+// ABOUTME: Documents the backend command surface the frontend expects.
+// ABOUTME: Also holds the two remaining mocks — sync test and evals run.
 import { ref } from "vue";
 
 export type BackendStatus = "idle" | "running" | "ready" | "error";
