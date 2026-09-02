@@ -99,7 +99,6 @@ async function registerFile(file: File) {
 
   customPrompt.value = "";
   openSession(id);
-  queueInitialReview(details, fileText);
 }
 
 function handleFiles(files: FileList | null) {
@@ -136,6 +135,11 @@ function beginInitialReview(session: ReviewSession) {
     content: "Preparing initial summary using backend.",
     timestamp: formatTimestamp(),
   });
+
+  // Kick off (or retry) the backend work. Without this, a session left in
+  // "idle" by a failed review would show "Reviewing" forever with nothing
+  // actually running.
+  void queueInitialReview(session.file, session.fileText);
 }
 
 function openSession(id: string) {
@@ -207,7 +211,12 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
     const session = sessions.value[file.id];
     if (session) {
       session.reviewStatus = "idle";
-      session.messages = [];
+      session.messages.push({
+        id: generateId(),
+        role: "assistant",
+        content: "Initial review failed. Select this session again to retry.",
+        timestamp: formatTimestamp(),
+      });
     }
     toasts.addToast("Failed to start initial review. Please try again.", "error");
   } finally {
