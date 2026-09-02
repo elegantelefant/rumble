@@ -67,3 +67,21 @@ README — decide before scheduling the work.
 3. camelCase wire migration (or scope it to premium call sites under option 2).
 4. Reconcile removed surfaces (translate/summarise/research-result) per the decision.
 5. Refresh vendored spec(s), regenerate, let the drift gate (#37) hold the line.
+
+## Decision (2026-09-03)
+
+Purpose settles ownership: **the elefant-api contract describes the subscription-gated
+cloud API — the thing the funnel sells into. The local sidecar is the simple, free tier
+and owns its own shapes.**
+
+Consequences:
+
+- The vendored `openapi.json` here is the **rumble sidecar's own spec** from now on. It is
+  frozen at the current shapes (0.1.0 lineage), drift-gated by CI, and deliberately does
+  NOT track birepo. Translate/summarise stay — they're local features.
+- No camelCase migration, no endpoint removals, no wholesale regeneration.
+- When a premium surface makes real cloud calls (briefcases, billing, cloud review), that
+  call site consumes `@elefant/api-contract` (birepo publishes it) at whatever version is
+  current — scoped to those calls only.
+- README's "hybrid cloud/sidecar, one contract" story overstates interchangeability now;
+  soften it when premium work starts.
