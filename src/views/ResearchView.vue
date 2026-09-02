@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: "ResearchView" });
-import { computed, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createResearchJob, waitForResearch } from "../api/sidecar";
 import { useModels } from "../composables/models";
@@ -22,7 +22,7 @@ type ResearchThread = {
 
 const toasts = useToast();
 
-const { models: modelInventory } = useModels();
+const { models: modelInventory, loadModels } = useModels();
 
 const threads = ref<ResearchThread[]>([
   {
@@ -67,6 +67,17 @@ const threads = ref<ResearchThread[]>([
 const activeThreadId = ref(threads.value[0]?.id ?? null);
 const prompt = ref("");
 const selectedModel = ref(modelInventory.value.find((m) => m.available)?.id ?? "");
+
+// Models load asynchronously from the sidecar; pick a default once they arrive.
+watch(modelInventory, (list) => {
+  if (!selectedModel.value || !list.some((m) => m.id === selectedModel.value)) {
+    selectedModel.value = list.find((m) => m.available)?.id ?? "";
+  }
+}, { immediate: true });
+
+onMounted(() => {
+  void loadModels();
+});
 const showApiDocs = ref(false);
 const researchDocs = computed(() =>
   backendRegistry.value.filter((doc) => doc.command.includes("research")),
@@ -108,7 +119,7 @@ async function submitPrompt() {
   if (!thread || !prompt.value.trim() || thread.isResearching) return;
 
   if (!selectedModel.value) {
-    toasts.addToast("Add an API key in Settings to unlock hosted research models.", "error");
+    toasts.addToast("No models available. Check that Ollama is running with a model pulled, or add a provider key in Settings.", "error");
     return;
   }
 
