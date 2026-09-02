@@ -414,9 +414,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
             &port.to_string(),
             "--data-dir",
             &data_dir.to_string_lossy(),
-            "--secret",
-            &state.secret,
-        ]);
+        ])
+        // Passed via the environment rather than argv: command-line arguments
+        // are visible to any process on the machine via `ps`, which would
+        // defeat the point of the secret. `--secret` stays available for
+        // manual dev runs.
+        .env("RUMBLE_SIDECAR_SECRET", &state.secret);
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
@@ -496,6 +499,15 @@ fn kill_sidecar(state: &AppState) {
     *port = None;
 }
 
+/// Returns the shared secret for the one frontend path that talks to the
+/// sidecar directly (SSE streaming, which can't go through `api_call`).
+/// Kept separate from `sidecar_status` so the secret doesn't appear in
+/// routine status payloads that end up in devtools or log captures.
+#[tauri::command]
+fn sidecar_secret(state: State<'_, AppState>) -> String {
+    state.secret.clone()
+}
+
 #[tauri::command]
 async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -504,7 +516,6 @@ async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value,
     let mut result = serde_json::json!({
         "running": running,
         "port": port,
-        "secret": state.secret,
     });
 
     if let Some(p) = port {
@@ -597,6 +608,7 @@ pub fn run() {
             set_backend_mode,
             // Sidecar
             sidecar_status,
+            sidecar_secret,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

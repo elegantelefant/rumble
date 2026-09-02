@@ -69,17 +69,18 @@ export async function streamMessage(
   onDelta: (chunk: string) => void,
   model?: string,
 ): Promise<string> {
-  const status = await invoke<{ port: number | null; secret: string }>(
-    "sidecar_status",
-  );
+  const status = await invoke<{ port: number | null }>("sidecar_status");
   if (!status.port) throw new Error("Sidecar is not running");
+
+  // Fetched separately so the secret isn't carried in routine status payloads.
+  const secret = await invoke<string>("sidecar_secret");
 
   const url = `http://127.0.0.1:${status.port}/chats/${chatId}/stream`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Rumble-Secret": status.secret,
+      "X-Rumble-Secret": secret,
     },
     body: JSON.stringify({ text, ...(model ? { model } : {}) }),
   });
