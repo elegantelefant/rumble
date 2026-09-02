@@ -49,6 +49,7 @@ pnpm install                          # frontend deps
 cd src-tauri/sidecar
 uv sync
 uv run pyinstaller sidecar.spec --noconfirm
+mkdir -p ../binaries
 cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
 cd ../..
 
@@ -73,6 +74,7 @@ sudo apt-get install -y \
 ```bash
 cd src-tauri/sidecar
 uv run pyinstaller sidecar.spec --noconfirm
+mkdir -p ../binaries
 cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
 
 cd ../..
