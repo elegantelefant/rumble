@@ -59,3 +59,4 @@ playwright-report/
 
 # Selenium E2E screenshots
 e2e-screenshots/
+.orval/

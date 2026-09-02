@@ -5,11 +5,11 @@
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
  * OpenAPI spec version: 0.1.0
  */
-import type { EdiscoveryTextResponseMetadata } from './ediscoveryTextResponseMetadata.ts';
 
-export interface EdiscoveryTextResponse {
-  text: string;
-  metadata?: EdiscoveryTextResponseMetadata;
-  status: string;
-  warnings?: string[];
-}
+export type GetLegalConnectionsDirection = typeof GetLegalConnectionsDirection[keyof typeof GetLegalConnectionsDirection] | null;
+
+
+export const GetLegalConnectionsDirection = {
+  inbound: 'inbound',
+  outbound: 'outbound',
+} as const;

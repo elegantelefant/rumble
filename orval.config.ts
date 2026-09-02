@@ -1,21 +1,15 @@
-// ABOUTME: Orval configuration for generating vue-query composables from openapi.json.
-// ABOUTME: Routes all generated API calls through the Tauri IPC bridge in src/api/client.ts.
+// ABOUTME: Orval configuration for generating contract types from openapi.json.
+// ABOUTME: Types only — API calls go through the hand-written client in src/api/sidecar.ts.
 import { defineConfig } from "orval";
 
 export default defineConfig({
   api: {
-    input: { target: "./openapi.json" },
+    input: "./openapi.json",
     output: {
-      target: "src/api/generated",
+      // orval refuses to run without a client target; .orval/ is gitignored
+      // and outside tsconfig's include, so the generated client is discarded.
+      target: ".orval/discard.ts",
       schemas: "src/api/models",
-      client: "vue-query",
-      mode: "tags-split",
-      override: {
-        mutator: {
-          path: "./src/api/client.ts",
-          name: "apiClient",
-        },
-      },
     },
   },
 });

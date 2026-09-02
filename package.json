@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "generate:api": "orval",
     "dev:sidecar": "cd src-tauri/sidecar && uv run python main.py --port 11435",
-    "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12",
+    "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --disable-timestamp",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
@@ -30,7 +30,7 @@
     "@vue/test-utils": "^2.4.6",
     "autoprefixer": "^10.4.21",
     "happy-dom": "^20.8.3",
-    "orval": "^8.5.0",
+    "orval": "^8.27.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.18",
     "typescript": "~5.6.2",
