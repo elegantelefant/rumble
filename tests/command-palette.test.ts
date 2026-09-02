@@ -125,6 +125,22 @@ describe("CommandPalette", () => {
     expect(wrapper.text()).toContain("No matches")
   })
 
+  it("keeps focus on the input when Tab is pressed", async () => {
+    const wrapper = mount(CommandPalette, {
+      props: { open: true, commands: makeCommands() },
+      attachTo: document.body,
+    })
+    const input = wrapper.find("input").element as HTMLInputElement
+    input.focus()
+    expect(document.activeElement).toBe(input)
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab" }))
+    await wrapper.vm.$nextTick()
+
+    expect(document.activeElement).toBe(input)
+    wrapper.unmount()
+  })
+
   it("displays shortcut text when provided", () => {
     const commands = [
       { id: "test", label: "Test", shortcut: "Ctrl+T", action: vi.fn() },

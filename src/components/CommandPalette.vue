@@ -62,6 +62,11 @@ function onKeydown(event: KeyboardEvent) {
       cmd.action();
       closePalette();
     }
+  } else if (event.key === "Tab") {
+    // The search input is the only focusable element in this dialog —
+    // keep focus trapped there so Tab can't escape to the page behind it.
+    event.preventDefault();
+    inputRef.value?.focus();
   }
 }
 
