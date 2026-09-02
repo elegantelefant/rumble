@@ -1,3 +1,17 @@
+<script setup lang="ts">
+import { ref } from "vue";
+import { useToast } from "../composables/toast";
+
+const toasts = useToast();
+const joined = ref(false);
+
+function joinWaitlist() {
+  if (joined.value) return;
+  joined.value = true;
+  toasts.addToast("Noted — the waitlist isn't live yet, but we'll announce Briefcases here when it launches.", "info");
+}
+</script>
+
 <template>
   <div class="grid gap-6 lg:grid-cols-2">
     <section class="card space-y-4">
@@ -15,7 +29,9 @@
       <div class="rounded-md border border-[var(--warning)] bg-yellow-50 px-3 py-2 text-sm text-[var(--warning)]">
         Premium Feature — $10/month after launch
       </div>
-      <button class="btn-primary w-full">Join Waitlist</button>
+      <button class="btn-primary w-full" :disabled="joined" @click="joinWaitlist">
+        {{ joined ? "Noted" : "Join Waitlist" }}
+      </button>
     </section>
 
     <section class="card space-y-3">
@@ -29,5 +45,3 @@
     </section>
   </div>
 </template>
-
-
