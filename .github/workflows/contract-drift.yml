@@ -3,10 +3,10 @@
 
 name: Contract Drift
 
-# This gate catches "the vendored openapi.json changed but the generated clients
-# weren't regenerated/committed". It does NOT catch "the backend contract moved
-# but ivory's vendored openapi.json is stale" — refreshing openapi.json from the
-# backend repo (birepo backend/openapi.json) is a manual/Renovate step.
+# This gate catches "openapi.json changed but the generated types weren't
+# regenerated/committed". openapi.json is the sidecar's own spec — it does not
+# track birepo's elefant-api; premium cloud call sites consume
+# @elefant/api-contract directly (see agent_docs/2026-09-02-contract-0207-*.md).
 
 on:
   push:
