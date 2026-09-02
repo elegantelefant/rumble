@@ -4,6 +4,8 @@ import { RouterView, useRouter, useRoute } from "vue-router";
 import SidebarNav from "../modules/navigation/SidebarNav.vue";
 import TopBar from "../modules/navigation/TopBar.vue";
 import CommandPalette from "../components/CommandPalette.vue";
+import { currentUser } from "../composables/user";
+import { getVersion } from "@tauri-apps/api/app";
 
 const sidebarOpen = ref(false);
 const paletteOpen = ref(false);
@@ -69,8 +71,14 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
+  try {
+    const version = await getVersion();
+    currentUser.value.version = `Rumble v${version}`;
+  } catch (error) {
+    console.error("Failed to read app version:", error);
+  }
 });
 
 onBeforeUnmount(() => {

@@ -5,5 +5,5 @@ import { ref } from "vue";
 export const currentUser = ref({
   name: "Local User",
   team: "",
-  version: "Rumble v0.1.0a",
+  version: "Rumble",
 });
