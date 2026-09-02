@@ -40,12 +40,24 @@ Runs on **macOS** (Apple Silicon + Intel), **Windows**, and **Linux**.
 ### Install & Run
 
 ```bash
+# From the repo root:
 pnpm install                          # frontend deps
-cd src-tauri/sidecar && uv sync       # sidecar deps
 
-# Dev mode (two terminals):
-pnpm dev:sidecar                      # start Python sidecar
-pnpm tauri dev                        # start Tauri + Vite
+# Sidecar deps, then build the sidecar binary. The binary is required before
+# the first dev run — Tauri setup() spawns it directly and will not pick up a
+# manually-run pnpm dev:sidecar process.
+cd src-tauri/sidecar
+uv sync
+uv run pyinstaller sidecar.spec --noconfirm
+cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
+cd ../..
+
+# Dev mode:
+pnpm tauri dev                        # starts Tauri + Vite, and spawns the sidecar
+
+# Optional, in a second terminal: run the sidecar from source instead, so Python
+# changes take effect without rebuilding the binary.
+pnpm dev:sidecar
 ```
 
 ### Linux System Dependencies
