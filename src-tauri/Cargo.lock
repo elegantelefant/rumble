@@ -894,6 +894,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "trash",
+ "uuid",
  "walkdir",
  "wiremock",
 ]
