@@ -18,7 +18,7 @@ vi.mock("../src/api/sidecar", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(invoke).mockResolvedValue(undefined)
+  vi.mocked(invoke).mockResolvedValue(true)
 })
 
 async function fillAndGenerate(wrapper: ReturnType<typeof mountDraft>) {
@@ -161,13 +161,38 @@ describe("DocumentDraftView export", () => {
     expect(invoke).toHaveBeenCalledWith("export_draft_docx", { text: "Sample draft text." })
   })
 
+  it("does not toast success when the user cancels the save dialog", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: "Sample draft text.", warnings: [] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    vi.mocked(invoke).mockResolvedValue(false)
+    mockAddToast.mockClear()
+
+    const buttons = wrapper.findAll("button")
+    const exportWordButton = buttons.find((b) => b.text() === "Export to Word")!
+    await exportWordButton.trigger("click")
+    await flushPromises()
+
+    expect(mockAddToast).not.toHaveBeenCalledWith(
+      "Draft exported as Word document.",
+      "success",
+    )
+  })
+
   it("shows error toast when export_draft_docx invoke fails", async () => {
     vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
     vi.mocked(waitForJob).mockResolvedValue({
       status: "completed",
       result: { draft: "Sample draft text.", warnings: [] },
     } as never)
-    vi.mocked(invoke).mockRejectedValue(new Error("save cancelled"))
+    // Tauri rejects with the raw string payload, not an Error object.
+    vi.mocked(invoke).mockRejectedValue("failed to create file: permission denied")
 
     const wrapper = mountDraft()
     await fillAndGenerate(wrapper)
@@ -178,6 +203,9 @@ describe("DocumentDraftView export", () => {
     await flushPromises()
 
     expect(invoke).toHaveBeenCalledWith("export_draft_docx", { text: "Sample draft text." })
-    expect(mockAddToast).toHaveBeenCalledWith("save cancelled", "error")
+    expect(mockAddToast).toHaveBeenCalledWith(
+      "failed to create file: permission denied",
+      "error",
+    )
   })
 })

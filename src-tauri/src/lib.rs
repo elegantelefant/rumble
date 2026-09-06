@@ -558,7 +558,10 @@ fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
 // --- Document export ---
 
 #[tauri::command]
-async fn export_draft_docx(app: AppHandle, text: String) -> Result<(), String> {
+/// Returns Ok(true) when a file was written, Ok(false) when the user cancelled
+/// the save dialog. The caller needs to tell those apart — reporting success for
+/// a cancelled save means toasting "exported" for a file that never existed.
+async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String> {
     let path = app
         .dialog()
         .file()
@@ -567,8 +570,8 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<(), String> {
         .blocking_save_file();
 
     let Some(path) = path else {
-        // User cancelled the dialog — not an error.
-        return Ok(());
+        // User cancelled the dialog — not an error, but not a write either.
+        return Ok(false);
     };
 
     let path = path
@@ -591,7 +594,7 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<(), String> {
         .pack(file)
         .map_err(|e| format!("failed to write docx: {}", e))?;
 
-    Ok(())
+    Ok(true)
 }
 
 // --- App entry ---

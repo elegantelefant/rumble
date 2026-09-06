@@ -129,10 +129,14 @@ async function exportDraft(format: "word" | "pdf") {
   }
 
   try {
-    await invoke("export_draft_docx", { text: draftResult.value });
-    toasts.addToast("Draft exported as Word document.", "success");
+    const wrote = await invoke<boolean>("export_draft_docx", { text: draftResult.value });
+    if (wrote) {
+      toasts.addToast("Draft exported as Word document.", "success");
+    }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to export draft.";
+    // Tauri rejects with the raw Err(String) payload, not an Error object, so
+    // `instanceof Error` never matches and the specific Rust message is lost.
+    const message = typeof error === "string" ? error : String(error);
     toasts.addToast(message, "error");
   }
 }
