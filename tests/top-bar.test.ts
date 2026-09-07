@@ -17,33 +17,51 @@ function mountTopBar() {
   return mount(TopBar)
 }
 
-describe("TopBar", () => {
-  it("shows 'Local & Confidential' when backend mode is ollama", async () => {
+describe("TopBar confidentiality indicator", () => {
+  it("shows Local & Confidential for ollama", async () => {
     vi.mocked(invoke).mockResolvedValue("ollama")
     const wrapper = mountTopBar()
     await flushPromises()
     expect(wrapper.text()).toContain("Local & Confidential")
   })
 
-  it("shows 'Local & Confidential' when backend mode is byok", async () => {
+  it("shows Direct to Provider for byok, not Local & Confidential", async () => {
     vi.mocked(invoke).mockResolvedValue("byok")
     const wrapper = mountTopBar()
     await flushPromises()
-    expect(wrapper.text()).toContain("Local & Confidential")
+    expect(wrapper.text()).toContain("Direct to Provider")
+    expect(wrapper.text()).not.toContain("Local & Confidential")
   })
 
-  it("shows the hybrid message when backend mode is premium", async () => {
+  it("shows the hybrid state for premium", async () => {
     vi.mocked(invoke).mockResolvedValue("premium")
     const wrapper = mountTopBar()
     await flushPromises()
-    expect(wrapper.text()).toContain("remote agents may assist on request")
+    expect(wrapper.text()).toContain("Hybrid")
+    expect(wrapper.text()).not.toContain("Local & Confidential")
   })
 
-  it("defaults to 'Local & Confidential' if invoke fails", async () => {
-    vi.mocked(invoke).mockRejectedValue(new Error("IPC error"))
+  it("does not claim confidentiality when the mode cannot be read", async () => {
+    vi.mocked(invoke).mockRejectedValue("IPC error")
     const wrapper = mountTopBar()
     await flushPromises()
-    expect(wrapper.text()).toContain("Local & Confidential")
+    expect(wrapper.text()).not.toContain("Local & Confidential")
+    expect(wrapper.text()).toContain("Mode unavailable")
+  })
+
+  it("does not claim confidentiality for an unrecognised mode", async () => {
+    vi.mocked(invoke).mockResolvedValue("something-new")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain("Local & Confidential")
+  })
+
+  it("exposes the full message as a tooltip", async () => {
+    vi.mocked(invoke).mockResolvedValue("byok")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    const pill = wrapper.find("span[title]")
+    expect(pill.attributes("title")).toContain("your API key")
   })
 
   it("calls get_backend_mode on mount", () => {
