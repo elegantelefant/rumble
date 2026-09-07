@@ -16,7 +16,7 @@ type ConfidentialityState = "local" | "byok" | "hybrid" | "unknown";
 const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; message: string }> = {
   local: {
     label: "Local & Confidential",
-    message: "Chats and drafting stay on this device. Nothing is sent externally.",
+    message: "Chats and drafting stay on this device.",
   },
   byok: {
     label: "Direct to Provider",
