@@ -124,6 +124,10 @@ describe("DocumentDraftView export", () => {
     const exportWordButton = buttons.find((b) => b.text() === "Export to Word")!
     await exportWordButton.trigger("click")
     expect(invoke).not.toHaveBeenCalled()
+    expect(mockAddToast).toHaveBeenCalledWith(
+      "Generate a draft before exporting.",
+      "info",
+    )
   })
 
   it("shows coming soon toast for PDF export and does not invoke", async () => {
@@ -141,6 +145,7 @@ describe("DocumentDraftView export", () => {
     await exportPdfButton.trigger("click")
 
     expect(invoke).not.toHaveBeenCalled()
+    expect(mockAddToast).toHaveBeenCalledWith("PDF export is coming soon.", "info")
   })
 
   it("calls export_draft_docx with draft text once generated", async () => {
