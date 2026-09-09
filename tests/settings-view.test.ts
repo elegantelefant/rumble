@@ -176,10 +176,30 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Test connection")
   })
 
-  it("test connection fires toast", async () => {
+  it("test connection rejects an empty server URL", async () => {
     const wrapper = mountSettings()
     const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
     await syncTab[0].trigger("click")
+    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
+    await testBtn!.trigger("click")
+    expect(mockAddToast).toHaveBeenCalledWith("Invalid server URL.", "error")
+  })
+
+  it("test connection fires toast once a server is set", async () => {
+    const wrapper = mountSettings()
+    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
+    await syncTab[0].trigger("click")
+
+    const serverInput = wrapper
+      .findAll("input")
+      .find((i) => i.attributes("placeholder") === "https://sync.myfirm.com")
+    // The default server field is disabled, so drive the custom one instead.
+    const customToggle = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.element.parentElement?.textContent?.includes("custom sync server"))
+    await customToggle!.setValue(true)
+    await serverInput!.setValue("https://sync.example.com")
+
     const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
     await testBtn!.trigger("click")
     expect(mockAddToast).toHaveBeenCalledWith(

@@ -78,10 +78,7 @@ onMounted(async () => {
     }
   }
   if (stored.length > 0) {
-    secrets.value = [
-      ...secrets.value.filter((s) => s.provider === "elefant-local"),
-      ...stored,
-    ];
+    secrets.value = stored;
   }
 });
 
@@ -115,8 +112,8 @@ const appearanceSettings = reactive({
 
 const syncSettings = reactive({
   enabled: true,
-  teamCode: "SilverEcho951",
-  server: "https://sync.elefantapp.com",
+  teamCode: "",
+  server: "",
   useCustom: false,
   customServer: "",
 });
