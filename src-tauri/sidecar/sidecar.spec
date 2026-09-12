@@ -53,6 +53,7 @@ a = Analysis(
         "services.llm",
         "services.jobs",
         "services.prompts",
+        "services.extract",
         "models",
         "models.generated",
     ],
