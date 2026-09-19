@@ -72,30 +72,49 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Workspace sync")
   })
 
-  it("shows existing secrets on providers tab", () => {
+  // Adds a local-provider secret through the real UI flow, so removal tests
+  // have something to act on now that the list starts empty.
+  async function addLocalSecret(wrapper: ReturnType<typeof mountSettings>, label = "Test runtime") {
+    const select = wrapper.find("select")
+    await select.setValue("elefant-local")
+    const labelInput = wrapper.find('input[placeholder="e.g. Drafting primary key"]')
+    await labelInput.setValue(label)
+    const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")
+    await saveBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+  }
+
+  it("starts with no configured secrets", () => {
     const wrapper = mountSettings()
-    expect(wrapper.text()).toContain("Primary local runtime")
+    expect(wrapper.findAll("button").some((b) => b.text() === "Remove")).toBe(false)
+  })
+
+  it("shows a secret after it is added", async () => {
+    const wrapper = mountSettings()
+    await addLocalSecret(wrapper)
+    expect(wrapper.text()).toContain("Test runtime")
   })
 
   it("removes secret on Remove click", async () => {
     const wrapper = mountSettings()
+    await addLocalSecret(wrapper)
     const removeBtn = wrapper.findAll("button").find((b) => b.text() === "Remove")
     expect(removeBtn).toBeDefined()
     await removeBtn!.trigger("click")
-    expect(wrapper.text()).not.toContain("Primary local runtime")
+    expect(wrapper.text()).not.toContain("Test runtime")
   })
 
   it("does not remove secret from UI when keychain delete fails", async () => {
+    const wrapper = mountSettings()
+    await addLocalSecret(wrapper)
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "delete_api_key") throw new Error("keychain locked")
       return undefined
     })
-    const wrapper = mountSettings()
-    await vi.advanceTimersByTimeAsync(0)
     const removeBtn = wrapper.findAll("button").find((b) => b.text() === "Remove")
     await removeBtn!.trigger("click")
     await vi.advanceTimersByTimeAsync(0)
-    expect(wrapper.text()).toContain("Primary local runtime")
+    expect(wrapper.text()).toContain("Test runtime")
     expect(mockAddToast).toHaveBeenCalledWith(
       "Could not remove credential from system keychain.",
       "error",
@@ -106,8 +125,7 @@ describe("SettingsView", () => {
     const wrapper = mountSettings()
     const saveBtn = wrapper.findAll("button").find((b) => b.text() === "Save secret")
     await saveBtn!.trigger("click")
-    // No new secret added, still just the original
-    expect(wrapper.text()).toContain("Primary local runtime")
+    expect(wrapper.findAll("button").some((b) => b.text() === "Remove")).toBe(false)
   })
 
   it("shows error toast when adding hosted provider without key", async () => {
@@ -158,10 +176,30 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Test connection")
   })
 
-  it("test connection fires toast", async () => {
+  it("test connection rejects an empty server URL", async () => {
     const wrapper = mountSettings()
     const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
     await syncTab[0].trigger("click")
+    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
+    await testBtn!.trigger("click")
+    expect(mockAddToast).toHaveBeenCalledWith("Invalid server URL.", "error")
+  })
+
+  it("test connection fires toast once a server is set", async () => {
+    const wrapper = mountSettings()
+    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
+    await syncTab[0].trigger("click")
+
+    const serverInput = wrapper
+      .findAll("input")
+      .find((i) => i.attributes("placeholder") === "https://sync.myfirm.com")
+    // The default server field is disabled, so drive the custom one instead.
+    const customToggle = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.element.parentElement?.textContent?.includes("custom sync server"))
+    await customToggle!.setValue(true)
+    await serverInput!.setValue("https://sync.example.com")
+
     const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
     await testBtn!.trigger("click")
     expect(mockAddToast).toHaveBeenCalledWith(

@@ -55,16 +55,7 @@ const providerOptions: ProviderOption[] = [
   },
 ];
 
-const secrets = ref<SecretRecord[]>([
-  {
-    id: "secret-1",
-    provider: "elefant-local",
-    label: "Primary local runtime",
-    addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    scope: "global",
-    notes: "Uses Ollama on localhost:11434",
-  },
-]);
+const secrets = ref<SecretRecord[]>([]);
 
 onMounted(async () => {
   const stored: SecretRecord[] = [];
@@ -87,10 +78,7 @@ onMounted(async () => {
     }
   }
   if (stored.length > 0) {
-    secrets.value = [
-      ...secrets.value.filter((s) => s.provider === "elefant-local"),
-      ...stored,
-    ];
+    secrets.value = stored;
   }
 });
 
@@ -124,13 +112,38 @@ const appearanceSettings = reactive({
 
 const syncSettings = reactive({
   enabled: true,
-  teamCode: "SilverEcho951",
-  server: "https://sync.elefantapp.com",
+  teamCode: "",
+  server: "",
   useCustom: false,
   customServer: "",
 });
 
 const isSaving = ref(false);
+
+const newBriefcase = ref("");
+const newResource = ref("");
+
+function addBriefcase() {
+  const name = newBriefcase.value.trim();
+  if (!name) return;
+  if (workspaceStorage.briefcases.includes(name)) {
+    toast.addToast("That briefcase already exists.", "error");
+    return;
+  }
+  workspaceStorage.briefcases.push(name);
+  newBriefcase.value = "";
+}
+
+function attachResource() {
+  const name = newResource.value.trim();
+  if (!name) return;
+  if (workspaceStorage.attachableResources.includes(name)) {
+    toast.addToast("That resource is already attached.", "error");
+    return;
+  }
+  workspaceStorage.attachableResources.push(name);
+  newResource.value = "";
+}
 
 async function addSecret() {
   if (!newSecret.provider) return;
@@ -351,7 +364,15 @@ const selectedProviderDetails = computed(() =>
                 {{ briefcase }}
               </li>
             </ul>
-            <button class="btn-secondary mt-2 text-xs" type="button">Add briefcase</button>
+            <div class="mt-2 flex gap-2">
+              <input
+                v-model="newBriefcase"
+                class="input text-xs"
+                placeholder="New briefcase name"
+                @keydown.enter.prevent="addBriefcase"
+              />
+              <button class="btn-secondary text-xs" type="button" @click="addBriefcase">Add briefcase</button>
+            </div>
           </div>
           <div>
             <h4 class="text-sm font-semibold text-[var(--primary-700)]">Attach threads to briefcase</h4>
@@ -361,7 +382,15 @@ const selectedProviderDetails = computed(() =>
                 {{ resource }}
               </li>
             </ul>
-            <button class="btn-secondary mt-2 text-xs" type="button">Attach resource</button>
+            <div class="mt-2 flex gap-2">
+              <input
+                v-model="newResource"
+                class="input text-xs"
+                placeholder="Thread or chat name"
+                @keydown.enter.prevent="attachResource"
+              />
+              <button class="btn-secondary text-xs" type="button" @click="attachResource">Attach resource</button>
+            </div>
           </div>
         </div>
       </section>
