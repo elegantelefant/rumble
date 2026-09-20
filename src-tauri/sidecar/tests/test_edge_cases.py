@@ -289,6 +289,38 @@ async def test_research_result_with_name_in_source_returns_200(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["sources"]
+    assert data["sources"][0]["title"] == "Donoghue v Stevenson"
+
+
+async def test_research_result_with_extra_key_in_source_field_returns_200(client):
+    """An unknown key inside SearchResult.source shouldn't 502 either."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("research", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "result": "Negligence requires duty, breach, causation, and damage.",
+        "sources": [
+            {
+                "id": "src-1",
+                "title": "Donoghue v Stevenson",
+                "source": {
+                    "name": "House of Lords",
+                    "url": "https://example.com",
+                    "type": "case law",
+                },
+            }
+        ],
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/research/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sources"][0]["source"]["name"] == "House of Lords"
 
 
 # --- _parse_llm_json tests (via endpoint behavior) ---

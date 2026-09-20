@@ -71,12 +71,29 @@ def _enum_type(annotation) -> type[Enum] | None:
     return None
 
 
+def _nested_submodel(annotation) -> type[BaseModel] | None:
+    """Return X if annotation is X (optionally wrapped in Optional/Union) and X is a BaseModel, else None."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in typing.get_args(annotation):
+        if isinstance(arg, type) and issubclass(arg, BaseModel):
+            return arg
+    return None
+
+
 def _filter_submodel_item(submodel: type[BaseModel], item):
-    """Drop unknown keys from one list item, and special-case ReviewIssue.kind."""
+    """Drop unknown keys from one list item, one level into any nested submodel field, and special-case ReviewIssue.kind."""
     if not isinstance(item, dict):
         return item
     known_fields = submodel.model_fields
     filtered_item = {k: v for k, v in item.items() if k in known_fields}
+    for name, field in known_fields.items():
+        if not isinstance(filtered_item.get(name), dict):
+            continue
+        nested = _nested_submodel(field.annotation)
+        if nested is not None:
+            nested_fields = nested.model_fields
+            filtered_item[name] = {k: v for k, v in filtered_item[name].items() if k in nested_fields}
     if submodel is ReviewIssue and "kind" in filtered_item:
         # kind is a StrEnum whose default ('other') exists precisely for this case: the
         # LLM inventing a category we didn't enumerate should fall back to it, not 502.
@@ -96,8 +113,9 @@ def _safe_construct(model_class, data: dict):
     """Construct a Pydantic model, dropping unknown keys to survive extra='forbid'.
 
     Also filters one level into any list[SubModel] field (e.g. ReviewResponse.issues,
-    ResearchResultResponse.sources): those submodels are extra='forbid' too, so an
-    unexpected key inside a list item would otherwise still raise.
+    ResearchResultResponse.sources), and one further level into a nested submodel
+    field inside such an item (e.g. SearchResult.source): those submodels are
+    extra='forbid' too, so an unexpected key inside them would otherwise still raise.
 
     Raises a clean 502 (rather than an unhandled 500) if the LLM's JSON is
     missing required fields or has values of the wrong type.
@@ -109,6 +127,7 @@ def _safe_construct(model_class, data: dict):
             continue
         submodel = _list_item_submodel(known_fields[name].annotation)
         if submodel is not None:
+            # Rebinding an existing key doesn't resize the dict, so this is safe during iteration.
             filtered[name] = [_filter_submodel_item(submodel, item) for item in value]
     try:
         return model_class(**filtered)
