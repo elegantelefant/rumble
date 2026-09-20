@@ -178,6 +178,65 @@ async def test_malformed_research_result_returns_502(client):
     assert resp.status_code == 502
 
 
+async def test_malformed_review_result_returns_502(client):
+    """Corrupted JSON in review result should yield 502."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("review", "{}")
+    raw_db = svc_db._get_db()
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result='{{bad' WHERE id=?",
+        (job["id"],),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/review/{job['id']}/result")
+    assert resp.status_code == 502
+    assert "malformed result" in resp.json()["detail"]
+
+
+async def test_draft_result_wrong_shape_returns_502(client):
+    """Valid JSON that doesn't match DraftResponse should yield 502 (see #46)."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("draft", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "employment_agreement": {
+            "additional_terms": "Example",
+            "document_type": "employment",
+            "employee_name": "Tester",
+            "position": "Role",
+            "salary": 100000,
+            "start_date": "2026-09-19",
+        }
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/draft/{job['id']}/result")
+    assert resp.status_code == 502
+    assert "expected shape" in resp.json()["detail"]
+
+
+async def test_review_result_wrong_shape_returns_502(client):
+    """Valid JSON missing the required summary field should yield 502."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("review", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({"issues": []})
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/review/{job['id']}/result")
+    assert resp.status_code == 502
+    assert "expected shape" in resp.json()["detail"]
+
+
 # --- _parse_llm_json tests (via endpoint behavior) ---
 # These are tested indirectly through the AI endpoints.
 # The mock returns clean JSON, so these pass.

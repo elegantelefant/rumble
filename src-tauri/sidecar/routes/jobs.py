@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException
 
 from models.generated import (
     DraftRequest,
+    DraftResponse,
     JobCreatedResponse,
     JobResultResponse,
     ResearchRequest,
     ResearchResponse,
     ResearchResultResponse,
     ReviewRequest,
+    ReviewResponse,
 )
 from routes.ai import _parse_llm_json, _safe_construct
 from services import db, jobs, llm, prompts
@@ -60,7 +62,10 @@ async def create_draft(body: DraftRequest) -> JobCreatedResponse:
 
 @router.get("/draft/{job_id}/result", response_model=JobResultResponse)
 async def get_draft_result(job_id: str) -> JobResultResponse:
-    return await _poll_job(job_id)
+    response = await _poll_job(job_id)
+    if response.status == "completed" and response.result is not None:
+        _safe_construct(DraftResponse, response.result)
+    return response
 
 
 # --- Review ---
@@ -90,7 +95,10 @@ async def create_review(body: ReviewRequest) -> JobCreatedResponse:
 
 @router.get("/review/{job_id}/result", response_model=JobResultResponse)
 async def get_review_result(job_id: str) -> JobResultResponse:
-    return await _poll_job(job_id)
+    response = await _poll_job(job_id)
+    if response.status == "completed" and response.result is not None:
+        _safe_construct(ReviewResponse, response.result)
+    return response
 
 
 # --- Research ---
