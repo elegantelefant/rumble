@@ -237,6 +237,60 @@ async def test_review_result_wrong_shape_returns_502(client):
     assert "expected shape" in resp.json()["detail"]
 
 
+async def test_review_result_with_extra_issue_fields_returns_200(client):
+    """Unknown keys and an out-of-range kind inside a ReviewIssue item shouldn't 502."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("review", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "summary": "Overall the agreement is standard.",
+        "issues": [
+            {
+                "kind": "formatting",
+                "severity": "high",
+                "message": "Inconsistent heading style",
+            }
+        ],
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/review/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["result"]["issues"]
+
+
+async def test_research_result_with_name_in_source_returns_200(client):
+    """A source using 'name' plus an unknown key should still pass through as 200."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("research", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "result": "Negligence requires duty, breach, causation, and damage.",
+        "sources": [
+            {
+                "name": "Donoghue v Stevenson",
+                "unknown_field": "should be dropped",
+                "published_at": "2026-01-15T00:00:00+00:00",
+            }
+        ],
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/research/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sources"]
+
+
 # --- _parse_llm_json tests (via endpoint behavior) ---
 # These are tested indirectly through the AI endpoints.
 # The mock returns clean JSON, so these pass.

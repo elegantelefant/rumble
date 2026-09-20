@@ -3,15 +3,18 @@
 
 import json
 import re
+import typing
+from enum import Enum
 
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from models.generated import (
     ChatTitleRequest,
     ChatTitleResponse,
     ClarifyRequest,
     ClarifyResponse,
+    ReviewIssue,
     SummariseChatRequest,
     SummariseChatResponse,
     SummariseDocumentRequest,
@@ -48,14 +51,65 @@ def _parse_llm_json(raw: str) -> dict:
         raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
 
+def _list_item_submodel(annotation) -> type[BaseModel] | None:
+    """Return X if annotation is list[X] (optionally wrapped in Optional/Union), else None."""
+    for candidate in (annotation, *typing.get_args(annotation)):
+        if typing.get_origin(candidate) is list:
+            args = typing.get_args(candidate)
+            if args and isinstance(args[0], type) and issubclass(args[0], BaseModel):
+                return args[0]
+    return None
+
+
+def _enum_type(annotation) -> type[Enum] | None:
+    """Return the Enum subclass in annotation (optionally wrapped in Optional), else None."""
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return annotation
+    for arg in typing.get_args(annotation):
+        if isinstance(arg, type) and issubclass(arg, Enum):
+            return arg
+    return None
+
+
+def _filter_submodel_item(submodel: type[BaseModel], item):
+    """Drop unknown keys from one list item, and special-case ReviewIssue.kind."""
+    if not isinstance(item, dict):
+        return item
+    known_fields = submodel.model_fields
+    filtered_item = {k: v for k, v in item.items() if k in known_fields}
+    if submodel is ReviewIssue and "kind" in filtered_item:
+        # kind is a StrEnum whose default ('other') exists precisely for this case: the
+        # LLM inventing a category we didn't enumerate should fall back to it, not 502.
+        # No other list-item field has a default that makes an unrecognised value safe
+        # to paper over, so this stays specific to ReviewIssue.kind rather than generic.
+        enum_cls = _enum_type(known_fields["kind"].annotation)
+        value = filtered_item["kind"]
+        if enum_cls and not isinstance(value, enum_cls):
+            try:
+                enum_cls(value)
+            except ValueError:
+                filtered_item["kind"] = known_fields["kind"].default
+    return filtered_item
+
+
 def _safe_construct(model_class, data: dict):
     """Construct a Pydantic model, dropping unknown keys to survive extra='forbid'.
+
+    Also filters one level into any list[SubModel] field (e.g. ReviewResponse.issues,
+    ResearchResultResponse.sources): those submodels are extra='forbid' too, so an
+    unexpected key inside a list item would otherwise still raise.
 
     Raises a clean 502 (rather than an unhandled 500) if the LLM's JSON is
     missing required fields or has values of the wrong type.
     """
-    known_fields = set(model_class.model_fields.keys())
+    known_fields = model_class.model_fields
     filtered = {k: v for k, v in data.items() if k in known_fields}
+    for name, value in filtered.items():
+        if not isinstance(value, list):
+            continue
+        submodel = _list_item_submodel(known_fields[name].annotation)
+        if submodel is not None:
+            filtered[name] = [_filter_submodel_item(submodel, item) for item in value]
     try:
         return model_class(**filtered)
     except ValidationError as exc:
