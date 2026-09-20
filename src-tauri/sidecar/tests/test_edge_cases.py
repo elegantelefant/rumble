@@ -309,6 +309,7 @@ async def test_research_result_with_extra_key_in_source_field_returns_200(client
                     "url": "https://example.com",
                     "type": "case law",
                 },
+                "metadata": {"jurisdiction": "UK", "confidence": 0.9},
             }
         ],
     })
@@ -321,6 +322,10 @@ async def test_research_result_with_extra_key_in_source_field_returns_200(client
     assert resp.status_code == 200
     data = resp.json()
     assert data["sources"][0]["source"]["name"] == "House of Lords"
+    # metadata is dict[str, Any]: the nested-submodel loop inspects it (it's a dict)
+    # but must not filter it, since _nested_submodel keys off the annotation, not
+    # the value, and dict[str, Any] isn't a BaseModel.
+    assert data["sources"][0]["metadata"] == {"jurisdiction": "UK", "confidence": 0.9}
 
 
 # --- _parse_llm_json tests (via endpoint behavior) ---

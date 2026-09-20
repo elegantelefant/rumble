@@ -72,7 +72,14 @@ def _enum_type(annotation) -> type[Enum] | None:
 
 
 def _nested_submodel(annotation) -> type[BaseModel] | None:
-    """Return X if annotation is X (optionally wrapped in Optional/Union) and X is a BaseModel, else None."""
+    """Return X if annotation is X (optionally wrapped in Optional/Union) and X is a BaseModel, else None.
+
+    Relies on isinstance(dict[str, Any], type) being False (true from Python 3.11 on),
+    so a dict[str, Any] field like SearchResult.metadata is correctly skipped rather
+    than raising. pyproject pins requires-python = ">=3.12", but backporting this
+    helper to an older runtime would need re-checking that assumption or it would
+    raise TypeError instead of the intended clean 502.
+    """
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return annotation
     for arg in typing.get_args(annotation):
