@@ -4,17 +4,15 @@
 import json
 import re
 import typing
-from enum import Enum
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from models.generated import (
     ChatTitleRequest,
     ChatTitleResponse,
     ClarifyRequest,
     ClarifyResponse,
-    ReviewIssue,
     SummariseChatRequest,
     SummariseChatResponse,
     SummariseDocumentRequest,
@@ -61,16 +59,6 @@ def _list_item_submodel(annotation) -> type[BaseModel] | None:
     return None
 
 
-def _enum_type(annotation) -> type[Enum] | None:
-    """Return the Enum subclass in annotation (optionally wrapped in Optional), else None."""
-    if isinstance(annotation, type) and issubclass(annotation, Enum):
-        return annotation
-    for arg in typing.get_args(annotation):
-        if isinstance(arg, type) and issubclass(arg, Enum):
-            return arg
-    return None
-
-
 def _nested_submodel(annotation) -> type[BaseModel] | None:
     """Return X if annotation is X (optionally wrapped in Optional/Union) and X is a BaseModel, else None.
 
@@ -88,8 +76,29 @@ def _nested_submodel(annotation) -> type[BaseModel] | None:
     return None
 
 
+def _drop_invalid_optional_fields(model_class: type[BaseModel], filtered: dict) -> None:
+    """Drop optional fields whose value doesn't match the declared type, in place.
+
+    An LLM inventing a value that doesn't fit an optional field (a ReviewIssue.kind
+    we didn't enumerate, a warnings string where a list was expected) shouldn't 502
+    the whole payload when the field already has a perfectly good default to fall
+    back on. Required fields are left untouched, so a missing or wrong-typed
+    required field still fails model_class(**filtered) and raises the usual 502.
+    """
+    known_fields = model_class.model_fields
+    for name in list(filtered):
+        field = known_fields[name]
+        if field.is_required():
+            continue
+        try:
+            TypeAdapter(field.annotation).validate_python(filtered[name])
+        except ValidationError:
+            del filtered[name]
+
+
 def _filter_submodel_item(submodel: type[BaseModel], item):
-    """Drop unknown keys from one list item, one level into any nested submodel field, and special-case ReviewIssue.kind."""
+    """Drop unknown keys from one list item, one level into any nested submodel field,
+    and drop any optional field whose value doesn't match its declared type."""
     if not isinstance(item, dict):
         return item
     known_fields = submodel.model_fields
@@ -101,18 +110,7 @@ def _filter_submodel_item(submodel: type[BaseModel], item):
         if nested is not None:
             nested_fields = nested.model_fields
             filtered_item[name] = {k: v for k, v in filtered_item[name].items() if k in nested_fields}
-    if submodel is ReviewIssue and "kind" in filtered_item:
-        # kind is a StrEnum whose default ('other') exists precisely for this case: the
-        # LLM inventing a category we didn't enumerate should fall back to it, not 502.
-        # No other list-item field has a default that makes an unrecognised value safe
-        # to paper over, so this stays specific to ReviewIssue.kind rather than generic.
-        enum_cls = _enum_type(known_fields["kind"].annotation)
-        value = filtered_item["kind"]
-        if enum_cls and not isinstance(value, enum_cls):
-            try:
-                enum_cls(value)
-            except ValueError:
-                filtered_item["kind"] = known_fields["kind"].default
+    _drop_invalid_optional_fields(submodel, filtered_item)
     return filtered_item
 
 
@@ -123,9 +121,11 @@ def _safe_construct(model_class, data: dict):
     ResearchResultResponse.sources), and one further level into a nested submodel
     field inside such an item (e.g. SearchResult.source): those submodels are
     extra='forbid' too, so an unexpected key inside them would otherwise still raise.
+    Wrong-typed optional fields (top-level and, via _filter_submodel_item, inside
+    list items) are dropped rather than failing the whole payload.
 
     Raises a clean 502 (rather than an unhandled 500) if the LLM's JSON is
-    missing required fields or has values of the wrong type.
+    missing a required field or has a required field of the wrong type.
     """
     known_fields = model_class.model_fields
     filtered = {k: v for k, v in data.items() if k in known_fields}
@@ -136,6 +136,7 @@ def _safe_construct(model_class, data: dict):
         if submodel is not None:
             # Rebinding an existing key doesn't resize the dict, so this is safe during iteration.
             filtered[name] = [_filter_submodel_item(submodel, item) for item in value]
+    _drop_invalid_optional_fields(model_class, filtered)
     try:
         return model_class(**filtered)
     except ValidationError as exc:

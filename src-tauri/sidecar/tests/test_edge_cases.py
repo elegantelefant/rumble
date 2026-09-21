@@ -220,6 +220,25 @@ async def test_draft_result_wrong_shape_returns_502(client):
     assert "expected shape" in resp.json()["detail"]
 
 
+async def test_draft_result_with_bad_warnings_returns_200(client):
+    """A wrong-typed optional field (warnings) is dropped, not fatal — the draft is still usable."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("draft", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({"draft": "Full contract text.", "warnings": "Check the dates."})
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/draft/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["result"]["draft"] == "Full contract text."
+    assert data["result"].get("warnings") is None
+
+
 async def test_review_result_wrong_shape_returns_502(client):
     """Valid JSON missing the required summary field should yield 502."""
     from services import db as svc_db
@@ -235,6 +254,27 @@ async def test_review_result_wrong_shape_returns_502(client):
     resp = await client.get(f"/review/{job['id']}/result")
     assert resp.status_code == 502
     assert "expected shape" in resp.json()["detail"]
+
+
+async def test_review_result_with_bad_issues_returns_200(client):
+    """A wrong-typed optional field (issues) is dropped, not fatal — the summary is still usable."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("review", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "summary": "Overall the agreement is standard.",
+        "issues": "Check the dates.",
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/review/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["result"]["summary"] == "Overall the agreement is standard."
 
 
 async def test_review_result_with_extra_issue_fields_returns_200(client):
