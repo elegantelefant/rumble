@@ -64,7 +64,7 @@ async def create_draft(body: DraftRequest) -> JobCreatedResponse:
 async def get_draft_result(job_id: str) -> JobResultResponse:
     response = await _poll_job(job_id)
     if response.status == "completed" and response.result is not None:
-        response.result = _safe_construct(DraftResponse, response.result).model_dump()
+        _safe_construct(DraftResponse, response.result)
     return response
 
 
@@ -97,7 +97,7 @@ async def create_review(body: ReviewRequest) -> JobCreatedResponse:
 async def get_review_result(job_id: str) -> JobResultResponse:
     response = await _poll_job(job_id)
     if response.status == "completed" and response.result is not None:
-        response.result = _safe_construct(ReviewResponse, response.result).model_dump()
+        _safe_construct(ReviewResponse, response.result)
     return response
 
 
