@@ -1,12 +1,12 @@
-# ABOUTME: Fails CI when the committed generated contract types drift from openapi.json.
+# ABOUTME: Fails CI when the committed generated contract types drift from sidecar-openapi.json.
 # ABOUTME: Regenerates the orval TS types and the Pydantic sidecar models, then diffs.
 
 name: Contract Drift
 
-# This gate catches "openapi.json changed but the generated types weren't
-# regenerated/committed". openapi.json is the sidecar's own spec — it does not
-# track birepo's elefant-api; premium cloud call sites consume
-# @elefant/api-contract directly (see agent_docs/2026-09-02-contract-0207-*.md).
+# openapi.json is the VENDORED CLOUD CONTRACT (elefant monorepo, subscription-gated
+# API, used by upcoming premium call sites). sidecar-openapi.json is the sidecar's
+# own frozen spec, which this gate protects — it does not track birepo's elefant-api
+# (see agent_docs/2026-09-02-contract-0207-*.md).
 
 on:
   push:
