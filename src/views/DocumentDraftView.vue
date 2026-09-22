@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 
@@ -116,10 +117,28 @@ async function generateDraft() {
   }
 }
 
-function exportDraft(format: "word" | "pdf") {
-  // TODO: invoke("draft_export", { format })
-  toasts.addToast(`Exported draft as ${format.toUpperCase()}.`, "info");
-  void format;
+async function exportDraft(format: "word" | "pdf") {
+  if (!draftResult.value) {
+    toasts.addToast("Generate a draft before exporting.", "info");
+    return;
+  }
+
+  if (format === "pdf") {
+    toasts.addToast("PDF export is coming soon.", "info");
+    return;
+  }
+
+  try {
+    const wrote = await invoke<boolean>("export_draft_docx", { text: draftResult.value });
+    if (wrote) {
+      toasts.addToast("Draft exported as Word document.", "success");
+    }
+  } catch (error) {
+    // Tauri rejects with the raw Err(String) payload, not an Error object, so
+    // `instanceof Error` never matches and the specific Rust message is lost.
+    const message = typeof error === "string" ? error : String(error);
+    toasts.addToast(message, "error");
+  }
 }
 </script>
 
