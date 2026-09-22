@@ -31,7 +31,8 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.datamodel-codegen]
-input = "../../openapi.json"
+input = "../../sidecar-openapi.json"
 output = "models/generated.py"
 output-model-type = "pydantic_v2.BaseModel"
 target-python-version = "3.12"
+disable-timestamp = true
