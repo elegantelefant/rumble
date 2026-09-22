@@ -12,7 +12,8 @@ A local-first legal-AI desktop app on Tauri v2: a Vue 3 frontend in a webview, a
 | `src-tauri/src/lib.rs` | The whole Rust host (~1.1k lines): `api_call`, `resolve_url`, keychain, sidecar spawn (`PORT:{port}` handshake), tray, export commands. The Rust tests live here |
 | `src-tauri/capabilities/default.json` | The webview→core permission surface — the file people audit at open-source time |
 | `src-tauri/sidecar/` | FastAPI + PydanticAI + aiosqlite: `routes/{ai,chat,health,jobs}.py`, `services/{db,jobs,llm,prompts}.py`, `models/generated.py` (generated), `tests/` (pytest), `sidecar.spec` (PyInstaller) |
-| `openapi.json` | The sidecar's **own frozen spec** (0.1.0 lineage). Decision 2026-09-03 (#33, #39): it does not track birepo; premium call sites will consume `@elefant/api-contract` when premium work starts |
+| `sidecar-openapi.json` | The sidecar's **own frozen spec** (0.1.0 lineage). Decision 2026-09-03 (#33, #39): it does not track birepo |
+| `openapi.json` | The vendored elefant **cloud contract** (0.305.0 lineage, subscription-gated API) for premium call sites; synced deliberately from the monorepo |
 | `tests/` | Vitest (happy-dom) unit + component tests; `test-utils.ts` |
 | `e2e/`, `selenium-tests/` | Playwright against Vite on `:1420`; Selenium (mocha) against `vite preview` in CI |
 | `.github/workflows/` | `test.yml` (vitest, pytest, cargo test), `contract-drift.yml`, `webdriver.yml`, `build.yml` (tag `v*` → dmg/msi/deb/AppImage draft release) |
@@ -58,7 +59,7 @@ All four tallies quoted in the verdict (`vitest 141 passed`, `pytest 146 passed`
 | `src/views/*`, components | `pnpm test:e2e` |
 | `src/api/sidecar.ts`, `sidecar/routes/*` | the pytest route tests **and** the vitest tests that mock that call — both sides of the wire |
 | `lib.rs` spawn / `resolve_url` / keychain, `capabilities/*.json`, `tauri.conf.json`, `sidecar.spec` | a packaged build (`pnpm tauri build`) smoked by a human — #35 (BYOK unreachable in the packaged app) is invisible to every automated suite |
-| `openapi.json` | it is frozen; changing it is a contract decision — ask first (#34 / #42) |
+| `sidecar-openapi.json` | it is frozen; changing it is a contract decision — ask first (#34 / #42) |
 
 Not yet in place: a `scripts/premerge-check.sh` that runs the block above on the merge ref; lint/format gates; the toolchain pin on `main`. Until then the verifier runs the commands by hand and says so.
 

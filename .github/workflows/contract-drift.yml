@@ -15,7 +15,7 @@ on:
 
 jobs:
   drift:
-    name: Generated types match openapi.json
+    name: Generated types match sidecar-openapi.json
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

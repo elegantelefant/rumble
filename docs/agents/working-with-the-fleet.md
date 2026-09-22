@@ -105,7 +105,7 @@ Not yet in place: `scripts/premerge-check.sh` (the block above, one command), li
 4. A decision is a ruling: lanes and humans do not re-litigate it; a verifier that disagrees says so in the verdict instead of re-imposing the withdrawn instruction.
 5. Surface owner-gated items as such in PR bodies and digests: "OWNER-GATED: endpoint shape — see #34". Never quietly wait on one.
 
-Examples here: `/extract` vs `/review/upload` and multipart vs base64 (#34); whether Settings persistence is in scope before open-sourcing (#17, #18); the Ollama default model; anything that changes `openapi.json`.
+Examples here: `/extract` vs `/review/upload` and multipart vs base64 (#34); whether Settings persistence is in scope before open-sourcing (#17, #18); the Ollama default model; anything that changes `sidecar-openapi.json`.
 
 ## No perfectionism
 
@@ -119,5 +119,5 @@ The bar is merge-ready and leaves the repo better. Follow-ups are follow-ups: fi
 - `Fixes #N` / `Closes #N`;
 - two pushers on one branch;
 - a verdict or an "addressed" comment without the head SHA;
-- hand-edits to `src/api/models/` or `sidecar/models/generated.py`, or a change to `openapi.json` without a decision on the issue;
+- hand-edits to `src/api/models/` or `sidecar/models/generated.py`, or a change to `sidecar-openapi.json` without a decision on the issue;
 - `pnpm install` / `uv sync` / `cargo` runs in the laptop checkout; work in your own clone under the session scratchpad.
