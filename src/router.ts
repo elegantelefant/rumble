@@ -42,7 +42,8 @@ router.beforeEach(async (to) => {
   }
 
   // On first navigation to an app page, check Ollama readiness
-  if (!isPublic && !setupVerified.value) {
+  const inTauri = "__TAURI_INTERNALS__" in window;
+  if (!isPublic && !setupVerified.value && inTauri) {
     try {
       const { ready } = await import("./api/sidecar");
       const res = await ready();
@@ -50,8 +51,13 @@ router.beforeEach(async (to) => {
         setupVerified.value = true;
         return true;
       }
-    } catch {
-      // Sidecar or Ollama not reachable
+    } catch (err) {
+      // invoke() rejects with a string for a real backend error (sidecar up,
+      // Ollama down); anything else means the IPC bridge itself is broken,
+      // which is not a readiness result and must not be swallowed as one.
+      if (typeof err !== "string") {
+        throw err;
+      }
     }
     // Redirect to setup if check failed
     return "/setup";
