@@ -4,6 +4,9 @@ import { ref } from "vue";
 /** Tracks whether Ollama setup has been verified this session. */
 export const setupVerified = ref(false);
 
+/** Set when a navigation guard rethrows a structural failure; ToastProvider watches this to surface it. */
+export const navigationError = ref<string | null>(null);
+
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
@@ -64,6 +67,18 @@ router.beforeEach(async (to) => {
   }
 
   return true;
+});
+
+// A structural IPC failure rethrown from the readiness check above (or any other
+// guard) aborts navigation silently otherwise — router.push() rejects, but a
+// RouterLink click never awaits that promise. This is the catch-all that turns
+// it into something the user actually sees, without guessing at a route: a
+// structural failure isn't a missing-Ollama problem, so it must not land on
+// /setup the way the readiness check's own string-rejection branch does.
+router.onError((error) => {
+  console.error("Navigation aborted:", error);
+  navigationError.value =
+    "Something went wrong reaching the local backend. Try again, or restart Rumble if it keeps happening.";
 });
 
 export default router;
