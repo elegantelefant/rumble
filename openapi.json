@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.305.0"
+    "version": "0.307.0"
   },
   "paths": {
     "/health": {
@@ -19475,13 +19475,78 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/review/{id}": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Completed Review",
+        "description": "Get a completed review owned by the caller or shared through its matter.",
+        "operationId": "get_completed_review",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResultResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/review/{id}/notes": {
       "get": {
         "tags": [
           "review"
         ],
         "summary": "List Finding Notes",
-        "description": "The caller's own annotations on this review's findings \u2014 note text and\nReviewed tick (per user, never shared).",
+        "description": "The caller's annotations plus shared collaborator notes on this review.",
         "operationId": "list_finding_notes",
         "parameters": [
           {
@@ -35092,6 +35157,18 @@
             "type": "string",
             "title": "Status"
           },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failurereason",
+            "description": "Stable reason for a failed ingest, when available to explain the upload outcome."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -35199,6 +35276,18 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failurereason",
+            "description": "Stable reason for a failed ingest, when available to explain the upload outcome."
           },
           "createdAt": {
             "type": "string",
@@ -44774,6 +44863,19 @@
             "type": "string",
             "title": "Note"
           },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "shared"
+            ],
+            "title": "Visibility",
+            "default": "private"
+          },
+          "authorId": {
+            "type": "string",
+            "title": "Authorid"
+          },
           "reviewed": {
             "type": "boolean",
             "title": "Reviewed",
@@ -44790,6 +44892,7 @@
         "required": [
           "findingKey",
           "note",
+          "authorId",
           "updatedAt"
         ],
         "title": "ReviewFindingNoteItem"
@@ -44801,6 +44904,15 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Note"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "shared"
+            ],
+            "title": "Visibility",
+            "default": "private"
           }
         },
         "additionalProperties": false,
@@ -44831,7 +44943,7 @@
           "reviewId"
         ],
         "title": "ReviewFindingNotesResponse",
-        "description": "The caller's annotations on one review \u2014 note plus Reviewed tick, per user,\nnever shared (design \u00a76.4)."
+        "description": "The caller's annotations and shared collaborator notes on one review."
       },
       "ReviewFindingReviewedRequest": {
         "properties": {
