@@ -221,11 +221,10 @@ async def test_draft_result_wrong_shape_returns_502(client):
 
 
 async def test_draft_result_with_bad_warnings_returns_200(client):
-    """A wrong-typed optional field (warnings) doesn't 502 — the draft is still usable.
-
-    get_draft_result calls _safe_construct only for its validation side effect and
-    returns the raw job result, so the wrong-typed warnings string is still present
-    on the wire; the point of this test is the status code and that draft survives.
+    """A wrong-typed optional field (warnings) doesn't 502, and the filtered
+    response drops it entirely rather than passing the wrong-typed value to the
+    client — DocumentDraftView v-for's over warnings, so a string there would
+    render one list item per character instead of failing loudly.
     """
     from services import db as svc_db
 
@@ -241,6 +240,7 @@ async def test_draft_result_with_bad_warnings_returns_200(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["result"]["draft"] == "Full contract text."
+    assert data["result"]["warnings"] is None
 
 
 async def test_review_result_wrong_shape_returns_502(client):
@@ -334,6 +334,32 @@ async def test_research_result_with_name_in_source_returns_200(client):
     data = resp.json()
     assert data["sources"]
     assert data["sources"][0]["title"] == "Donoghue v Stevenson"
+
+
+async def test_research_result_with_one_malformed_source_keeps_valid_ones(client):
+    """One malformed source item is dropped; the other, valid sources survive."""
+    from services import db as svc_db
+
+    job = await svc_db.create_job("research", "{}")
+    raw_db = svc_db._get_db()
+    payload = json.dumps({
+        "result": "Negligence requires duty, breach, causation, and damage.",
+        "sources": [
+            {"id": "src-1", "title": "Donoghue v Stevenson"},
+            {"id": "src-2", "title": "Caparo v Dickman"},
+            {"id": 123, "title": "Malformed — id is not a string"},
+        ],
+    })
+    await raw_db.execute(
+        "UPDATE jobs SET status='completed', result=? WHERE id=?",
+        (payload, job["id"]),
+    )
+    await raw_db.commit()
+    resp = await client.get(f"/research/{job['id']}/result")
+    assert resp.status_code == 200
+    data = resp.json()
+    titles = [source["title"] for source in data["sources"]]
+    assert titles == ["Donoghue v Stevenson", "Caparo v Dickman"]
 
 
 async def test_research_result_with_extra_key_in_source_field_returns_200(client):

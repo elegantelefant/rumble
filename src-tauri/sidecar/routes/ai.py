@@ -2,6 +2,7 @@
 # ABOUTME: Each endpoint takes a typed request, calls LLM once, and returns structured JSON.
 
 import json
+import logging
 import re
 import typing
 
@@ -23,6 +24,8 @@ from models.generated import (
     TranslateResponse,
 )
 from services import llm, prompts
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ai"])
 
@@ -49,13 +52,21 @@ def _parse_llm_json(raw: str) -> dict:
         raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
 
-def _list_item_submodel(annotation) -> type[BaseModel] | None:
+def _list_item_type(annotation):
     """Return X if annotation is list[X] (optionally wrapped in Optional/Union), else None."""
     for candidate in (annotation, *typing.get_args(annotation)):
         if typing.get_origin(candidate) is list:
             args = typing.get_args(candidate)
-            if args and isinstance(args[0], type) and issubclass(args[0], BaseModel):
+            if args:
                 return args[0]
+    return None
+
+
+def _list_item_submodel(annotation) -> type[BaseModel] | None:
+    """Return X if annotation is list[X] (optionally wrapped in Optional/Union) and X is a BaseModel, else None."""
+    item_type = _list_item_type(annotation)
+    if item_type is not None and isinstance(item_type, type) and issubclass(item_type, BaseModel):
+        return item_type
     return None
 
 
@@ -84,14 +95,33 @@ def _drop_invalid_optional_fields(model_class: type[BaseModel], filtered: dict) 
     the whole payload when the field already has a perfectly good default to fall
     back on. Required fields are left untouched, so a missing or wrong-typed
     required field still fails model_class(**filtered) and raises the usual 502.
+
+    A list-valued field is validated item by item rather than as a whole: one
+    malformed source shouldn't take every other, valid source down with it.
     """
     known_fields = model_class.model_fields
     for name in list(filtered):
         field = known_fields[name]
         if field.is_required():
             continue
+        value = filtered[name]
+        if isinstance(value, list):
+            item_type = _list_item_type(field.annotation)
+            if item_type is not None:
+                kept = []
+                for index, item in enumerate(value):
+                    try:
+                        TypeAdapter(item_type).validate_python(item)
+                        kept.append(item)
+                    except ValidationError:
+                        logger.warning(
+                            "Dropping invalid item %d in %s.%s: %r",
+                            index, model_class.__name__, name, item,
+                        )
+                filtered[name] = kept
+                continue
         try:
-            TypeAdapter(field.annotation).validate_python(filtered[name])
+            TypeAdapter(field.annotation).validate_python(value)
         except ValidationError:
             del filtered[name]
 

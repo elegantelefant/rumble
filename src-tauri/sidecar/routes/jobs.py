@@ -64,7 +64,11 @@ async def create_draft(body: DraftRequest) -> JobCreatedResponse:
 async def get_draft_result(job_id: str) -> JobResultResponse:
     response = await _poll_job(job_id)
     if response.status == "completed" and response.result is not None:
-        _safe_construct(DraftResponse, response.result)
+        # A completed job's result is persisted in SQLite with no re-run path, so
+        # a stored result missing a required field (or {}) 502s here on every poll
+        # from now on. That's deliberate: the result was garbage when it was saved,
+        # and nothing here could fix it in place.
+        response.result = _safe_construct(DraftResponse, response.result).model_dump()
     return response
 
 
@@ -97,6 +101,12 @@ async def create_review(body: ReviewRequest) -> JobCreatedResponse:
 async def get_review_result(job_id: str) -> JobResultResponse:
     response = await _poll_job(job_id)
     if response.status == "completed" and response.result is not None:
+        # Raw passthrough, unlike get_draft_result above: DocumentReviewView reads
+        # issue.severity/issue.description, which aren't ReviewIssue fields
+        # (kind/message/location/suggestion), so filtering to the constructed
+        # model would strip what it renders. Flip this to match get_draft_result
+        # once the view is updated to match the model (rumble#49). Same
+        # permanent-502 caveat as get_draft_result applies here too.
         _safe_construct(ReviewResponse, response.result)
     return response
 
