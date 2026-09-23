@@ -11,28 +11,31 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from services import prompts
+from services import mode, prompts
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-OLLAMA_API_BASE = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "llama3.2")
 
 _resolved_ollama_model: str | None = None
 
 
 async def _resolve_ollama_model() -> str:
-    """Return the configured default model if available, else the first pulled model."""
+    """Return the configured default model if available, else the first pulled model.
+
+    Cloud-named models (services.mode.is_cloud_model) are filtered out of the
+    candidate list first, so the "first pulled model" fallback can never
+    silently land on one.
+    """
     global _resolved_ollama_model
     if _resolved_ollama_model:
         return _resolved_ollama_model
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_API_BASE}/api/tags")
+            resp = await client.get(f"{mode.ollama_api_base()}/api/tags")
             resp.raise_for_status()
-            models = [m["name"] for m in resp.json().get("models", [])]
+            models = [m["name"] for m in resp.json().get("models", []) if not mode.is_cloud_model(m["name"])]
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         logger.warning("Cannot reach Ollama to resolve model — using default %s", OLLAMA_DEFAULT_MODEL)
         return OLLAMA_DEFAULT_MODEL
@@ -55,16 +58,23 @@ async def _build_agent(
 ) -> Agent:
     """Build a PydanticAI agent for the given provider config.
 
-    Falls back to the BYOK_API_KEY env var if no api_key is passed
-    explicitly, matching how routes/health.py detects BYOK mode.
+    Branches on services.mode.current_mode(), never on whether a key happens
+    to be present: a stray BYOK_API_KEY must not route an ollama-mode request
+    to OpenAI, and a byok-mode request must not silently fall back to Ollama
+    when no key is configured.
     """
-    resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
-    if resolved_api_key:
+    if mode.current_mode() == "byok":
+        resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
+        if not resolved_api_key:
+            raise ValueError("byok mode requires an API key")
         provider = OpenAIProvider(api_key=resolved_api_key)
         model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
+        if model_name and mode.is_cloud_model(model_name):
+            raise ValueError(f"refusing cloud model {model_name!r} in ollama mode")
+        base_url = mode.ollama_openai_base_url()
         resolved = model_name or await _resolve_ollama_model()
-        provider = OpenAIProvider(base_url=OLLAMA_BASE_URL, api_key="ollama")
+        provider = OpenAIProvider(base_url=base_url, api_key="ollama")
         model = OpenAIModel(resolved, provider=provider)
     return Agent(model=model, system_prompt=system_prompt)
 
