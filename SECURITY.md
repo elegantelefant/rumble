@@ -37,4 +37,4 @@ sidecar logs a loud warning on startup whenever it runs this way.
 ## Reporting a vulnerability
 
 Please don't report security vulnerabilities in public GitHub issues.
-[Private reporting channel to be confirmed.]
+Report them privately to dpo@elefant.legal.
