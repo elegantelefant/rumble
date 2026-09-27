@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.310.0"
+    "version": "0.311.0"
   },
   "paths": {
     "/health": {
@@ -22701,6 +22701,7 @@
           "channel-integrations"
         ],
         "summary": "Deactivate Channel Integration",
+        "description": "Set active = false. Idempotent: a retried or double-clicked DELETE on an\nalready-inactive row deactivates again (a no-op) rather than removing it \u2014\nDELETE no longer branches on server-side active state. Use POST\n.../remove for the distinct, non-idempotent removal.",
         "operationId": "deactivate_channel_integration",
         "parameters": [
           {
@@ -22736,6 +22737,81 @@
           },
           "404": {
             "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/channel-integrations/{id}/remove": {
+      "post": {
+        "tags": [
+          "channel-integrations"
+        ],
+        "summary": "Remove Channel Integration",
+        "description": "Permanently hide an inactive integration with no active sibling on its\nchannel, retaining its audit trail and credentials. Deliberately distinct\nfrom deactivate: this is the one destructive (non-reactivatable) operation\non this resource, so it never runs as a side effect of a retried DELETE.",
+        "operationId": "remove_channel_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The integration is still active, or its channel has an active sibling integration.",
             "content": {
               "application/json": {
                 "schema": {
