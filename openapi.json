@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.311.0"
+    "version": "0.312.0"
   },
   "paths": {
     "/health": {
@@ -3190,6 +3190,16 @@
           },
           "401": {
             "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -30059,6 +30069,11 @@
                 "type": "null"
               }
             ]
+          },
+          "attachedDocumentCount": {
+            "type": "integer",
+            "title": "Attacheddocumentcount",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -35060,6 +35075,18 @@
             ],
             "title": "Briefcaseid",
             "description": "Optional briefcase to file the ingested document into once the ingest job completes. Must be OWNED by the caller (same rule as adding an item directly); the per-plan save cap is checked eagerly here and again in the worker."
+          },
+          "chatId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chatid",
+            "description": "Optional Ask Elf conversation this upload is being attached to. Only ever narrows: the confirm is refused (409, detail.reason 'chat_document_limit_reached') once that chat already holds CHAT_MAX_DOCUMENTS documents, so a wrong or absent id costs the caller the cap's protection rather than granting anything."
           }
         },
         "additionalProperties": false,
