@@ -15,6 +15,7 @@ use tauri_plugin_shell::ShellExt;
 use trash::delete;
 use walkdir::WalkDir;
 use docx_rs::{Docx, Paragraph, Run};
+use percent_encoding::percent_decode_str;
 use tauri_plugin_dialog::DialogExt;
 
 const SERVICE_NAME: &str = "elefant-rumble";
@@ -97,6 +98,12 @@ impl AppState {
             return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
         }
 
+        self.sidecar_url(path)
+    }
+
+    /// Build a URL against the local sidecar only, ignoring backend mode —
+    /// for operations like document extraction that never go to the cloud.
+    fn sidecar_url(&self, path: &str) -> Result<String, String> {
         let port = self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
         match *port {
             Some(p) => Ok(format!("http://127.0.0.1:{}{}", p, path)),
@@ -254,6 +261,92 @@ async fn api_call(
         None
     };
     make_http_request(&state.http, &url, &method, body, params, token.as_deref(), secret).await
+}
+
+const EXTRACT_FILENAME_HEADER: &str = "X-Rumble-Filename";
+
+/// Posts a file's bytes to the sidecar's /extract endpoint as multipart form data.
+///
+/// Maps a 422 (the sidecar's ExtractionError response) to its `detail` message —
+/// safe to show the user, since the sidecar only ever puts a human-readable
+/// explanation there. Any other failure (connection error, 5xx, unreadable body)
+/// collapses to a generic message; we never surface a raw response body from an
+/// unexpected failure mode.
+async fn post_extract_multipart(
+    http: &Client,
+    sidecar_url: &str,
+    secret: &str,
+    filename: &str,
+    data: Vec<u8>,
+) -> Result<String, String> {
+    let part = reqwest::multipart::Part::bytes(data).file_name(filename.to_string());
+    let form = reqwest::multipart::Form::new().part("file", part);
+
+    let response = http
+        .post(format!("{}/extract", sidecar_url))
+        .header(SECRET_HEADER, secret)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| "could not reach the sidecar".to_string())?;
+
+    let status = response.status();
+
+    if status.is_success() {
+        let value: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|_| "extraction failed".to_string())?;
+        return value
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| "extraction failed".to_string());
+    }
+
+    if status.as_u16() == 422 {
+        let value: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|_| "extraction failed".to_string())?;
+        let detail = value
+            .get("detail")
+            .and_then(|v| v.as_str())
+            .unwrap_or("extraction failed");
+        return Err(detail.to_string());
+    }
+
+    Err("extraction failed".to_string())
+}
+
+/// Header values must be Latin-1, so a non-ASCII filename is percent-encoded
+/// on the way in (see `extractDocument` in src/api/sidecar.ts); decode it back.
+fn decode_filename(raw: &str) -> Result<String, String> {
+    percent_decode_str(raw)
+        .decode_utf8()
+        .map(|s| s.into_owned())
+        .map_err(|_| "invalid filename encoding".to_string())
+}
+
+#[tauri::command]
+async fn extract_document(
+    state: State<'_, AppState>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<String, String> {
+    let raw_filename = request
+        .headers()
+        .get(EXTRACT_FILENAME_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| "missing filename header".to_string())?;
+    let filename = decode_filename(raw_filename)?;
+
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        _ => return Err("expected a raw file body".to_string()),
+    };
+
+    let sidecar_url = state.sidecar_url("")?;
+    post_extract_multipart(&state.http, &sidecar_url, &state.secret, &filename, data).await
 }
 
 // --- Keychain helpers ---
@@ -641,6 +734,7 @@ pub fn run() {
             move_to_trash,
             // API proxy
             api_call,
+            extract_document,
             // Auth / keychain
             auth_store_token,
             auth_get_token,
@@ -955,7 +1049,7 @@ mod tests {
 
     // --- make_http_request (wiremock) ---
 
-    use wiremock::matchers::{bearer_token, body_json, method, path, query_param};
+    use wiremock::matchers::{bearer_token, body_json, body_string_contains, header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -1151,6 +1245,102 @@ mod tests {
         let url = format!("{}/items/1", server.uri());
         let result = make_http_request(&http, &url, "DELETE", None, None, None, None).await;
         assert_eq!(result.unwrap(), serde_json::json!({}));
+    }
+
+    // --- decode_filename ---
+
+    #[test]
+    fn decode_filename_passes_through_ascii() {
+        assert_eq!(decode_filename("contract.pdf").unwrap(), "contract.pdf");
+    }
+
+    #[test]
+    fn decode_filename_decodes_percent_encoded_unicode() {
+        // encodeURIComponent("合同.pdf") on the TS side
+        assert_eq!(
+            decode_filename("%E5%90%88%E5%90%8C.pdf").unwrap(),
+            "合同.pdf"
+        );
+    }
+
+    // --- post_extract_multipart (wiremock) ---
+
+    #[tokio::test]
+    async fn extract_sends_file_part_and_secret_header() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .and(header(SECRET_HEADER, "test-secret"))
+            .and(body_string_contains("filename=\"contract.pdf\""))
+            .and(body_string_contains("Clause one."))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"text": "Clause one."})),
+            )
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "contract.pdf",
+            b"Clause one.".to_vec(),
+        )
+        .await;
+        assert_eq!(result.unwrap(), "Clause one.");
+    }
+
+    #[tokio::test]
+    async fn extract_422_surfaces_detail_message() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(ResponseTemplate::new(422).set_body_json(
+                serde_json::json!({"detail": "Unsupported file type: contract.doc"}),
+            ))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "contract.doc",
+            b"anything".to_vec(),
+        )
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "Unsupported file type: contract.doc"
+        );
+    }
+
+    #[tokio::test]
+    async fn extract_500_surfaces_generic_message_not_raw_body() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(
+                ResponseTemplate::new(500)
+                    .set_body_string("<html>Internal Server Error - stack trace here</html>"),
+            )
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "contract.pdf",
+            b"bytes".to_vec(),
+        )
+        .await;
+        let err = result.unwrap_err();
+        assert_eq!(err, "extraction failed");
+        assert!(!err.contains("stack trace"), "must not leak raw body: {}", err);
     }
 
     // --- validate_user_path ---
