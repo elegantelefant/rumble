@@ -12211,6 +12211,49 @@
         }
       }
     },
+    "/extract": {
+      "post": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "Extract Document",
+        "operationId": "extract_document_extract_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_document_extract_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Extract Document Extract Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/citations/check": {
       "post": {
         "tags": [
@@ -23071,6 +23114,20 @@
         ],
         "title": "ChatStreamError",
         "type": "object"
+      },
+      "Body_extract_document_extract_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_extract_document_extract_post"
       }
     },
     "securitySchemes": {

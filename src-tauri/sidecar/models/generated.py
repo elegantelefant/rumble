@@ -2484,6 +2484,10 @@ class ChatStreamError(BaseModel):
     value: str = Field(..., title='Value')
 
 
+class BodyExtractDocumentExtractPost(BaseModel):
+    file: bytes = Field(..., title='File')
+
+
 class BriefcaseItemBatchRequest(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
