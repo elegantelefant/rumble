@@ -67,4 +67,28 @@ describe("DocumentReviewView file intake", () => {
     )
     expect(createReviewJob).not.toHaveBeenCalled()
   })
+
+  it("resets the file input's value after handling a selection", async () => {
+    vi.mocked(extractDocument).mockResolvedValue("Clause one.")
+    vi.mocked(createReviewJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { summary: "Summary.", issues: [] },
+    } as never)
+
+    const wrapper = mountReview()
+    const file = new File(["Clause one."], "contract.pdf", { type: "application/pdf" })
+    const input = wrapper.find('input[type="file"]')
+
+    const valueSetter = vi.fn()
+    Object.defineProperty(input.element, "value", {
+      get: () => "",
+      set: valueSetter,
+      configurable: true,
+    })
+
+    await uploadFile(wrapper, file)
+
+    expect(valueSetter).toHaveBeenCalledWith("")
+  })
 })

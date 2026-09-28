@@ -103,6 +103,9 @@ function handleFiles(files: FileList | null) {
 function handleInputChange(event: Event) {
   const input = event.target as HTMLInputElement | null;
   handleFiles(input?.files ?? null);
+  // Reset so picking the identical file again still changes the input's
+  // value and fires `change` — otherwise the browser never re-fires it.
+  if (input) input.value = "";
 }
 
 function handleDrop(event: DragEvent) {
