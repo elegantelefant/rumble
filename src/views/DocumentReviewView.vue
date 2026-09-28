@@ -2,7 +2,7 @@
 defineOptions({ name: "DocumentReviewView" });
 import { computed, ref } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
-import { createChat, createReviewJob, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
+import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
@@ -27,15 +27,6 @@ type ReviewSession = {
   chatId: string | null;
   fileText: string;
 };
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-    reader.readAsText(file);
-  });
-}
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const customPrompt = ref("");
@@ -69,9 +60,10 @@ function triggerFilePicker() {
 async function registerFile(file: File) {
   let fileText: string;
   try {
-    fileText = await readFileAsText(file);
-  } catch {
-    toasts.addToast(`Could not read ${file.name}. Only plain-text files are supported.`, "error");
+    fileText = await extractDocument(file);
+  } catch (err) {
+    const message = typeof err === "string" ? err : err instanceof Error ? err.message : `Could not read ${file.name}.`;
+    toasts.addToast(message, "error");
     return;
   }
   if (!fileText.trim()) {

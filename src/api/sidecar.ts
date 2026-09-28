@@ -136,6 +136,28 @@ export async function streamMessage(
 }
 
 // ---------------------------------------------------------------------------
+// Document extraction
+// ---------------------------------------------------------------------------
+
+const EXTRACT_FILENAME_HEADER = "X-Rumble-Filename";
+
+/**
+ * Extract text from an uploaded file via the host's extract_document command,
+ * which posts the bytes to the sidecar's /extract endpoint as multipart form
+ * data. Supports PDF, DOCX, and plain text; rejects with the sidecar's
+ * human-readable message for anything else (scanned PDF, unsupported type).
+ *
+ * The filename travels in a header, and header values must be Latin-1, so a
+ * non-ASCII name (e.g. "合同.pdf") is percent-encoded here; the host decodes it.
+ */
+export async function extractDocument(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return invoke<string>("extract_document", bytes, {
+    headers: { [EXTRACT_FILENAME_HEADER]: encodeURIComponent(file.name) },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Stateless AI endpoints
 // ---------------------------------------------------------------------------
 
