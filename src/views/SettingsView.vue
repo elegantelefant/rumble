@@ -99,8 +99,8 @@ const newSecret = reactive({
 const workspaceStorage = reactive({
   templatesPath: "~/Documents/LegalTemplates",
   workspacePath: "~/Library/Application Support/Elefant/Rumble",
-  briefcases: ["General research", "Litigation", "Transactions"],
-  attachableResources: ["DocumentReview: Contract_2024.pdf", "Research: Tax compliance"],
+  briefcases: [] as string[],
+  attachableResources: [] as string[],
 });
 
 const appearanceSettings = reactive({
@@ -119,6 +119,9 @@ const syncSettings = reactive({
 });
 
 const isSaving = ref(false);
+// Save stays disabled until saved settings have loaded (or failed to), so an
+// edit or a save can't race the load and write defaults over the saved file.
+const isLoaded = ref(false);
 
 const newBriefcase = ref("");
 const newResource = ref("");
@@ -192,36 +195,53 @@ async function removeSecret(id: string) {
 
 // The groups the host persists to settings.json. API keys are never among
 // them: those go to the OS keychain via addSecret/removeSecret.
-type SavedSettings = {
-  appearance?: Partial<typeof appearanceSettings>;
-  workspace?: Partial<typeof workspaceStorage>;
-  sync?: Partial<typeof syncSettings>;
-  localConfig?: Partial<typeof localConfig>;
-};
+type SavedSettings = Record<string, unknown>;
 
 function errorMessage(error: unknown): string {
   return typeof error === "string" ? error : String(error);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sameShape(current: unknown, saved: unknown): boolean {
+  if (Array.isArray(current)) {
+    return Array.isArray(saved) && saved.every((item) => typeof item === "string");
+  }
+  return typeof saved === typeof current;
+}
+
+// Takes only keys the form already has, and only values shaped like the
+// default, so a hand-edited or older file can't turn a list into a string.
+function mergeSaved(target: Record<string, unknown>, saved: unknown) {
+  if (!isRecord(saved)) return;
+  for (const key of Object.keys(target)) {
+    if (key in saved && sameShape(target[key], saved[key])) target[key] = saved[key];
+  }
+}
+
 onMounted(async () => {
-  let saved: SavedSettings | null | undefined;
   try {
-    saved = await invoke<SavedSettings | null>("load_settings");
+    const saved = await invoke<SavedSettings | null>("load_settings");
+    if (isRecord(saved)) {
+      mergeSaved(appearanceSettings, saved.appearance);
+      mergeSaved(workspaceStorage, saved.workspace);
+      mergeSaved(syncSettings, saved.sync);
+      mergeSaved(localConfig, saved.localConfig);
+    }
   } catch (error) {
     toast.addToast(`Couldn't load saved settings: ${errorMessage(error)}`, "error");
-    return;
+  } finally {
+    isLoaded.value = true;
   }
-  if (!saved) return;
-  Object.assign(appearanceSettings, saved.appearance);
-  Object.assign(workspaceStorage, saved.workspace);
-  Object.assign(syncSettings, saved.sync);
-  Object.assign(localConfig, saved.localConfig);
 });
 
 async function saveSettings() {
+  if (!isLoaded.value) return;
   isSaving.value = true;
   try {
-    await invoke("save_settings", {
+    const aside = await invoke<string | null>("save_settings", {
       settings: {
         appearance: { ...appearanceSettings },
         workspace: {
@@ -233,7 +253,12 @@ async function saveSettings() {
         localConfig: { ...localConfig },
       },
     });
-    toast.addToast("Settings saved on this device.", "success");
+    toast.addToast(
+      aside
+        ? `Settings saved on this device. The unreadable settings file was kept as ${aside}.`
+        : "Settings saved on this device.",
+      "success",
+    );
   } catch (error) {
     toast.addToast(`Couldn't save settings: ${errorMessage(error)}`, "error");
   } finally {
@@ -291,7 +316,7 @@ const selectedProviderDetails = computed(() =>
     </div>
 
     <form class="card space-y-6" @submit.prevent="saveSettings">
-    <fieldset :disabled="isSaving">
+    <fieldset :disabled="isSaving || !isLoaded">
       <section v-if="activeTab === 'providers'" class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
@@ -364,7 +389,7 @@ const selectedProviderDetails = computed(() =>
             </label>
           </div>
           <p class="text-xs text-[var(--primary-500)]">
-            Remote providers process prompts on their servers. Only chats are retained locally.
+            Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.
           </p>
           <div class="flex justify-end">
             <button class="btn-primary" type="button" @click="addSecret">Save secret</button>
@@ -520,7 +545,7 @@ const selectedProviderDetails = computed(() =>
         <router-link to="/setup" class="text-sm text-[var(--primary-500)] underline hover:text-[var(--accent-600)]">
           Ollama setup guide
         </router-link>
-        <button class="btn-primary" type="submit" :disabled="isSaving">
+        <button class="btn-primary" type="submit" :disabled="isSaving || !isLoaded">
           <span v-if="!isSaving">Save settings</span>
           <span v-else class="flex items-center gap-2">
             <span class="spinner"></span>

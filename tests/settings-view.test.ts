@@ -22,12 +22,14 @@ afterEach(() => {
 
 const mockAddToast = vi.fn()
 
+// router-link is stubbed: no router is installed, and resolving it warns on every render.
 function mountSettings() {
   return mount(SettingsView, {
     global: {
       provide: {
         [TOAST_KEY as symbol]: { addToast: mockAddToast },
       },
+      stubs: { RouterLink: true, "router-link": true },
     },
   })
 }
@@ -163,7 +165,7 @@ describe("SettingsView", () => {
     const saved = {
       appearance: { theme: "dark", navigationSidebar: "right" },
       workspace: { templatesPath: "/firm/templates", briefcases: ["Matter A"] },
-      sync: { teamCode: "TEAM-42" },
+      sync: { teamCode: "TEAM-42", useCustom: true },
       localConfig: { model: "llama3.2" },
     }
 
@@ -171,74 +173,183 @@ describe("SettingsView", () => {
       vi.mocked(invoke).mockImplementation(async (cmd: string, args?: any) => handlers[cmd]?.(args))
     }
 
-    function saveCalls() {
-      return vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "save_settings")
+    async function mountAndLoad() {
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      return wrapper
+    }
+
+    function savedPayload() {
+      const call = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === "save_settings")
+      return (call![1] as any).settings
     }
 
     async function openTab(wrapper: ReturnType<typeof mountSettings>, label: string) {
       await wrapper.findAll("button").find((b) => b.text().includes(label))!.trigger("click")
     }
 
+    function inputByValue(wrapper: ReturnType<typeof mountSettings>, value: string) {
+      return wrapper.findAll("input").find((i) => (i.element as HTMLInputElement).value === value)
+    }
+
+    async function submit(wrapper: ReturnType<typeof mountSettings>) {
+      await wrapper.find("form").trigger("submit")
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
     it("fills the form from saved settings on mount", async () => {
       mockCommands({ load_settings: () => saved })
-      const wrapper = mountSettings()
-      await vi.advanceTimersByTimeAsync(0)
+      const wrapper = await mountAndLoad()
       await openTab(wrapper, "Appearance")
       const theme = wrapper.findAll("select").find((s) => s.text().includes("Match system"))!
       expect((theme.element as HTMLSelectElement).value).toBe("dark")
     })
 
-    it("shows saved briefcases instead of the defaults", async () => {
+    it("shows saved briefcases", async () => {
       mockCommands({ load_settings: () => saved })
-      const wrapper = mountSettings()
-      await vi.advanceTimersByTimeAsync(0)
+      const wrapper = await mountAndLoad()
       await openTab(wrapper, "Templates")
       expect(wrapper.text()).toContain("Matter A")
-      expect(wrapper.text()).not.toContain("Litigation")
+    })
+
+    it("fills sync settings from the saved file", async () => {
+      mockCommands({ load_settings: () => saved })
+      const wrapper = await mountAndLoad()
+      await openTab(wrapper, "Sync")
+      expect(inputByValue(wrapper, "TEAM-42")).toBeDefined()
+    })
+
+    it("fills the local runtime config from the saved file", async () => {
+      mockCommands({ load_settings: () => saved })
+      const wrapper = await mountAndLoad()
+      await wrapper.find("select").setValue("elefant-local")
+      expect(inputByValue(wrapper, "llama3.2")).toBeDefined()
+    })
+
+    it("keeps defaults for fields a partial file doesn't mention", async () => {
+      mockCommands({ load_settings: () => saved, save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().workspace.templatesPath).toBe("/firm/templates")
+      expect(savedPayload().workspace.workspacePath).toBe("~/Library/Application Support/Elefant/Rumble")
+    })
+
+    it("ignores saved values whose shape doesn't match the field", async () => {
+      mockCommands({
+        load_settings: () => ({
+          workspace: { briefcases: "Matter A" },
+          sync: "xy",
+          appearance: { theme: 3 },
+        }),
+        save_settings: () => null,
+      })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().workspace.briefcases).toEqual([])
+      expect(savedPayload().sync.teamCode).toBe("")
+      expect(savedPayload().appearance.theme).toBe("system")
+    })
+
+    it("does not carry unknown saved keys into the form", async () => {
+      mockCommands({
+        load_settings: () => ({ appearance: { theme: "dark", legacyColour: "teal" } }),
+        save_settings: () => null,
+      })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().appearance).not.toHaveProperty("legacyColour")
+    })
+
+    it("starts from blank lists and no error on first run", async () => {
+      mockCommands({ load_settings: () => null, save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "error")
+      expect(savedPayload().workspace.briefcases).toEqual([])
+      expect(savedPayload().workspace.attachableResources).toEqual([])
     })
 
     it("keeps defaults and reports the error when saved settings can't be loaded", async () => {
       mockCommands({ load_settings: () => Promise.reject("failed to parse settings.json") })
-      const wrapper = mountSettings()
-      await vi.advanceTimersByTimeAsync(0)
+      const wrapper = await mountAndLoad()
       expect(mockAddToast).toHaveBeenCalledWith(
         "Couldn't load saved settings: failed to parse settings.json",
         "error",
       )
-      await openTab(wrapper, "Templates")
-      expect(wrapper.text()).toContain("Litigation")
+      await openTab(wrapper, "Appearance")
+      const theme = wrapper.findAll("select").find((s) => s.text().includes("Match system"))!
+      expect((theme.element as HTMLSelectElement).value).toBe("system")
+    })
+
+    it("disables saving until saved settings have loaded", async () => {
+      let finishLoad!: (value: unknown) => void
+      mockCommands({ load_settings: () => new Promise((resolve) => (finishLoad = resolve)) })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      const saveButton = () => wrapper.find('button[type="submit"]')
+      expect(saveButton().attributes("disabled")).toBeDefined()
+      finishLoad(saved)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(saveButton().attributes("disabled")).toBeUndefined()
+    })
+
+    it("does not save while the load is still pending", async () => {
+      mockCommands({ load_settings: () => new Promise(() => {}), save_settings: () => null })
+      const wrapper = mountSettings()
+      await submit(wrapper)
+      expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "save_settings")).toBe(false)
     })
 
     it("saves all four groups, including unsaved edits", async () => {
-      mockCommands({ load_settings: () => saved, save_settings: () => undefined })
-      const wrapper = mountSettings()
-      await vi.advanceTimersByTimeAsync(0)
+      mockCommands({ load_settings: () => saved, save_settings: () => null })
+      const wrapper = await mountAndLoad()
       await openTab(wrapper, "Templates")
       await wrapper.find('input[placeholder="New briefcase name"]').setValue("Matter B")
       await wrapper.findAll("button").find((b) => b.text() === "Add briefcase")!.trigger("click")
-      await wrapper.find("form").trigger("submit")
-      await vi.advanceTimersByTimeAsync(0)
-      const settings = (saveCalls()[0][1] as any).settings
+      await submit(wrapper)
+      const settings = savedPayload()
       expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "sync", "workspace"])
       expect(settings.workspace.briefcases).toEqual(["Matter A", "Matter B"])
       expect(settings.appearance.theme).toBe("dark")
     })
 
+    it("saves the loaded sync settings", async () => {
+      mockCommands({ load_settings: () => saved, save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().sync).toMatchObject({ teamCode: "TEAM-42", useCustom: true })
+    })
+
+    it("saves the loaded local runtime config", async () => {
+      mockCommands({ load_settings: () => saved, save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().localConfig).toEqual({ host: "http://127.0.0.1", port: "11434", model: "llama3.2" })
+    })
+
     it("confirms the save only once the host has stored it", async () => {
-      mockCommands({ save_settings: () => undefined })
-      const wrapper = mountSettings()
-      await wrapper.find("form").trigger("submit")
-      await vi.advanceTimersByTimeAsync(0)
+      mockCommands({ save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
       expect(mockAddToast).toHaveBeenCalledWith("Settings saved on this device.", "success")
     })
 
-    it("reports a failed save and never claims success", async () => {
-      mockCommands({ save_settings: () => Promise.reject("failed to create settings dir") })
-      const wrapper = mountSettings()
-      await wrapper.find("form").trigger("submit")
-      await vi.advanceTimersByTimeAsync(0)
+    it("says where an unreadable settings file was kept when the host moved it aside", async () => {
+      mockCommands({ save_settings: () => "/data/settings.json.corrupt-20260929T120000Z" })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
       expect(mockAddToast).toHaveBeenCalledWith(
-        "Couldn't save settings: failed to create settings dir",
+        "Settings saved on this device. The unreadable settings file was kept as /data/settings.json.corrupt-20260929T120000Z.",
+        "success",
+      )
+    })
+
+    it("reports a failed save and never claims success", async () => {
+      mockCommands({ save_settings: () => Promise.reject("couldn't save settings to /data/settings.json: denied") })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(mockAddToast).toHaveBeenCalledWith(
+        "Couldn't save settings: couldn't save settings to /data/settings.json: denied",
         "error",
       )
       expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "success")
