@@ -3,6 +3,7 @@
 
 import logging
 import os
+import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -93,8 +94,14 @@ async def _compact_once(existed: bool, path: Path) -> None:
     if (await cursor.fetchone())[0] >= SCHEMA_VERSION_COMPACTED:
         return
     if existed:
-        await _db.execute("VACUUM")
-        await _checkpoint()
+        try:
+            await _db.execute("VACUUM")
+            await _checkpoint()
+        except sqlite3.Error as exc:
+            # Best effort: a full disk or a lock must not stop the sidecar starting. user_version
+            # stays unset, so the next start tries again.
+            logger.error("could not compact %s (will retry next start): %s", path, exc)
+            return
         logger.warning("compacted %s once to erase content deleted by earlier builds", path)
     await _db.execute(f"PRAGMA user_version = {SCHEMA_VERSION_COMPACTED}")
     await _db.commit()

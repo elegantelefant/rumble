@@ -225,17 +225,18 @@ async def lifespan(app: FastAPI):
         await init_db(app.state.data_dir)
         retention_days = job_retention_days()
         purged = await purge_jobs_older_than(retention_days)
+        if pidfile is not None:
+            _write_pidfile(pidfile)
     except BaseException:
         # aiosqlite's worker thread is non-daemon: a failed startup that left the database
         # open would keep the process alive with nothing serving.
         await close_db()
+        if pidfile is not None:
+            _remove_pidfile(pidfile)
         raise
     if purged:
         # WARNING, not INFO: nothing configures logging, so only WARNING and above reach the host's stderr log.
         logger.warning("retention: deleted %d job(s) older than %d days", purged, retention_days)
-
-    if pidfile is not None:
-        _write_pidfile(pidfile)
 
     if app.state.watch_stdin:
         loop = asyncio.get_running_loop()

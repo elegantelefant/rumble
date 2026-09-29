@@ -4,10 +4,12 @@
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import aiosqlite
-import pytest
 import pytest_asyncio
 
 from app import _remove_pidfile, _write_pidfile, create_app, lifespan
@@ -216,12 +218,64 @@ def test_a_sidecar_removes_its_own_pidfile(tmp_path):
     assert not pidfile.exists()
 
 
-async def test_a_failed_startup_purge_closes_the_database(tmp_path, monkeypatch):
-    async def failing_purge(days):
-        raise RuntimeError("disk I/O error")
-
-    monkeypatch.setattr("app.purge_jobs_older_than", failing_purge)
-    with pytest.raises(RuntimeError):
-        async with lifespan(create_app(data_dir=str(tmp_path), dev=True)):
+# Run in a child process: a startup failure that leaves the database open keeps aiosqlite's
+# non-daemon thread alive, so the interpreter never exits — a hang the timeout turns into a failure.
+_FAILED_STARTUP_SCRIPT = """
+import asyncio, sys
+sys.path.insert(0, {root!r})
+import app
+{sabotage}
+async def main():
+    try:
+        async with app.lifespan(app.create_app(data_dir={data_dir!r}, dev=True)):
             pass
-    assert db._db is None
+    except Exception as exc:
+        print("startup failed:", type(exc).__name__)
+asyncio.run(main())
+"""
+STARTUP_EXIT_TIMEOUT_S = 30
+
+
+def _run_failed_startup(tmp_path, sabotage: str) -> subprocess.CompletedProcess:
+    script = _FAILED_STARTUP_SCRIPT.format(
+        root=str(Path(__file__).resolve().parent.parent), data_dir=str(tmp_path), sabotage=sabotage
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=STARTUP_EXIT_TIMEOUT_S
+    )
+
+
+def test_a_failed_startup_purge_closes_the_database_and_exits(tmp_path):
+    sabotage = (
+        "async def failing_purge(days):\n"
+        "    raise RuntimeError('disk I/O error')\n"
+        "app.purge_jobs_older_than = failing_purge"
+    )
+    result = _run_failed_startup(tmp_path, sabotage)
+    assert "startup failed: RuntimeError" in result.stdout, result.stderr
+
+
+def test_a_failed_pidfile_write_closes_the_database_and_exits(tmp_path):
+    (tmp_path / "sidecar.pid").mkdir()  # writing the pidfile now raises IsADirectoryError
+    result = _run_failed_startup(tmp_path, "")
+    assert "startup failed: IsADirectoryError" in result.stdout, result.stderr
+
+
+async def test_a_failed_compaction_does_not_block_startup_and_retries(tmp_path, monkeypatch, caplog):
+    sqlite3.connect(tmp_path / "rumble.db").close()  # an earlier build's database
+    real_execute = aiosqlite.Connection.execute
+
+    async def full_disk_vacuum(self, sql, *args, **kwargs):
+        if sql == "VACUUM":
+            raise sqlite3.OperationalError("database or disk is full")
+        return await real_execute(self, sql, *args, **kwargs)
+
+    monkeypatch.setattr(aiosqlite.Connection, "execute", full_disk_vacuum)
+    with caplog.at_level("ERROR"):
+        await db.init_db(str(tmp_path))
+    try:
+        assert any("could not compact" in r.message for r in caplog.records)
+        version = await (await db._get_db().execute("PRAGMA user_version")).fetchone()
+        assert version[0] == 0
+    finally:
+        await db.close_db()
