@@ -81,13 +81,15 @@ test.describe("2. File Upload", () => {
 // ═══════════════════════════════════════
 
 test.describe("3. Toast Notifications", () => {
-  test("3a. settings save shows success toast", async ({ page }) => {
+  // Playwright runs against Vite with no Tauri host, so nothing can be stored:
+  // the honest outcome is the failure toast, never a success claim.
+  test("3a. settings save without the host reports the failure", async ({ page }) => {
     await page.goto("/settings");
     await page.getByRole("button", { name: "Save settings" }).click();
     // Wait for toast to appear
     await page.waitForTimeout(500);
     await page.screenshot({ path: S("03a-toast-settings-saved"), fullPage: true });
-    await expect(page.getByText("Settings stored securely")).toBeVisible();
+    await expect(page.getByText("Couldn't save settings")).toBeVisible();
   });
 
   test("3b. draft export shows info toast", async ({ page }) => {

@@ -1339,6 +1339,108 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String>
     Ok(true)
 }
 
+// --- Settings ---
+
+/// Lives in app_local_data_dir, not app_data_dir: on Windows the latter is the
+/// roaming profile, and briefcase and resource names can be client-matter names.
+const SETTINGS_FILE_NAME: &str = "settings.json";
+
+type Settings = serde_json::Map<String, serde_json::Value>;
+
+enum StoredSettings {
+    Missing,
+    Valid(Settings),
+    /// Present but not a JSON object: kept aside on the next save, never overwritten.
+    Corrupt(String),
+}
+
+fn settings_path_in(dir: &Path) -> PathBuf {
+    dir.join(SETTINGS_FILE_NAME)
+}
+
+/// An unreadable file (permissions, a directory in the way) is an error; bytes
+/// that don't parse as a JSON object, invalid UTF-8 included, are `Corrupt`.
+fn read_stored_settings(path: &Path) -> Result<StoredSettings, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(StoredSettings::Missing),
+        Err(e) => return Err(format!("failed to read {}: {}", path.display(), e)),
+    };
+    Ok(match serde_json::from_slice(&bytes) {
+        Ok(settings) => StoredSettings::Valid(settings),
+        Err(e) => StoredSettings::Corrupt(format!("failed to parse {}: {}", path.display(), e)),
+    })
+}
+
+/// A missing file is "nothing saved yet". A corrupt one is an error, never a
+/// silent reset to defaults.
+fn read_settings(path: &Path) -> Result<Option<Settings>, String> {
+    match read_stored_settings(path)? {
+        StoredSettings::Missing => Ok(None),
+        StoredSettings::Valid(settings) => Ok(Some(settings)),
+        StoredSettings::Corrupt(e) => Err(e),
+    }
+}
+
+/// Writes `incoming` over the stored file's top-level groups, so groups this
+/// caller doesn't send survive. A corrupt file is renamed aside first and its
+/// new path returned, so a save never destroys what it couldn't read.
+fn save_settings_to(path: &Path, incoming: Settings) -> Result<Option<PathBuf>, String> {
+    let context = |e: String| format!("couldn't save settings to {}: {}", path.display(), e);
+    let (mut settings, aside) = match read_stored_settings(path).map_err(context)? {
+        StoredSettings::Missing => (Settings::new(), None),
+        StoredSettings::Valid(stored) => (stored, None),
+        StoredSettings::Corrupt(_) => {
+            // The uuid keeps two corrupt saves within one second from overwriting each other's aside.
+            let aside = path.with_file_name(format!(
+                "{}.corrupt-{}-{}",
+                SETTINGS_FILE_NAME,
+                chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
+                Uuid::new_v4().simple()
+            ));
+            std::fs::rename(path, &aside)
+                .map_err(|e| context(format!("couldn't move the unreadable file aside: {}", e)))?;
+            (Settings::new(), Some(aside))
+        }
+    };
+    settings.extend(incoming);
+    write_settings(path, &settings)?;
+    Ok(aside)
+}
+
+/// Atomic rename of an fsynced temp file; the directory itself is not fsynced.
+fn write_settings(path: &Path, settings: &Settings) -> Result<(), String> {
+    let write = || {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        write_atomically(path, |file| {
+            serde_json::to_writer_pretty(file, settings).map_err(|e| e.to_string())?;
+            file.sync_all().map_err(|e| e.to_string())
+        })
+    };
+    write().map_err(|e| format!("couldn't save settings to {}: {}", path.display(), e))
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_local_data_dir()
+        .map(|dir| settings_path_in(&dir))
+        .map_err(|e| format!("failed to resolve app local data dir: {}", e))
+}
+
+#[tauri::command]
+fn load_settings(app: AppHandle) -> Result<Option<Settings>, String> {
+    read_settings(&settings_path(&app)?)
+}
+
+/// Returns where a corrupt settings file was moved aside, if one was.
+#[tauri::command]
+fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, String> {
+    save_settings_to(&settings_path(&app)?, settings)
+        .map(|aside| aside.map(|p| p.display().to_string()))
+}
+
 // --- App entry ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1397,6 +1499,9 @@ pub fn run() {
             sidecar_status,
             // Document export
             export_draft_docx,
+            // Settings
+            load_settings,
+            save_settings,
             // Local data lifecycle
             delete_all_local_data,
         ])
@@ -1929,6 +2034,203 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(std::fs::read(&dest).unwrap(), b"original content");
+    }
+
+    // --- settings ---
+
+    fn sample_settings() -> Settings {
+        serde_json::json!({
+            "appearance": {"theme": "dark", "showChatSidebarByDefault": false},
+            "workspace": {"briefcases": ["Matter A"]},
+        })
+        .as_object()
+        .unwrap()
+        .clone()
+    }
+
+    fn settings_of(value: serde_json::Value) -> Settings {
+        value.as_object().unwrap().clone()
+    }
+
+    fn corrupt_asides(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        entries(dir)
+            .into_iter()
+            .filter(|p| p.to_string_lossy().contains(".corrupt-"))
+            .collect()
+    }
+
+    #[test]
+    fn settings_path_is_settings_json_in_the_given_dir() {
+        assert_eq!(
+            settings_path_in(Path::new("/data/com.ielegante.rumble")),
+            Path::new("/data/com.ielegante.rumble/settings.json")
+        );
+    }
+
+    #[test]
+    fn settings_survive_a_save_and_a_fresh_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_missing_file_reads_as_nothing_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_settings(&settings_path_in(dir.path())).unwrap(), None);
+    }
+
+    #[test]
+    fn settings_corrupt_file_is_an_error_not_a_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"{not json").unwrap();
+
+        let err = read_settings(&path).unwrap_err();
+
+        assert!(err.contains("failed to parse"), "got: {}", err);
+    }
+
+    #[test]
+    fn settings_non_object_json_is_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"[1, 2]").unwrap();
+
+        assert!(read_settings(&path).is_err());
+    }
+
+    #[test]
+    fn settings_save_keeps_top_level_groups_it_was_not_sent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, br#"{"backendMode": "byok", "appearance": {"theme": "light"}}"#).unwrap();
+
+        save_settings_to(&path, settings_of(serde_json::json!({"appearance": {"theme": "dark"}}))).unwrap();
+
+        assert_eq!(
+            read_settings(&path).unwrap(),
+            Some(settings_of(serde_json::json!({
+                "backendMode": "byok",
+                "appearance": {"theme": "dark"},
+            })))
+        );
+    }
+
+    #[test]
+    fn settings_save_moves_a_corrupt_file_aside_instead_of_overwriting_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"{not json").unwrap();
+
+        let aside = save_settings_to(&path, sample_settings()).unwrap().unwrap();
+
+        assert_eq!(std::fs::read(&aside).unwrap(), b"{not json");
+        assert_eq!(corrupt_asides(dir.path()), vec![aside]);
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_invalid_utf8_file_is_moved_aside_like_any_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"{\"a\": \"\xff\xfe\"}").unwrap();
+
+        assert!(read_settings(&path).unwrap_err().contains("failed to parse"));
+        let aside = save_settings_to(&path, sample_settings()).unwrap().unwrap();
+
+        assert_eq!(std::fs::read(&aside).unwrap(), b"{\"a\": \"\xff\xfe\"}");
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_two_corrupt_saves_keep_two_asides() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+
+        std::fs::write(&path, b"first").unwrap();
+        save_settings_to(&path, sample_settings()).unwrap();
+        std::fs::write(&path, b"second").unwrap();
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        let mut kept: Vec<Vec<u8>> =
+            corrupt_asides(dir.path()).iter().map(|p| std::fs::read(p).unwrap()).collect();
+        kept.sort();
+        assert_eq!(kept, vec![b"first".to_vec(), b"second".to_vec()]);
+    }
+
+    #[test]
+    fn settings_save_over_a_valid_file_moves_nothing_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        assert_eq!(save_settings_to(&path, sample_settings()).unwrap(), None);
+        assert!(corrupt_asides(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn settings_save_refuses_to_write_over_an_unreadable_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::create_dir(&path).unwrap();
+
+        let err = save_settings_to(&path, sample_settings()).unwrap_err();
+
+        assert!(err.starts_with(&format!("couldn't save settings to {}: ", path.display())), "got: {}", err);
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn settings_write_leaves_only_the_settings_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        assert_eq!(entries(dir.path()), vec![path]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn settings_write_replaces_the_file_rather_than_rewriting_it_in_place() {
+        use std::io::Read;
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"{}").unwrap();
+        let mut held = std::fs::File::open(&path).unwrap();
+
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        let mut seen = String::new();
+        held.read_to_string(&mut seen).unwrap();
+        assert_eq!(seen, "{}");
+    }
+
+    #[test]
+    fn settings_write_creates_missing_parent_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(&dir.path().join("not-yet-created"));
+
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_write_error_names_settings_and_the_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("a-file");
+        std::fs::write(&blocker, b"").unwrap();
+        let path = settings_path_in(&blocker);
+
+        let err = write_settings(&path, &sample_settings()).unwrap_err();
+
+        assert!(err.starts_with("couldn't save settings to "), "got: {}", err);
+        assert!(err.contains(&path.display().to_string()), "got: {}", err);
     }
 
     // --- make_http_request (wiremock) ---

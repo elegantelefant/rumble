@@ -43,25 +43,25 @@ describe("Toast System", function () {
     await new Promise((r) => setTimeout(r, 300));
   });
 
-  it("saving settings shows a success toast that auto-dismisses", async function () {
+  // `vite preview` has no Tauri host, so nothing can be stored: the honest
+  // outcome of a save is the failure toast, never a success claim.
+  it("saving settings without the host shows a failure toast that auto-dismisses", async function () {
     const driver = getDriver();
 
     // Trigger save
     await clickSaveSettings(driver);
 
-    // Wait for toast to appear (mock delays 150ms + render)
-    await driver.wait(async () => {
-      const toasts = await findToasts(driver);
-      return toasts.length > 0;
-    }, 5000, "Toast did not appear after saving settings");
+    const saveToast = async () => {
+      for (const toast of await findToasts(driver)) {
+        if ((await toast.getText()).includes("Couldn't save settings")) return toast;
+      }
+      return null;
+    };
+    await driver.wait(saveToast, 5000, "Toast did not appear after saving settings");
 
-    // Verify toast text and success class
-    const toasts = await findToasts(driver);
-    expect(toasts.length).to.be.greaterThan(0);
-    const text = await toasts[0].getText();
-    expect(text).to.include("Settings stored securely");
-    const classes = await toasts[0].getAttribute("class");
-    expect(classes).to.include("bg-[var(--success)]");
+    // Verify toast class
+    const classes = await (await saveToast()).getAttribute("class");
+    expect(classes).to.include("bg-[var(--error)]");
 
     // Wait for auto-dismiss (~3s duration + buffer)
     await waitForNoToasts(driver);

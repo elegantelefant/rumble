@@ -44,6 +44,17 @@ is "offline after setup", not "offline".
 
 - **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
   directory for identifier `com.ielegante.rumble`: `~/Library/Application Support/com.ielegante.rumble/`
+  on macOS, `%APPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
+  on Linux. It holds chats, messages and jobs; a job row stores its full request and result,
+  which includes document text. (`src-tauri/src/lib.rs` `spawn_sidecar`,
+  `src-tauri/sidecar/services/db.py`.) Settings shows a hardcoded path that isn't this one ([#22]).
+- **Settings** — `settings.json` in the Tauri app *local* data directory:
+  `~/Library/Application Support/com.ielegante.rumble/` on macOS,
+  `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows (not the roaming profile),
+  `~/.local/share/com.ielegante.rumble/` on Linux. It holds the preferences saved from Settings:
+  appearance, workspace and templates paths, briefcase and attached-resource names, sync options
+  and the local Ollama host/port/model. Plain JSON, never provider keys. (`src-tauri/src/lib.rs`
+  `load_settings`/`save_settings`.)
   on macOS, `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
   (or `$XDG_DATA_HOME/com.ielegante.rumble/`) on Linux. It holds chats, messages and jobs; a job row
   stores its full request and result, which includes document text. (`src-tauri/src/lib.rs`
