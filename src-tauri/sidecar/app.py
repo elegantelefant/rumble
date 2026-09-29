@@ -185,7 +185,10 @@ def _write_pidfile(pidfile: Path) -> None:
 
 
 def _remove_pidfile(pidfile: Path) -> None:
-    pidfile.unlink(missing_ok=True)
+    """Only this sidecar's own: the host reads the pidfile's absence as "this data dir's
+    database is closed", so removing a sibling instance's would claim that falsely."""
+    if _read_pidfile(pidfile) == os.getpid():
+        pidfile.unlink(missing_ok=True)
 
 
 def _watch_stdin_for_eof(loop: asyncio.AbstractEventLoop, server) -> None:

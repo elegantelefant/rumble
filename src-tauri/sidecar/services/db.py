@@ -16,7 +16,13 @@ _db: aiosqlite.Connection | None = None
 
 # Jobs hold full document text in request/result, so they are not kept forever (#57).
 DEFAULT_JOB_RETENTION_DAYS = 30
+# A century: far beyond any real policy, and well inside what datetime arithmetic can represent.
+MAX_JOB_RETENTION_DAYS = 36500
 JOB_RETENTION_ENV = "RUMBLE_JOB_RETENTION_DAYS"
+
+# PRAGMA user_version once the database has been compacted to erase what earlier
+# builds deleted without secure_delete.
+SCHEMA_VERSION_COMPACTED = 1
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -69,14 +75,34 @@ async def init_db(data_dir: str | None = None) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
     else:
         path = Path("rumble.db")
+    existed = path.exists()
     _db = await aiosqlite.connect(str(path))
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")
     await _db.execute("PRAGMA foreign_keys=ON")
-    # Overwrite deleted rows' content in the file rather than leaving it in free pages.
+    # Zero a deleted row's content in its page rather than leaving it in free space.
     await _db.execute("PRAGMA secure_delete=ON")
     await _db.executescript(SCHEMA)
     await _db.commit()
+    await _compact_once(existed, path)
+
+
+async def _compact_once(existed: bool, path: Path) -> None:
+    """VACUUM a database from before secure_delete, once: its free pages still hold deleted content."""
+    cursor = await _db.execute("PRAGMA user_version")
+    if (await cursor.fetchone())[0] >= SCHEMA_VERSION_COMPACTED:
+        return
+    if existed:
+        await _db.execute("VACUUM")
+        await _checkpoint()
+        logger.warning("compacted %s once to erase content deleted by earlier builds", path)
+    await _db.execute(f"PRAGMA user_version = {SCHEMA_VERSION_COMPACTED}")
+    await _db.commit()
+
+
+async def _checkpoint() -> None:
+    """Copy the WAL into the database file and truncate it, so superseded pages leave the WAL too."""
+    await _get_db().execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
 
 async def close_db() -> None:
@@ -230,7 +256,7 @@ async def set_job_result(job_id: str, result: str | None = None, error: str | No
 # --- Retention ---
 
 def job_retention_days() -> int:
-    """RUMBLE_JOB_RETENTION_DAYS as a whole number of days (at least 1), else the default."""
+    """RUMBLE_JOB_RETENTION_DAYS as a whole number of days (1 to MAX_JOB_RETENTION_DAYS), else the default."""
     raw = os.environ.get(JOB_RETENTION_ENV)
     if raw is None:
         return DEFAULT_JOB_RETENTION_DAYS
@@ -238,11 +264,12 @@ def job_retention_days() -> int:
         days = int(raw)
     except ValueError:
         days = 0
-    if days < 1:
+    if not 1 <= days <= MAX_JOB_RETENTION_DAYS:
         logger.warning(
-            "Ignoring %s=%r (need a whole number of days, at least 1); keeping jobs %d days",
+            "Ignoring %s=%r (need a whole number of days from 1 to %d); keeping jobs %d days",
             JOB_RETENTION_ENV,
             raw,
+            MAX_JOB_RETENTION_DAYS,
             DEFAULT_JOB_RETENTION_DAYS,
         )
         return DEFAULT_JOB_RETENTION_DAYS
@@ -257,4 +284,8 @@ async def purge_jobs_older_than(days: int, now: datetime | None = None) -> int:
     # where isoformat() omits zero microseconds, "+" sorts before ".".
     cursor = await db.execute("DELETE FROM jobs WHERE created_at < ?", (cutoff,))
     await db.commit()
+    if cursor.rowcount:
+        # secure_delete zeroes the rows in the pages it writes to the WAL; the database file and
+        # the WAL's older frames keep the old text until a checkpoint replaces and truncates them.
+        await _checkpoint()
     return cursor.rowcount
