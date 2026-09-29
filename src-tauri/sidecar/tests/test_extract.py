@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from pypdf import PdfWriter
 
 from services.extract import ExtractionError, extract, extract_docx
 
@@ -70,6 +71,24 @@ def test_scanned_pdf_fails_honestly():
     data = (FIXTURES / "sample-scanned.pdf").read_bytes()
     with pytest.raises(ExtractionError, match="scan or image-only"):
         extract("sample-scanned.pdf", data)
+
+
+def _user_password_pdf_bytes() -> bytes:
+    writer = PdfWriter(clone_from=FIXTURES / "sample-text.pdf")
+    writer.encrypt(user_password="open-sesame", algorithm="AES-256")
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def test_owner_password_only_pdf_is_extracted():
+    data = (FIXTURES / "sample-owner-password.pdf").read_bytes()
+    assert "Lorem ipsum dolor sit amet" in extract("restricted.pdf", data)
+
+
+def test_user_password_pdf_fails_honestly():
+    with pytest.raises(ExtractionError, match="password protected"):
+        extract("locked.pdf", _user_password_pdf_bytes())
 
 
 def test_unreadable_pdf_raises():

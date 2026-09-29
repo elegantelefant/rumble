@@ -2467,6 +2467,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/58/13/645df3995075112cb3cce15e8797c205f0f88fb50acc11012b84b071bc22/pypdf-6.18.1-py3-none-any.whl", hash = "sha256:ee93a2665670ecf57ee81d197a4ca548f3dc15f9cefc56e59b8140866aaa3de5", size = 394327, upload-time = "2026-09-11T10:10:06.103Z" },
 ]
 
+[package.optional-dependencies]
+crypto = [
+    { name = "cryptography" },
+]
+
 [[package]]
 name = "pyperclip"
 version = "1.11.0"
@@ -2893,7 +2898,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic-ai" },
-    { name = "pypdf" },
+    { name = "pypdf", extra = ["crypto"] },
     { name = "python-docx" },
     { name = "python-multipart" },
     { name = "sse-starlette" },
@@ -2914,7 +2919,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pydantic-ai", specifier = ">=0.1" },
-    { name = "pypdf", specifier = ">=6.18.1" },
+    { name = "pypdf", extras = ["crypto"], specifier = ">=6.18.1" },
     { name = "python-docx", specifier = ">=1.2.0" },
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "sse-starlette", specifier = ">=2.2" },

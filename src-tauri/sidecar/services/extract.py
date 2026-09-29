@@ -5,7 +5,7 @@ import io
 import logging
 
 from docx import Document
-from pypdf import PdfReader
+from pypdf import PasswordType, PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,10 @@ UNREADABLE_DOCX = (
     "This Word document could not be read. It may be damaged, or saved in the "
     "older .doc format rather than .docx."
 )
+PASSWORD_PROTECTED_PDF = (
+    "This PDF is password protected. Remove the password and upload it again."
+)
+
 
 class ExtractionError(Exception):
     """Raised when a document cannot be turned into usable text."""
@@ -26,8 +30,10 @@ def extract_pdf(data: bytes) -> str:
         logger.warning("PDF parse failed: %s", exc)
         raise ExtractionError(UNREADABLE_PDF) from exc
 
-    if reader.is_encrypted:
-        raise ExtractionError("PDF is password protected")
+    # Print/copy-restricted PDFs carry only an owner password and open with an
+    # empty user password; only a real user password blocks reading.
+    if reader.is_encrypted and reader.decrypt("") == PasswordType.NOT_DECRYPTED:
+        raise ExtractionError(PASSWORD_PROTECTED_PDF)
 
     pages = [page.extract_text() or "" for page in reader.pages]
     text = "\n\n".join(p for p in pages if p.strip())
