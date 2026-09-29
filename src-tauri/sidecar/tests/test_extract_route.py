@@ -2,12 +2,14 @@
 # ABOUTME: Exercises the real fixtures through the route, not just the service function.
 
 import asyncio
+import re
 import threading
 from pathlib import Path
 
 from docx import Document
 
 FIXTURES = Path(__file__).parent / "fixtures"
+FRONTEND_CLIENT = Path(__file__).resolve().parents[3] / "src" / "api" / "sidecar.ts"
 # How long the stand-in extraction would hold the event loop if it ran on it.
 SLOW_EXTRACT_SECONDS = 2
 
@@ -100,3 +102,27 @@ async def test_health_answers_while_an_extraction_is_in_flight(client, monkeypat
 
     assert health.status_code == 200
     assert extraction_still_running
+
+
+async def test_extract_oversize_upload_returns_413_with_limit(client, monkeypatch):
+    monkeypatch.setattr("routes.extract.MAX_UPLOAD_BYTES", 4)
+    resp = await client.post(
+        "/extract", files={"file": ("notes.txt", b"12345", "text/plain")}
+    )
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == "This file is larger than the 50 MB upload limit."
+
+
+async def test_extract_upload_at_the_limit_is_accepted(client, monkeypatch):
+    monkeypatch.setattr("routes.extract.MAX_UPLOAD_BYTES", 5)
+    resp = await client.post(
+        "/extract", files={"file": ("notes.txt", b"12345", "text/plain")}
+    )
+    assert resp.status_code == 200
+
+
+def test_upload_limit_matches_the_frontend():
+    from routes.extract import MAX_UPLOAD_MB
+
+    match = re.search(r"MAX_UPLOAD_MB = (\d+);", FRONTEND_CLIENT.read_text())
+    assert match and int(match.group(1)) == MAX_UPLOAD_MB

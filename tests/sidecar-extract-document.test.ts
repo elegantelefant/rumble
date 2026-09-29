@@ -2,7 +2,15 @@
 // ABOUTME: Verifies the file's bytes and filename header reach invoke("extract_document").
 
 import { invoke } from "@tauri-apps/api/core"
-import { extractDocument } from "../src/api/sidecar"
+import { extractDocument, MAX_UPLOAD_MB } from "../src/api/sidecar"
+
+function fileOfSize(name: string, bytes: number): File {
+  const file = new File([""], name, { type: "application/pdf" })
+  const arrayBuffer = vi.fn(() => Promise.resolve(new ArrayBuffer(0)))
+  Object.defineProperty(file, "size", { value: bytes })
+  Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer })
+  return file
+}
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -45,5 +53,22 @@ describe("extractDocument", () => {
     const file = new File(["anything"], "contract.doc")
 
     await expect(extractDocument(file)).rejects.toBe("Unsupported file type: contract.doc")
+  })
+
+  it("refuses a file over the upload limit before reading its bytes", async () => {
+    const file = fileOfSize("bundle.pdf", MAX_UPLOAD_MB * 1024 * 1024 + 1)
+
+    await expect(extractDocument(file)).rejects.toBe(
+      `bundle.pdf is larger than the ${MAX_UPLOAD_MB} MB upload limit.`,
+    )
+    expect(file.arrayBuffer).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it("sends a file exactly at the upload limit", async () => {
+    vi.mocked(invoke).mockResolvedValue("Clause one.")
+    const file = fileOfSize("bundle.pdf", MAX_UPLOAD_MB * 1024 * 1024)
+
+    await expect(extractDocument(file)).resolves.toBe("Clause one.")
   })
 })

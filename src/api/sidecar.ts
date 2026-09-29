@@ -141,6 +141,11 @@ export async function streamMessage(
 
 const EXTRACT_FILENAME_HEADER = "X-Rumble-Filename";
 
+// Must equal MAX_UPLOAD_MB in src-tauri/sidecar/routes/extract.py, which
+// rejects larger uploads with a 413; a sidecar test holds the two in step.
+export const MAX_UPLOAD_MB = 50;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
 /**
  * Extract text from an uploaded file via the host's extract_document command,
  * which posts the bytes to the sidecar's /extract endpoint as multipart form
@@ -149,8 +154,14 @@ const EXTRACT_FILENAME_HEADER = "X-Rumble-Filename";
  *
  * The filename travels in a header, and header values must be Latin-1, so a
  * non-ASCII name (e.g. "合同.pdf") is percent-encoded here; the host decodes it.
+ *
+ * A file over the upload limit is refused before its bytes are read, rejecting
+ * with a string as the host's commands do.
  */
 export async function extractDocument(file: File): Promise<string> {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw `${file.name} is larger than the ${MAX_UPLOAD_MB} MB upload limit.`;
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
   return invoke<string>("extract_document", bytes, {
     headers: { [EXTRACT_FILENAME_HEADER]: encodeURIComponent(file.name) },
