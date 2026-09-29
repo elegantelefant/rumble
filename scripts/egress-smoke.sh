@@ -91,7 +91,9 @@ sample_peers() {
 }
 
 observe() {
+  [[ $# -eq 2 ]] || usage
   local app_pid="$1" duration="$2" pids seen="" deadline samples=0
+  [[ "$app_pid" =~ ^[0-9]+$ && "$duration" =~ ^[0-9]+$ && "$duration" -gt 0 ]] || usage
   ps -p "$app_pid" >/dev/null || { echo "no such process: $app_pid" >&2; exit "$EXIT_USAGE"; }
 
   deadline=$((SECONDS + duration))
@@ -117,6 +119,8 @@ observe() {
 Limits: this samples; it does not watch. A connection opened and closed between samples is
 missed, and UDP without a connected peer (e.g. DNS) is invisible. Unprivileged lsof sees only
 your own processes (an Ollama running as another user, e.g. a Linux service, is not watched).
+WebKit webview helper processes reparent to ppid 1, so the app-pid tree does NOT include the
+webview's own fetches (including any CSP-allowed cloud host) — another reason "none seen" is weak.
 "None seen" is not proof. The deny-by-default block ('$(basename "$0") procedure') is.
 EOF
   [[ -z "$seen" ]] || exit "$EXIT_PEERS_SEEN"
