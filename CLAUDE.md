@@ -19,7 +19,7 @@ A local-first legal-AI desktop app on Tauri v2: a Vue 3 frontend in a webview, a
 | `.github/workflows/` | `test.yml` (vitest, pytest, cargo test), `contract-drift.yml`, `webdriver.yml`, `build.yml` (tag `v*` → dmg/msi/deb/AppImage draft release) |
 | `agent_docs/` | Date-versioned; `2026-09-02-contract-0207-migration-scoping.md` holds the contract decision |
 
-Routing in one line: the frontend never `fetch`es (except SSE `streamMessage`); every call is `invoke('api_call')` and Rust picks cloud (`/api/v1/*`, or everything in Premium) versus the sidecar on `127.0.0.1:{port}`. Cloud auth is a keychain bearer; the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
+Routing in one line: the frontend never `fetch`es (except SSE `streamMessage`); every call is `invoke('api_call')` and `resolve_url` sends it to the sidecar on `127.0.0.1:{port}` or refuses it ("requires Elefant Premium": `/api/v1/*` in local/BYOK, everything in Premium until the L0 payload contract) — it never returns a cloud URL. Cloud auth is a keychain bearer, attached only to non-sidecar URLs; the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
 
 ## Commands (from `package.json`, `pyproject.toml`, CI; nothing else exists)
 
@@ -118,5 +118,5 @@ When you do need him: one comment on the issue under `## OWNER QUESTIONS <date>`
 - `router.ts` hardcodes `isAuthenticated = true`; `src/modules/backend/backendClient.ts` still has `mock*` functions — check which path a view actually uses before assuming.
 - Bundle id is `com.ielegante.rumble`, which decides the app-support/DB path. The sidecar binary is gitignored; `pnpm tauri dev` needs a built one, `pnpm dev:sidecar` alone is not enough.
 - `pnpm install` can be refused by pnpm's minimum-release-age policy on a freshly published transitive dep (#36 comment) — wait; never bypass.
-- Local/BYOK modes silently route `/api/v1/*` to the cloud (#41). The sidecar takes its mode only from `RUMBLE_BACKEND_MODE`, failing closed to `ollama` (a `BYOK_API_KEY` alone never selects BYOK), and the packaged host doesn't set it yet (host half of #52): the mode you think you are testing may not be the one running.
+- The sidecar takes its mode only from `RUMBLE_BACKEND_MODE`, failing closed to `ollama` (a `BYOK_API_KEY` alone never selects BYOK). The host sets it at spawn and respawns the sidecar on every mode switch (`set_backend_mode`), with `BYOK_API_KEY` blanked outside byok. `pnpm dev:sidecar` sets neither, so a source sidecar runs `ollama` unless you export them. The host mode is not persisted: every launch starts in `ollama`.
 - In ollama mode `llm.py` refuses a requested model that isn't a pulled local model in `/api/tags`, and any cloud one (by `remote_host`/`remote_model`, then name suffix); with no model requested it uses `OLLAMA_DEFAULT_MODEL` (refused, never skipped, if that is a cloud model), else the first pulled local model (#26). This resolution and cloud check run on every request, uncached, because `ollama cp` can make a local name remote at runtime; `/ready` is `not_ready` when it finds no usable local model.
