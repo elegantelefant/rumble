@@ -52,7 +52,7 @@ def _stdin_watcher_running() -> bool:
 async def test_lifespan_ignores_closed_stdin_when_not_watching(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _EOFStdin())
 
-    application = create_app(data_dir=str(tmp_path), watch_stdin=False)
+    application = create_app(data_dir=str(tmp_path), dev=True, watch_stdin=False)
     application.state.server = SimpleNamespace(should_exit=False)
 
     async with lifespan(application):
@@ -67,7 +67,7 @@ async def test_lifespan_ignores_closed_stdin_when_not_watching(tmp_path, monkeyp
 async def test_lifespan_cleans_up_even_when_the_body_raises(tmp_path):
     before = {t.ident for t in threading.enumerate()}
 
-    application = create_app(data_dir=str(tmp_path), watch_stdin=False)
+    application = create_app(data_dir=str(tmp_path), dev=True, watch_stdin=False)
     pidfile = tmp_path / "sidecar.pid"
 
     with pytest.raises(RuntimeError):
