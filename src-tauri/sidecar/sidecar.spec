@@ -36,6 +36,8 @@ a = Analysis(
         "uvicorn.protocols.websockets.auto",
         "uvicorn.protocols.websockets.wsproto_impl",
         # FastAPI/Starlette internals
+        "python_multipart",
+        "python_multipart.multipart",
         "multipart",
         "multipart.multipart",
         # PydanticAI
@@ -48,6 +50,7 @@ a = Analysis(
         "routes.chat",
         "routes.ai",
         "routes.jobs",
+        "routes.extract",
         "services",
         "services.db",
         "services.llm",
