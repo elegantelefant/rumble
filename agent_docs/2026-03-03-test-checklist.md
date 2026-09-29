@@ -408,5 +408,5 @@
 | TypeScript Backend Client | 9 | 0 | 9 | 0% |
 | TypeScript Router | 4 | 0 | 4 | 0% |
 | Rust (resolve_url) | 8 | 8 | 0 | 100% |
-| Rust (other functions) | 18 | 0 | 18 | 0% |
-| **TOTAL** | **246** | **139** | **107** | **57%** |
+| Rust (other functions) | 18 | 3 | 15 | 17% |
+| **TOTAL** | **246** | **142** | **104** | **58%** |

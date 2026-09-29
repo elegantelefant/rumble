@@ -75,13 +75,32 @@ fn check_request_path(path: &str) -> Result<(), String> {
     }
 }
 
-/// Whether a path addresses the cloud contract, judged on the parsed,
-/// case-folded path so a query, dot segments or case can't dodge it.
+/// Whether a path addresses the cloud contract. Judged on the parsed path,
+/// percent-decoded, case-folded, with empty segments and `;` parameters
+/// dropped, so a query, dot segments, case, `%2F`, `//` or `;x` can't dodge
+/// the loud refusal.
 fn is_cloud_api_path(path: &str) -> bool {
-    reqwest::Url::parse(&format!("http://127.0.0.1{}", path)).is_ok_and(|u| {
-        let parsed = u.path().to_ascii_lowercase();
-        parsed == CLOUD_API_PREFIX || parsed.starts_with(&format!("{}/", CLOUD_API_PREFIX))
-    })
+    let Ok(url) = reqwest::Url::parse(&format!("http://127.0.0.1{}", path)) else {
+        return false;
+    };
+    let decoded = percent_decode_str(url.path()).decode_utf8_lossy().to_ascii_lowercase();
+    let mut segments = decoded
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.split(';').next().unwrap_or_default());
+    CLOUD_API_PREFIX
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .all(|prefix| segments.next() == Some(prefix))
+}
+
+/// Where an api_call goes, with the sidecar port its URL was built from, so
+/// the credentials decision reads that same port rather than re-reading one
+/// a respawn may have changed in between.
+#[derive(Debug, PartialEq)]
+struct Target {
+    url: String,
+    sidecar_port: Option<u16>,
 }
 
 impl AppState {
@@ -90,11 +109,11 @@ impl AppState {
     /// routing is built against the L0 payload contract
     /// (agent_docs/2026-09-22-premium-payload-contract.md). Never returns a
     /// non-loopback URL.
-    fn resolve_url(&self, path: &str) -> Result<String, String> {
+    fn resolve_url(&self, path: &str) -> Result<Target, String> {
         let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
         match mode {
             BackendMode::Ollama | BackendMode::Byok if !is_cloud_api_path(path) => {
-                self.sidecar_url(path)
+                self.sidecar_target(path)
             }
             _ => Err(PREMIUM_REQUIRED.to_string()),
         }
@@ -126,9 +145,16 @@ impl AppState {
     /// Build a URL against the local sidecar only, ignoring backend mode —
     /// for operations like document extraction that never go to the cloud.
     fn sidecar_url(&self, path: &str) -> Result<String, String> {
+        self.sidecar_target(path).map(|target| target.url)
+    }
+
+    fn sidecar_target(&self, path: &str) -> Result<Target, String> {
         check_request_path(path)?;
         let port = self.sidecar_port().ok_or("sidecar not running")?;
-        Ok(format!("http://127.0.0.1:{}{}", port, path))
+        Ok(Target {
+            url: format!("http://127.0.0.1:{}{}", port, path),
+            sidecar_port: Some(port),
+        })
     }
 }
 
@@ -276,25 +302,24 @@ async fn api_call(
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let url = state.resolve_url(&path)?;
-    let (token, secret) = request_credentials(&url, state.sidecar_port(), &state.secret, || {
+    let target = state.resolve_url(&path)?;
+    let (token, secret) = request_credentials(&target, &state.secret, || {
         auth_get_token_inner()
             .map_err(|e| eprintln!("[keychain] failed to read auth token: {}", e))
             .ok()
     });
-    make_http_request(&state.http, &url, &method, body, params, token.as_deref(), secret).await
+    make_http_request(&state.http, &target.url, &method, body, params, token.as_deref(), secret).await
 }
 
 /// The credentials a request carries: the shared secret for our own sidecar,
 /// the premium bearer token for anything else — never both, and the keychain
 /// is not read at all for a sidecar-bound request (#72).
 fn request_credentials<'a>(
-    url: &str,
-    sidecar_port: Option<u16>,
+    target: &Target,
     secret: &'a str,
     read_token: impl FnOnce() -> Option<String>,
 ) -> (Option<String>, Option<&'a str>) {
-    if is_sidecar_url(url, sidecar_port) {
+    if is_sidecar_url(&target.url, target.sidecar_port) {
         (None, Some(secret))
     } else {
         (read_token(), None)
@@ -525,7 +550,11 @@ fn after_key_change(
         *mode = BackendMode::Ollama;
     }
     drop(mode);
-    respawn()
+    let done = match change {
+        KeyChange::Stored => "Key saved",
+        KeyChange::Deleted => "Key removed",
+    };
+    respawn().map_err(|e| format!("{}, but the local AI service didn't restart: {}", done, e))
 }
 
 /// Respawns the sidecar; if that fails, stops the running one rather than
@@ -545,7 +574,9 @@ fn get_backend_mode(state: State<'_, AppState>) -> BackendMode {
 /// Sync, not async: spawn_sidecar uses block_on, which must not run inside
 /// the async runtime.
 #[tauri::command]
-fn set_backend_mode(app: AppHandle, state: State<'_, AppState>, mode: String) -> Result<(), String> {
+/// Ok(true) when the mode changed and the sidecar is restarting, Ok(false)
+/// when it was already in that mode and nothing happened.
+fn set_backend_mode(app: AppHandle, state: State<'_, AppState>, mode: String) -> Result<bool, String> {
     apply_mode(&state, parse_mode(&mode)?, || spawn_sidecar(&app))
 }
 
@@ -561,20 +592,20 @@ fn parse_mode(mode: &str) -> Result<BackendMode, String> {
 /// Switches the host's mode and respawns the sidecar, which reads its mode
 /// only from its spawn environment (decision on PR #66). A failed respawn
 /// restores the previous mode: spawn_sidecar fails before it kills the running
-/// sidecar, so host and sidecar still agree.
+/// sidecar, so host and sidecar still agree. Ok(false): already in that mode.
 fn apply_mode(
     state: &AppState,
     requested: BackendMode,
     respawn: impl FnOnce() -> Result<(), String>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let previous = {
         let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
         if *current == requested {
-            return Ok(());
+            return Ok(false);
         }
         std::mem::replace(&mut *current, requested)
     };
-    respawn().map_err(|e| {
+    respawn().map(|()| true).map_err(|e| {
         *state.mode.lock().unwrap_or_else(|e| e.into_inner()) = previous;
         e
     })
@@ -990,7 +1021,7 @@ mod tests {
             let state = make_state(mode.clone(), Some(11435));
             for path in ["/health", "/chats", "/chats/abc-123/message", "/draft", "/billing", "/search", "/some-future-endpoint"] {
                 assert_eq!(
-                    state.resolve_url(path).unwrap(),
+                    state.resolve_url(path).unwrap().url,
                     format!("http://127.0.0.1:11435{}", path),
                     "{:?} {}",
                     mode,
@@ -1014,7 +1045,7 @@ mod tests {
     fn local_modes_do_not_treat_lookalike_prefixes_as_cloud() {
         let state = make_state(BackendMode::Ollama, Some(11435));
         for path in ["/api/v10/x", "/api/v1x", "/api"] {
-            assert_eq!(state.resolve_url(path).unwrap(), format!("http://127.0.0.1:11435{}", path));
+            assert_eq!(state.resolve_url(path).unwrap().url, format!("http://127.0.0.1:11435{}", path));
         }
     }
 
@@ -1040,7 +1071,7 @@ mod tests {
         for mode in [BackendMode::Ollama, BackendMode::Byok, BackendMode::Premium] {
             let state = make_state(mode, Some(11435));
             for path in paths {
-                if let Ok(url) = state.resolve_url(path) {
+                if let Ok(Target { url, .. }) = state.resolve_url(path) {
                     assert!(url.starts_with("http://127.0.0.1:11435"), "{}", url);
                 }
             }
@@ -1059,7 +1090,20 @@ mod tests {
     #[test]
     fn the_cloud_contract_is_judged_on_the_parsed_case_folded_path() {
         let state = make_state(BackendMode::Byok, Some(11435));
-        for path in ["/api/v1?x=1", "/API/v1/me", "/Api/V1", "/./api/v1/me", "/x/../api/v1/me", "/api/v1#frag"] {
+        for path in [
+            "/api/v1?x=1",
+            "/API/v1/me",
+            "/Api/V1",
+            "/./api/v1/me",
+            "/x/../api/v1/me",
+            "/api/v1#frag",
+            "/api%2Fv1/me",
+            "/%61pi/v1/me",
+            "/api/v1%2Fme",
+            "/api/v1;x",
+            "/api//v1/me",
+            "/api;x/v1/me",
+        ] {
             assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{}", path);
         }
     }
@@ -1091,28 +1135,42 @@ mod tests {
 
     // --- request_credentials (#72) ---
 
+    fn target(url: &str, sidecar_port: Option<u16>) -> Target {
+        Target { url: url.to_string(), sidecar_port }
+    }
+
+    fn never_read_token() -> Option<String> {
+        panic!("the keychain must not be read for a sidecar request")
+    }
+
     #[test]
     fn sidecar_requests_carry_the_secret_and_never_read_the_token() {
-        let (token, secret) = request_credentials("http://127.0.0.1:11435/chats", Some(11435), "s3cret", || {
-            panic!("the keychain must not be read for a sidecar request")
-        });
+        let (token, secret) =
+            request_credentials(&target("http://127.0.0.1:11435/chats", Some(11435)), "s3cret", never_read_token);
         assert_eq!((token, secret), (None, Some("s3cret")));
     }
 
     #[test]
+    fn a_respawn_after_resolving_does_not_turn_a_sidecar_request_into_a_cloud_one() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let resolved = state.resolve_url("/chats").unwrap();
+        kill_sidecar(&state);
+        *state.sidecar_port.lock().unwrap() = Some(22222);
+        let (token, secret) = request_credentials(&resolved, &state.secret, never_read_token);
+        assert_eq!((token, secret), (None, Some("test-secret")));
+    }
+
+    #[test]
     fn cloud_requests_carry_the_bearer_and_never_the_secret() {
-        let (token, secret) = request_credentials(
-            "https://api.elefant.com/api/v1/me",
-            Some(11435),
-            "s3cret",
-            || Some("bearer".to_string()),
-        );
+        let (token, secret) =
+            request_credentials(&target("https://api.elefant.com/api/v1/me", None), "s3cret", || Some("bearer".to_string()));
         assert_eq!((token, secret), (Some("bearer".to_string()), None));
     }
 
     #[test]
     fn a_lookalike_sidecar_url_never_gets_the_secret() {
-        let (_, secret) = request_credentials("http://127.0.0.1:11435@evil.example/x", Some(11435), "s3cret", || None);
+        let (_, secret) =
+            request_credentials(&target("http://127.0.0.1:11435@evil.example/x", Some(11435)), "s3cret", || None);
         assert_eq!(secret, None);
     }
 
@@ -1162,23 +1220,22 @@ mod tests {
     fn same_mode_does_not_respawn() {
         let state = make_state(BackendMode::Ollama, Some(11435));
         let mut respawns = 0;
-        apply_mode(&state, BackendMode::Ollama, || {
+        let changed = apply_mode(&state, BackendMode::Ollama, || {
             respawns += 1;
             Ok(())
-        })
-        .unwrap();
-        assert_eq!(respawns, 0);
+        });
+        assert_eq!((changed, respawns), (Ok(false), 0));
     }
 
     #[test]
     fn a_mode_change_respawns_once_with_the_new_mode_already_set() {
         let state = make_state(BackendMode::Ollama, Some(11435));
         let mut seen = Vec::new();
-        apply_mode(&state, BackendMode::Byok, || {
+        let changed = apply_mode(&state, BackendMode::Byok, || {
             seen.push(state.mode.lock().unwrap().clone());
             Ok(())
-        })
-        .unwrap();
+        });
+        assert_eq!(changed, Ok(true));
         assert_eq!(seen, vec![BackendMode::Byok]);
         assert_eq!(*state.mode.lock().unwrap(), BackendMode::Byok);
     }
@@ -1224,10 +1281,15 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_respawn_after_a_key_change_is_reported() {
-        let state = make_state(BackendMode::Byok, Some(11435));
-        let result = after_key_change(&state, "openai", KeyChange::Stored, || Err("spawn failed".to_string()));
-        assert_eq!(result, Err("spawn failed".to_string()));
+    fn a_failed_respawn_after_a_key_change_says_the_key_change_happened() {
+        for (change, done) in [(KeyChange::Stored, "Key saved"), (KeyChange::Deleted, "Key removed")] {
+            let state = make_state(BackendMode::Byok, Some(11435));
+            let result = after_key_change(&state, "openai", change, || Err("spawn failed".to_string()));
+            assert_eq!(
+                result,
+                Err(format!("{}, but the local AI service didn't restart: spawn failed", done))
+            );
+        }
     }
 
     // --- set_port_if_current: the generation guard ---
