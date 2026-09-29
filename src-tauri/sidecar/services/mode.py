@@ -1,6 +1,7 @@
 # ABOUTME: Single source of truth for the sidecar's operating mode and its Ollama base URL.
 # ABOUTME: Both routes/health.py and services/llm.py read mode and config through here, never independently.
 
+import functools
 import logging
 import os
 from typing import Literal
@@ -26,8 +27,14 @@ def current_mode() -> Mode:
     if raw == "byok":
         return "byok"
     if raw != "ollama":
-        logger.warning("Unrecognised or missing RUMBLE_BACKEND_MODE=%r; failing closed to ollama", raw)
+        _warn_fail_closed(raw)
     return "ollama"
+
+
+@functools.cache
+def _warn_fail_closed(raw: str | None) -> None:
+    """Warn once per distinct value: packaged builds pass no mode, and current_mode() runs on every request."""
+    logger.warning("Unrecognised or missing RUMBLE_BACKEND_MODE=%r; failing closed to ollama", raw)
 
 
 def ollama_api_base() -> str:

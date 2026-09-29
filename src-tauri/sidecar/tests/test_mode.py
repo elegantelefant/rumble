@@ -25,6 +25,14 @@ def test_current_mode_unrecognised_defaults_to_ollama(monkeypatch):
     assert mode.current_mode() == "ollama"
 
 
+def test_current_mode_warns_once_for_repeated_unrecognised_value(monkeypatch, caplog):
+    monkeypatch.setenv("RUMBLE_BACKEND_MODE", "warn-once-probe")
+    with caplog.at_level("WARNING", logger=mode.__name__):
+        mode.current_mode()
+        mode.current_mode()
+    assert len(caplog.records) == 1
+
+
 def test_ollama_api_base_accepts_loopback(monkeypatch):
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     assert mode.ollama_api_base() == "http://127.0.0.1:11434"
