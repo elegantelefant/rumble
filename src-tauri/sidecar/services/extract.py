@@ -2,10 +2,18 @@
 # ABOUTME: Handles PDF and DOCX; fails honestly when there is no text layer.
 
 import io
+import logging
 
 from docx import Document
 from pypdf import PdfReader
 
+logger = logging.getLogger(__name__)
+
+UNREADABLE_PDF = "This PDF could not be read. It may be damaged or not a real PDF."
+UNREADABLE_DOCX = (
+    "This Word document could not be read. It may be damaged, or saved in the "
+    "older .doc format rather than .docx."
+)
 
 class ExtractionError(Exception):
     """Raised when a document cannot be turned into usable text."""
@@ -15,7 +23,8 @@ def extract_pdf(data: bytes) -> str:
     try:
         reader = PdfReader(io.BytesIO(data))
     except Exception as exc:
-        raise ExtractionError(f"could not read PDF: {exc}") from exc
+        logger.warning("PDF parse failed: %s", exc)
+        raise ExtractionError(UNREADABLE_PDF) from exc
 
     if reader.is_encrypted:
         raise ExtractionError("PDF is password protected")
@@ -37,7 +46,8 @@ def extract_docx(data: bytes) -> str:
     try:
         document = Document(io.BytesIO(data))
     except Exception as exc:
-        raise ExtractionError(f"could not read DOCX: {exc}") from exc
+        logger.warning("DOCX parse failed: %s", exc)
+        raise ExtractionError(UNREADABLE_DOCX) from exc
 
     parts = [p.text for p in document.paragraphs if p.text.strip()]
 

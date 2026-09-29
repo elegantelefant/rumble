@@ -60,3 +60,14 @@ async def test_extract_unsupported_extension_returns_422(client):
     )
     assert resp.status_code == 422
     assert "Unsupported file type" in resp.json()["detail"]
+
+
+async def test_extract_truncated_pdf_returns_422_in_user_language(client):
+    data = (FIXTURES / "sample-text.pdf").read_bytes()[:200]
+    resp = await client.post(
+        "/extract", files={"file": ("contract.pdf", data, "application/pdf")}
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == (
+        "This PDF could not be read. It may be damaged or not a real PDF."
+    )

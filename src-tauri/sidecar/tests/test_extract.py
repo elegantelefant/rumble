@@ -44,8 +44,14 @@ def test_empty_docx_raises():
 
 
 def test_unreadable_docx_raises():
-    with pytest.raises(ExtractionError, match="could not read DOCX"):
+    with pytest.raises(ExtractionError, match="could not be read"):
         extract_docx(b"not a docx at all")
+
+
+def test_unreadable_docx_message_hides_parser_internals():
+    with pytest.raises(ExtractionError) as info:
+        extract_docx(b"not a docx at all")
+    assert "zip" not in str(info.value).lower()
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -67,8 +73,15 @@ def test_scanned_pdf_fails_honestly():
 
 
 def test_unreadable_pdf_raises():
-    with pytest.raises(ExtractionError, match="could not read PDF"):
+    with pytest.raises(ExtractionError, match="could not be read"):
         extract("contract.pdf", b"not a pdf at all")
+
+
+def test_truncated_pdf_message_hides_parser_internals():
+    data = (FIXTURES / "sample-text.pdf").read_bytes()
+    with pytest.raises(ExtractionError) as info:
+        extract("contract.pdf", data[:200])
+    assert "Stream has ended" not in str(info.value)
 
 
 def test_plain_text_passes_through():
