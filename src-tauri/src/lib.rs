@@ -791,15 +791,15 @@ fn settings_path_in(dir: &Path) -> PathBuf {
     dir.join(SETTINGS_FILE_NAME)
 }
 
-/// An unreadable file (permissions, a directory in the way) is an error; a file
-/// that reads but doesn't parse as an object is `Corrupt`.
+/// An unreadable file (permissions, a directory in the way) is an error; bytes
+/// that don't parse as a JSON object, invalid UTF-8 included, are `Corrupt`.
 fn read_stored_settings(path: &Path) -> Result<StoredSettings, String> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(StoredSettings::Missing),
         Err(e) => return Err(format!("failed to read {}: {}", path.display(), e)),
     };
-    Ok(match serde_json::from_str(&text) {
+    Ok(match serde_json::from_slice(&bytes) {
         Ok(settings) => StoredSettings::Valid(settings),
         Err(e) => StoredSettings::Corrupt(format!("failed to parse {}: {}", path.display(), e)),
     })
@@ -819,18 +819,20 @@ fn read_settings(path: &Path) -> Result<Option<Settings>, String> {
 /// caller doesn't send survive. A corrupt file is renamed aside first and its
 /// new path returned, so a save never destroys what it couldn't read.
 fn save_settings_to(path: &Path, incoming: Settings) -> Result<Option<PathBuf>, String> {
-    let (mut settings, aside) = match read_stored_settings(path)? {
+    let context = |e: String| format!("couldn't save settings to {}: {}", path.display(), e);
+    let (mut settings, aside) = match read_stored_settings(path).map_err(context)? {
         StoredSettings::Missing => (Settings::new(), None),
         StoredSettings::Valid(stored) => (stored, None),
         StoredSettings::Corrupt(_) => {
+            // The uuid keeps two corrupt saves within one second from overwriting each other's aside.
             let aside = path.with_file_name(format!(
-                "{}.corrupt-{}",
+                "{}.corrupt-{}-{}",
                 SETTINGS_FILE_NAME,
-                chrono::Utc::now().format("%Y%m%dT%H%M%SZ")
+                chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
+                Uuid::new_v4().simple()
             ));
-            std::fs::rename(path, &aside).map_err(|e| {
-                format!("couldn't move the unreadable {} aside: {}", path.display(), e)
-            })?;
+            std::fs::rename(path, &aside)
+                .map_err(|e| context(format!("couldn't move the unreadable file aside: {}", e)))?;
             (Settings::new(), Some(aside))
         }
     };
@@ -1375,6 +1377,35 @@ mod tests {
     }
 
     #[test]
+    fn settings_invalid_utf8_file_is_moved_aside_like_any_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+        std::fs::write(&path, b"{\"a\": \"\xff\xfe\"}").unwrap();
+
+        assert!(read_settings(&path).unwrap_err().contains("failed to parse"));
+        let aside = save_settings_to(&path, sample_settings()).unwrap().unwrap();
+
+        assert_eq!(std::fs::read(&aside).unwrap(), b"{\"a\": \"\xff\xfe\"}");
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_two_corrupt_saves_keep_two_asides() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = settings_path_in(dir.path());
+
+        std::fs::write(&path, b"first").unwrap();
+        save_settings_to(&path, sample_settings()).unwrap();
+        std::fs::write(&path, b"second").unwrap();
+        save_settings_to(&path, sample_settings()).unwrap();
+
+        let mut kept: Vec<Vec<u8>> =
+            corrupt_asides(dir.path()).iter().map(|p| std::fs::read(p).unwrap()).collect();
+        kept.sort();
+        assert_eq!(kept, vec![b"first".to_vec(), b"second".to_vec()]);
+    }
+
+    #[test]
     fn settings_save_over_a_valid_file_moves_nothing_aside() {
         let dir = tempfile::tempdir().unwrap();
         let path = settings_path_in(dir.path());
@@ -1390,7 +1421,9 @@ mod tests {
         let path = settings_path_in(dir.path());
         std::fs::create_dir(&path).unwrap();
 
-        assert!(save_settings_to(&path, sample_settings()).is_err());
+        let err = save_settings_to(&path, sample_settings()).unwrap_err();
+
+        assert!(err.starts_with(&format!("couldn't save settings to {}: ", path.display())), "got: {}", err);
         assert!(path.is_dir());
     }
 
