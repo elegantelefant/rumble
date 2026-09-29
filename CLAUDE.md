@@ -19,7 +19,7 @@ A local-first legal-AI desktop app on Tauri v2: a Vue 3 frontend in a webview, a
 | `.github/workflows/` | `test.yml` (vitest, pytest, cargo test), `contract-drift.yml`, `webdriver.yml`, `build.yml` (tag `v*` → dmg/msi/deb/AppImage draft release) |
 | `agent_docs/` | Date-versioned; `2026-09-02-contract-0207-migration-scoping.md` holds the contract decision |
 
-Routing in one line: the frontend never `fetch`es (except SSE `streamMessage`); every call is `invoke('api_call')` and Rust picks cloud (`/api/v1/*`, or everything in Premium) versus the sidecar on `127.0.0.1:{port}`. Cloud auth is a keychain bearer; the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
+Routing in one line: the frontend never `fetch`es; every call is `invoke('api_call')` (chat streaming is `invoke('stream_message')` with an IPC channel) and Rust picks cloud (`/api/v1/*`, or everything in Premium) versus the sidecar on `127.0.0.1:{port}`. Cloud auth is a keychain bearer; the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
 
 ## Commands (from `package.json`, `pyproject.toml`, CI; nothing else exists)
 

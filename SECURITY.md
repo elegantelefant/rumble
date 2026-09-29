@@ -17,7 +17,8 @@ so they cannot obtain the secret and cannot call the sidecar's API.
 point the attacker can read the app's own environment, its keychain entries, and its local SQLite
 database directly — a request secret adds no protection against that level of access.
 
-Known issue: the secret is currently also exposed to the webview for chat streaming — see [#55].
+The secret never reaches webview JavaScript: chat streaming goes through the host's `stream_message`
+command, which attaches it host-side and relays the reply over a Tauri IPC channel ([#55]).
 
 ## The packaged app always requires a secret
 
@@ -66,9 +67,6 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
 
 ## Known issues
 
-- **Secret handed to webview JavaScript** — chat streaming fetches the sidecar directly from the
-  webview and obtains the shared secret via the `sidecar_secret` command, so any script in the
-  webview can read it ([#55]). The CSP's `script-src 'self'` limits which scripts that could be.
 - **Data retention** — jobs, and the document text inside them, are never deleted; there is no
   "delete all local data"; on Windows the data directory is in the roaming profile, which can sync
   client documents to domain servers ([#57]).
