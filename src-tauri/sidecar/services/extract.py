@@ -3,6 +3,7 @@
 
 import io
 import logging
+import zipfile
 
 from docx import Document
 from pypdf import PasswordType, PdfReader
@@ -17,6 +18,16 @@ UNREADABLE_DOCX = (
 PASSWORD_PROTECTED_PDF = (
     "This PDF is password protected. Remove the password and upload it again."
 )
+DOCX_TOO_LARGE = "This Word document is too large or complex to process."
+
+# A .docx is a zip, and python-docx inflates every part into memory and builds
+# an XML tree from each XML part: a 232 KB upload of repetitive XML took 1.6 GB
+# and 69 s. zipfile stops each member at its declared size, so the declared
+# sizes bound what python-docx can inflate. At this cap the worst case measured
+# ~19 s and ~600 MB; a contract's text is a few MB, but a document of images
+# totalling more than this is refused.
+MAX_DOCX_UNCOMPRESSED_MB = 32
+MAX_DOCX_UNCOMPRESSED_BYTES = MAX_DOCX_UNCOMPRESSED_MB * 1024 * 1024
 
 
 class ExtractionError(Exception):
@@ -57,7 +68,21 @@ def extract_pdf(data: bytes) -> str:
     return text
 
 
+def _docx_uncompressed_bytes(data: bytes) -> int:
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        return sum(member.file_size for member in archive.infolist())
+
+
 def extract_docx(data: bytes) -> str:
+    try:
+        uncompressed = _docx_uncompressed_bytes(data)
+    except Exception as exc:
+        logger.warning("DOCX parse failed: %s", exc)
+        raise ExtractionError(UNREADABLE_DOCX) from exc
+    if uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+        logger.warning("DOCX refused: %d bytes uncompressed", uncompressed)
+        raise ExtractionError(DOCX_TOO_LARGE)
+
     try:
         document = Document(io.BytesIO(data))
     except Exception as exc:

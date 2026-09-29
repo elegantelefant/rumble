@@ -2,13 +2,15 @@
 # ABOUTME: Builds real PDF and DOCX bytes rather than mocking the parsers.
 
 import io
+import zipfile
 from pathlib import Path
 
 import pytest
 from docx import Document
 from pypdf import PdfWriter
 
-from services.extract import ExtractionError, extract, extract_docx
+from services import extract as extract_service
+from services.extract import DOCX_TOO_LARGE, ExtractionError, extract, extract_docx
 
 
 def _docx_bytes(paragraphs: list[str], table: list[list[str]] | None = None) -> bytes:
@@ -53,6 +55,32 @@ def test_unreadable_docx_message_hides_parser_internals():
     with pytest.raises(ExtractionError) as info:
         extract_docx(b"not a docx at all")
     assert "zip" not in str(info.value).lower()
+
+
+def _inflated_docx_bytes(padding_bytes: int) -> bytes:
+    """A valid .docx whose document.xml ends in a comment that deflates ~1000:1, as a crafted upload would."""
+    source = zipfile.ZipFile(io.BytesIO(_docx_bytes(["Clause."])))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+        for member in source.infolist():
+            part = source.read(member.filename)
+            if member.filename == "word/document.xml":
+                part += b"<!--" + b" " * padding_bytes + b"-->"
+            archive.writestr(member.filename, part)
+    return buf.getvalue()
+
+
+def test_docx_over_the_uncompressed_limit_is_refused(monkeypatch):
+    monkeypatch.setattr(extract_service, "MAX_DOCX_UNCOMPRESSED_BYTES", 1024 * 1024)
+    data = _inflated_docx_bytes(2 * 1024 * 1024)
+    assert len(data) < 64 * 1024  # small on the wire, like the 232 KB original
+    with pytest.raises(ExtractionError, match=DOCX_TOO_LARGE):
+        extract_docx(data)
+
+
+def test_docx_under_the_uncompressed_limit_is_extracted(monkeypatch):
+    monkeypatch.setattr(extract_service, "MAX_DOCX_UNCOMPRESSED_BYTES", 4 * 1024 * 1024)
+    assert extract_docx(_inflated_docx_bytes(2 * 1024 * 1024)) == "Clause."
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
