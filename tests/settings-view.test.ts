@@ -281,6 +281,28 @@ describe("SettingsView", () => {
       expect((theme.element as HTMLSelectElement).value).toBe("system")
     })
 
+    it("unlocks the form after a failed load", async () => {
+      mockCommands({ load_settings: () => Promise.reject("failed to parse settings.json") })
+      const wrapper = await mountAndLoad()
+      expect(wrapper.find("fieldset").attributes("disabled")).toBeUndefined()
+      expect(wrapper.find('button[type="submit"]').attributes("disabled")).toBeUndefined()
+    })
+
+    it("merges the groups a file has when it lacks others", async () => {
+      mockCommands({ load_settings: () => ({ sync: { teamCode: "TEAM-42" } }), save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "error")
+      expect(savedPayload().sync.teamCode).toBe("TEAM-42")
+    })
+
+    it("ignores a saved list that holds anything but strings", async () => {
+      mockCommands({ load_settings: () => ({ workspace: { briefcases: [1, { name: "x" }] } }), save_settings: () => null })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().workspace.briefcases).toEqual([])
+    })
+
     it("disables saving until saved settings have loaded", async () => {
       let finishLoad!: (value: unknown) => void
       mockCommands({ load_settings: () => new Promise((resolve) => (finishLoad = resolve)) })
