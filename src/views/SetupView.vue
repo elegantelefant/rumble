@@ -30,7 +30,10 @@ async function checkStatus() {
     const readyRes = await ready();
     if (readyRes.status !== "ready") {
       state.value = "no-ollama";
-      errorDetail.value = "Ollama is not responding. Make sure it is running.";
+      // The sidecar's reason, e.g. a refused non-loopback OLLAMA_BASE_URL, not a guess that Ollama is down.
+      errorDetail.value = readyRes.error
+        ? `Ollama is not ready: ${readyRes.error}`
+        : "Ollama is not responding. Make sure it is running.";
       return;
     }
   } catch {
