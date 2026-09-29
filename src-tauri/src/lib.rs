@@ -1,6 +1,6 @@
 //! ABOUTME: hosts rumble tauri commands and runtime wiring.
 //! ABOUTME: coordinates tray icon, API proxy, keychain, sidecar lifecycle, and plugins.
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -16,6 +16,7 @@ use trash::delete;
 use walkdir::WalkDir;
 use docx_rs::{Docx, Paragraph, Run};
 use tauri_plugin_dialog::DialogExt;
+use uuid::Uuid;
 
 const SERVICE_NAME: &str = "elefant-rumble";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
@@ -557,6 +558,40 @@ fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
 
 // --- Document export ---
 
+/// Writes to `dest` atomically. `write` receives a handle to a fresh, uniquely
+/// named, dot-prefixed temp file created in `dest`'s own directory; the temp
+/// file is renamed onto `dest` only once `write` returns `Ok`. A rename within
+/// one filesystem is atomic, so a reader never observes a partial file, and on
+/// any failure the temp file is removed and `dest` (existing or not) is left
+/// untouched.
+fn write_atomically(
+    dest: &Path,
+    write: impl FnOnce(&std::fs::File) -> Result<(), String>,
+) -> Result<(), String> {
+    let dir = dest.parent().unwrap_or_else(|| Path::new("."));
+    let temp_name = format!(
+        ".{}.{}.tmp",
+        dest.file_name().and_then(|n| n.to_str()).unwrap_or("export"),
+        Uuid::new_v4()
+    );
+    let temp_path = dir.join(temp_name);
+
+    let file =
+        std::fs::File::create(&temp_path).map_err(|e| format!("failed to create temp file: {}", e))?;
+    let result = write(&file);
+    drop(file);
+
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(e);
+    }
+
+    std::fs::rename(&temp_path, dest).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("failed to finalize export: {}", e)
+    })
+}
+
 #[tauri::command]
 /// Returns Ok(true) when a file was written, Ok(false) when the user cancelled
 /// the save dialog. The caller needs to tell those apart — reporting success for
@@ -578,21 +613,21 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String>
         .into_path()
         .map_err(|e| format!("invalid save path: {}", e))?;
 
-    let file = std::fs::File::create(&path).map_err(|e| format!("failed to create file: {}", e))?;
+    write_atomically(&path, |file| {
+        let mut docx = Docx::new();
+        for line in text.lines() {
+            let paragraph = if line.trim().is_empty() {
+                Paragraph::new()
+            } else {
+                Paragraph::new().add_run(Run::new().add_text(line))
+            };
+            docx = docx.add_paragraph(paragraph);
+        }
 
-    let mut docx = Docx::new();
-    for line in text.lines() {
-        let paragraph = if line.trim().is_empty() {
-            Paragraph::new()
-        } else {
-            Paragraph::new().add_run(Run::new().add_text(line))
-        };
-        docx = docx.add_paragraph(paragraph);
-    }
-
-    docx.build()
-        .pack(file)
-        .map_err(|e| format!("failed to write docx: {}", e))?;
+        docx.build()
+            .pack(file)
+            .map_err(|e| format!("failed to write docx: {}", e))
+    })?;
 
     Ok(true)
 }
@@ -951,6 +986,54 @@ mod tests {
     fn move_to_trash_nonexistent_file_errors() {
         let result = move_to_trash("/tmp/nonexistent-rumble-test-file-xyz".to_string());
         assert!(result.is_err());
+    }
+
+    // --- write_atomically ---
+
+    fn entries(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect()
+    }
+
+    #[test]
+    fn write_atomically_failed_write_leaves_nothing_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("draft.docx");
+
+        let result = write_atomically(&dest, |_file| Err("write failed".to_string()));
+
+        assert!(result.is_err());
+        assert!(!dest.exists());
+        assert!(entries(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn write_atomically_success_writes_content_and_cleans_up_temp() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("draft.docx");
+
+        let result = write_atomically(&dest, |mut file| {
+            use std::io::Write;
+            file.write_all(b"hello docx").map_err(|e| e.to_string())
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello docx");
+        assert_eq!(entries(dir.path()), vec![dest]);
+    }
+
+    #[test]
+    fn write_atomically_failed_write_leaves_existing_destination_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("draft.docx");
+        std::fs::write(&dest, b"original content").unwrap();
+
+        let result = write_atomically(&dest, |_file| Err("write failed".to_string()));
+
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"original content");
     }
 
     // --- make_http_request (wiremock) ---
