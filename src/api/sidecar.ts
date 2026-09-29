@@ -254,9 +254,11 @@ export type ReadyResponse = {
   status: string;
   mode: string;
   error?: string;
+  checks?: Record<string, string>;
 };
 export type ModelsResponse = {
   models: { id: string; provider: string; name: string; default: boolean }[];
+  error?: string | null;
 };
 
 export async function health(): Promise<HealthResponse> {

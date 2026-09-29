@@ -9,4 +9,6 @@ import type { ModelInfo } from './modelInfo.ts';
 
 export interface ModelListResponse {
   models?: ModelInfo[];
+  /** Why no models can be listed, e.g. Ollama unreachable, a refused OLLAMA_BASE_URL or default model, or no local model pulled */
+  error?: string | null;
 }

@@ -1,21 +1,16 @@
 # ABOUTME: Health and readiness endpoints for the sidecar.
 # ABOUTME: Reports status, checks Ollama reachability, and lists available models.
 
-import os
-
 import httpx
 from fastapi import APIRouter
 
-router = APIRouter(tags=["health"])
+from services import mode as mode_service
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+router = APIRouter(tags=["health"])
 
 
 def _current_mode() -> str:
-    """Determine operating mode from environment."""
-    if os.environ.get("BYOK_API_KEY"):
-        return "byok"
-    return "ollama"
+    return mode_service.current_mode()
 
 
 @router.get("/health")
@@ -25,26 +20,29 @@ async def health() -> dict:
 
 @router.get("/ready")
 async def ready() -> dict:
-    mode = _current_mode()
-    if mode == "byok":
+    current = _current_mode()
+    if current == "byok":
         # BYOK mode: just check key is present
         return {"status": "ready", "mode": "byok"}
 
-    # Ollama mode: check if Ollama is reachable
+    # Ollama mode: ready only if a request without a model would get a usable local one
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            resp.raise_for_status()
-            return {"status": "ready", "mode": "ollama"}
+        mode_service.resolve_default(await mode_service.ollama_tags())
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"status": "not_ready", "mode": "ollama", "error": "ollama unreachable"}
+    except mode_service.NoLocalModel as exc:
+        # Ollama itself is fine; checks.models lets setup ask for a pull instead of an install.
+        return {"status": "not_ready", "mode": "ollama", "error": str(exc), "checks": {"models": "none"}}
+    except ValueError as exc:
+        return {"status": "not_ready", "mode": "ollama", "error": str(exc)}
+    return {"status": "ready", "mode": "ollama"}
 
 
 @router.get("/models")
 async def list_models() -> dict:
-    mode = _current_mode()
+    current = _current_mode()
 
-    if mode == "byok":
+    if current == "byok":
         # Return static BYOK model list
         return {
             "models": [
@@ -54,21 +52,17 @@ async def list_models() -> dict:
             ]
         }
 
-    # Ollama mode: query local models
+    # Ollama mode: query local models, filtering out cloud models
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            resp.raise_for_status()
-            data = resp.json()
-            models = [
-                {
-                    "id": m["name"],
-                    "provider": "ollama",
-                    "name": m["name"],
-                    "default": i == 0,
-                }
-                for i, m in enumerate(data.get("models", []))
-            ]
-            return {"models": models}
+        tags = await mode_service.ollama_tags()
+        mode_service.resolve_default(tags)
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
-        return {"models": []}
+        return {"models": [], "error": "ollama unreachable"}
+    except ValueError as exc:
+        return {"models": [], "error": str(exc)}
+    names = mode_service.local_model_names(tags)
+    models = [
+        {"id": name, "provider": "ollama", "name": name, "default": i == 0}
+        for i, name in enumerate(names)
+    ]
+    return {"models": models}

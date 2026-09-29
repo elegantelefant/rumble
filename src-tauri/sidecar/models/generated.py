@@ -1416,6 +1416,11 @@ class ModelListResponse(BaseModel):
         extra='forbid',
     )
     models: list[ModelInfo] | None = Field(None, title='Models')
+    error: str | None = Field(
+        None,
+        description='Why no models can be listed, e.g. Ollama unreachable, a refused OLLAMA_BASE_URL or default model, or no local model pulled',
+        title='Error',
+    )
 
 
 class ModelPerformanceResultsResponse(BaseModel):

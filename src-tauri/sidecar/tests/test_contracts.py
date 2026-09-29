@@ -16,6 +16,7 @@ from models.generated import (
     HealthResponse,
     JobCreatedResponse,
     JobResultResponse,
+    ModelListResponse,
     ReadyResponse,
     ResearchResponse,
     ResearchResultResponse,
@@ -39,6 +40,20 @@ async def test_health_matches_contract(client):
 async def test_ready_matches_contract(client):
     resp = await client.get("/ready")
     ReadyResponse(**resp.json())
+
+
+async def test_models_matches_contract(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("llama3.2:latest")
+    resp = await client.get("/models")
+    ModelListResponse(**resp.json())
+
+
+async def test_models_error_matches_contract(client, monkeypatch):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://evil.example.com:11434")
+    resp = await client.get("/models")
+    assert ModelListResponse(**resp.json()).error
 
 
 # --- Chat CRUD ---

@@ -13,14 +13,14 @@
 | # | Endpoint | Test | Status |
 |---|----------|------|--------|
 | 1 | `GET /health` | Returns 200 + `{status: ok, mode}` | [x] `test_health_returns_ok` |
-| 2 | `GET /health` | Mode defaults to `ollama` when no BYOK key | [x] `test_health_mode_defaults_to_ollama` |
-| 3 | `GET /health` | Mode is `byok` when BYOK_API_KEY set | [x] `test_health_mode_byok_when_key_set` |
+| 2 | `GET /health` | Mode defaults to `ollama` when `RUMBLE_BACKEND_MODE` is missing | [x] `test_health_mode_defaults_to_ollama` |
+| 3 | `GET /health` | Mode is `byok` when `RUMBLE_BACKEND_MODE=byok` (a key alone never selects it) | [x] `test_health_mode_byok_when_mode_env_set` |
 | 4 | `GET /ready` | BYOK always ready | [x] `test_ready_byok_always_ready` |
 | 5 | `GET /ready` | Ollama unreachable reports not_ready | [x] `test_ready_ollama_reports_unreachable` |
-| 6 | `GET /ready` | Ollama mode with mocked reachable server → ready | [ ] |
+| 6 | `GET /ready` | Ollama mode with a reachable loopback fake Ollama → ready | [x] `test_ready_ollama_ready_when_reachable` |
 | 7 | `GET /models` | BYOK returns static model list with default flag | [x] `test_models_byok_returns_static_list` |
 | 8 | `GET /models` | Ollama returns list or empty | [x] `test_models_ollama_returns_list_or_empty` |
-| 9 | `GET /models` | Ollama with mocked tags response → parsed models | [ ] |
+| 9 | `GET /models` | Ollama with a fake tags response → parsed models, cloud/remote ones hidden | [x] `test_models_ollama_filters_cloud_models` |
 
 ### 1.2 Chat Endpoints (`routes/chat.py`)
 
@@ -126,8 +126,8 @@
 
 | # | Function | Test | Status |
 |---|----------|------|--------|
-| 90 | `_build_agent(byok)` | Uses api_key → OpenAI model | [ ] |
-| 91 | `_build_agent(ollama)` | No key → Ollama model with base_url | [ ] |
+| 90 | `_build_agent(byok)` | `RUMBLE_BACKEND_MODE=byok` → OpenAI provider with the key at the pinned public base_url | [x] `test_build_agent_byok_mode_uses_key_no_ollama_call` |
+| 91 | `_build_agent(ollama)` | Ollama mode, even with a key present → Ollama provider at the loopback base_url | [x] `test_build_agent_ollama_mode_ignores_byok_env_key` |
 | 92 | `send_message` | Returns full text | [x] (tested via route integration) |
 | 93 | `stream_message` | Yields text chunks | [x] (tested via route integration) |
 | 94 | `run_single_turn` | Returns raw text | [x] (tested via route integration) |
@@ -398,15 +398,15 @@
 
 | Layer | Total | Tested | Missing | Coverage |
 |-------|-------|--------|---------|----------|
-| Python Sidecar (HTTP endpoints) | 65 | 42 | 23 | 65% |
-| Python Sidecar (DB service) | 24 | 17 | 7 | 71% |
-| Python Sidecar (other services) | 8 | 3 | 5 | 38% |
+| Python Sidecar (HTTP endpoints) | 65 | 48 | 17 | 74% |
+| Python Sidecar (DB service) | 24 | 16 | 8 | 67% |
+| Python Sidecar (other services) | 8 | 6 | 2 | 75% |
 | TypeScript Utilities | 13 | 13 | 0 | 100% |
 | TypeScript API Client | 13 | 10 | 3 | 77% |
-| TypeScript Components (tested) | 46 | 44 | 2 | 96% |
-| TypeScript Components (untested) | 40 | 0 | 40 | 0% |
+| TypeScript Components (tested) | 41 | 38 | 3 | 93% |
+| TypeScript Components (untested) | 43 | 0 | 43 | 0% |
 | TypeScript Backend Client | 9 | 0 | 9 | 0% |
 | TypeScript Router | 4 | 0 | 4 | 0% |
 | Rust (resolve_url) | 8 | 8 | 0 | 100% |
-| Rust (other functions) | 16 | 0 | 16 | 0% |
-| **TOTAL** | **246** | **137** | **109** | **56%** |
+| Rust (other functions) | 18 | 0 | 18 | 0% |
+| **TOTAL** | **246** | **139** | **107** | **57%** |
