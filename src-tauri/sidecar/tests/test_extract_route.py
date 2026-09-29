@@ -1,11 +1,15 @@
 # ABOUTME: HTTP-level tests for POST /extract.
 # ABOUTME: Exercises the real fixtures through the route, not just the service function.
 
+import asyncio
+import threading
 from pathlib import Path
 
 from docx import Document
 
 FIXTURES = Path(__file__).parent / "fixtures"
+# How long the stand-in extraction would hold the event loop if it ran on it.
+SLOW_EXTRACT_SECONDS = 2
 
 
 def _docx_bytes(paragraphs: list[str]) -> bytes:
@@ -71,3 +75,28 @@ async def test_extract_truncated_pdf_returns_422_in_user_language(client):
     assert resp.json()["detail"] == (
         "This PDF could not be read. It may be damaged or not a real PDF."
     )
+
+
+async def test_health_answers_while_an_extraction_is_in_flight(client, monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_extract(filename: str, data: bytes) -> str:
+        started.set()
+        release.wait(timeout=SLOW_EXTRACT_SECONDS)
+        return "done"
+
+    monkeypatch.setattr("routes.extract.extract", slow_extract)
+    upload = asyncio.create_task(
+        client.post("/extract", files={"file": ("notes.txt", b"x", "text/plain")})
+    )
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+
+    health = await client.get("/health")
+    extraction_still_running = not upload.done()
+    release.set()
+    await upload
+
+    assert health.status_code == 200
+    assert extraction_still_running
