@@ -120,8 +120,8 @@ def default_model(tags: list[dict]) -> str | None:
 
 
 async def ollama_tags() -> list[dict]:
-    """Fetch Ollama's /api/tags items from the validated loopback base URL."""
-    async with httpx.AsyncClient(timeout=OLLAMA_TAGS_TIMEOUT_S) as client:
+    """Fetch Ollama's /api/tags items from the validated loopback base URL, never through a proxy (#73)."""
+    async with httpx.AsyncClient(timeout=OLLAMA_TAGS_TIMEOUT_S, trust_env=False) as client:
         resp = await client.get(f"{ollama_api_base()}/api/tags")
         resp.raise_for_status()
         return resp.json().get("models", [])

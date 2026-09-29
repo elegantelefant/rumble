@@ -2,9 +2,11 @@
 # ABOUTME: Covers mode-driven branching (never key-presence-driven) and cloud-model refusal.
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from services import llm
+from tests.conftest import CHAT_COMPLETION
 
 
 def _mock_provider(monkeypatch):
@@ -24,34 +26,31 @@ def _never_resolve_ollama_model(monkeypatch):
 
 async def test_build_agent_byok_mode_uses_key_no_ollama_call(monkeypatch):
     monkeypatch.setenv("RUMBLE_BACKEND_MODE", "byok")
-    mock_cls = _mock_provider(monkeypatch)
     _never_resolve_ollama_model(monkeypatch)
 
-    await llm._build_agent(api_key="explicit-key")
+    agent = await llm._build_agent(api_key="explicit-key")
 
-    mock_cls.assert_called_once_with(api_key="explicit-key")
+    assert agent.model.client.api_key == "explicit-key"
 
 
 async def test_build_agent_byok_mode_falls_back_to_env_key(monkeypatch):
     monkeypatch.setenv("RUMBLE_BACKEND_MODE", "byok")
     monkeypatch.setenv("BYOK_API_KEY", "env-key-123")
-    mock_cls = _mock_provider(monkeypatch)
     _never_resolve_ollama_model(monkeypatch)
 
-    await llm._build_agent()
+    agent = await llm._build_agent()
 
-    mock_cls.assert_called_once_with(api_key="env-key-123")
+    assert agent.model.client.api_key == "env-key-123"
 
 
 async def test_build_agent_byok_mode_prefers_explicit_key_over_env(monkeypatch):
     monkeypatch.setenv("RUMBLE_BACKEND_MODE", "byok")
     monkeypatch.setenv("BYOK_API_KEY", "env-key-123")
-    mock_cls = _mock_provider(monkeypatch)
     _never_resolve_ollama_model(monkeypatch)
 
-    await llm._build_agent(api_key="explicit-key")
+    agent = await llm._build_agent(api_key="explicit-key")
 
-    mock_cls.assert_called_once_with(api_key="explicit-key")
+    assert agent.model.client.api_key == "explicit-key"
 
 
 async def test_build_agent_byok_mode_without_key_fails_no_fallback(monkeypatch):
@@ -67,31 +66,29 @@ async def test_build_agent_byok_mode_without_key_fails_no_fallback(monkeypatch):
 async def test_build_agent_ollama_mode_ignores_byok_env_key(monkeypatch):
     monkeypatch.setenv("RUMBLE_BACKEND_MODE", "ollama")
     monkeypatch.setenv("BYOK_API_KEY", "should-be-ignored")
-    mock_cls = _mock_provider(monkeypatch)
 
     async def fake_resolve(_model_name=None):
         return "llama3.2"
 
     monkeypatch.setattr(llm, "_resolve_ollama_model", fake_resolve)
 
-    await llm._build_agent()
+    client = (await llm._build_agent()).model.client
 
-    mock_cls.assert_called_once_with(base_url=llm.mode.ollama_openai_base_url(), api_key="ollama")
+    assert (str(client.base_url), client.api_key) == (f"{llm.mode.ollama_openai_base_url()}/", "ollama")
 
 
 async def test_build_agent_missing_mode_env_defaults_to_ollama(monkeypatch):
     monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
     monkeypatch.delenv("BYOK_API_KEY", raising=False)
-    mock_cls = _mock_provider(monkeypatch)
 
     async def fake_resolve(_model_name=None):
         return "llama3.2"
 
     monkeypatch.setattr(llm, "_resolve_ollama_model", fake_resolve)
 
-    await llm._build_agent()
+    client = (await llm._build_agent()).model.client
 
-    mock_cls.assert_called_once_with(base_url=llm.mode.ollama_openai_base_url(), api_key="ollama")
+    assert (str(client.base_url), client.api_key) == (f"{llm.mode.ollama_openai_base_url()}/", "ollama")
 
 
 async def test_build_agent_refuses_non_loopback_ollama_base_url(monkeypatch):
@@ -190,3 +187,51 @@ async def test_build_agent_resolves_requested_name_to_the_pulled_tag(monkeypatch
     agent = await llm._build_agent(model_name="Llama3.2 ")
 
     assert agent.model.model_name == "llama3.2:latest"
+
+
+def _lowercase_headers(request: dict) -> dict:
+    return {k.lower(): v for k, v in request["headers"].items()}
+
+
+async def test_ollama_mode_traffic_bypasses_inherited_proxy_env(monkeypatch, fake_ollama, hostile_env):
+    monkeypatch.setenv("RUMBLE_BACKEND_MODE", "ollama")
+    fake_ollama.set_tags("llama3.2:latest")
+
+    await (await llm._build_agent()).run("hi")
+
+    assert (hostile_env.requests, [r["path"] for r in fake_ollama.requests]) == ([], ["/api/tags", "/v1/chat/completions"])
+
+
+async def test_ollama_mode_completion_ignores_openai_env_and_byok_key(monkeypatch, fake_ollama, hostile_env):
+    monkeypatch.setenv("RUMBLE_BACKEND_MODE", "ollama")
+    fake_ollama.set_tags("llama3.2:latest")
+
+    await (await llm._build_agent()).run("hi")
+
+    headers = _lowercase_headers(fake_ollama.requests[-1])
+    assert (headers["authorization"], "openai-organization" in headers, "openai-project" in headers) == (
+        "Bearer ollama",
+        False,
+        False,
+    )
+
+
+async def test_byok_mode_sends_to_public_openai_host_despite_openai_base_url(monkeypatch, hostile_env):
+    monkeypatch.setenv("RUMBLE_BACKEND_MODE", "byok")
+    sent: list[httpx.Request] = []
+
+    def _record(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json=CHAT_COMPLETION)
+
+    monkeypatch.setattr(
+        llm, "cached_async_http_client", lambda provider: httpx.AsyncClient(transport=httpx.MockTransport(_record))
+    )
+
+    await (await llm._build_agent()).run("hi")
+
+    assert (str(sent[0].url), sent[0].headers["authorization"], "openai-organization" in sent[0].headers) == (
+        f"{llm.OPENAI_API_BASE_URL}/chat/completions",
+        "Bearer byok-key",
+        False,
+    )

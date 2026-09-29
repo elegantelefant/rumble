@@ -135,7 +135,7 @@ class RecordingServer:
         self._httpd.server_close()
 
 
-_CHAT_COMPLETION = {
+CHAT_COMPLETION = {
     "id": "chatcmpl-test",
     "object": "chat.completion",
     "created": 0,
@@ -149,11 +149,30 @@ def fake_ollama(monkeypatch):
     """A real loopback Ollama stand-in: `.set_tags(...)` what it serves, read `.requests` for what it received."""
     from services import llm
 
-    server = RecordingServer({"/api/tags": {"models": []}, "/v1/chat/completions": _CHAT_COMPLETION})
+    server = RecordingServer({"/api/tags": {"models": []}, "/v1/chat/completions": CHAT_COMPLETION})
     monkeypatch.setenv("OLLAMA_BASE_URL", server.url)
     monkeypatch.setattr(llm, "_resolved_ollama_model", None)
     yield server
     server.close()
+
+
+_ROUTING_ENVS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "OPENAI_BASE_URL")
+
+
+@pytest.fixture
+def hostile_env(monkeypatch):
+    """Every inherited env that could re-route or re-key sidecar traffic; routing ones point at this recording decoy."""
+    decoy = RecordingServer({})
+    for name in _ROUTING_ENVS:
+        monkeypatch.setenv(name, decoy.url)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "env-openai-key")
+    monkeypatch.setenv("OPENAI_ORG_ID", "env-org")
+    monkeypatch.setenv("OPENAI_PROJECT_ID", "env-project")
+    monkeypatch.setenv("BYOK_API_KEY", "byok-key")
+    yield decoy
+    decoy.close()
 
 
 @pytest.fixture(autouse=True)

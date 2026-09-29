@@ -1,18 +1,31 @@
 # ABOUTME: LLM service wrapping PydanticAI for Ollama and BYOK providers.
 # ABOUTME: Provides send_message, stream_message for chat, and run_single_turn for stateless endpoints.
 
+import functools
 import logging
 import os
 from collections.abc import AsyncIterator
 
+import httpx
+from openai import AsyncOpenAI, omit
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models import DEFAULT_HTTP_TIMEOUT, cached_async_http_client
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from services import mode, prompts
 
 logger = logging.getLogger(__name__)
+
+# The openai SDK's own default, pinned so an inherited OPENAI_BASE_URL can't redirect BYOK traffic (#74).
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+
+# Connect timeout for the Ollama client, matching pydantic-ai's default.
+LLM_CONNECT_TIMEOUT_S = 5
+
+# Drops the headers the openai SDK would otherwise fill from OPENAI_ORG_ID / OPENAI_PROJECT_ID.
+_NO_ENV_HEADERS = {"OpenAI-Organization": omit, "OpenAI-Project": omit}
 
 _resolved_ollama_model: str | None = None
 
@@ -47,6 +60,21 @@ async def _resolve_ollama_model(model_name: str | None = None) -> str:
     return resolved
 
 
+@functools.cache
+def _loopback_http_client() -> httpx.AsyncClient:
+    """Ollama's pooled client. trust_env=False: no proxy, from env or macOS system settings, sees loopback traffic (#73)."""
+    return httpx.AsyncClient(timeout=httpx.Timeout(DEFAULT_HTTP_TIMEOUT, connect=LLM_CONNECT_TIMEOUT_S), trust_env=False)
+
+
+def _provider(base_url: str, api_key: str, http_client: httpx.AsyncClient) -> OpenAIProvider:
+    """An OpenAI-compatible provider whose destination, key and headers come from its arguments, never OPENAI_* env."""
+    return OpenAIProvider(
+        openai_client=AsyncOpenAI(
+            base_url=base_url, api_key=api_key, http_client=http_client, default_headers=_NO_ENV_HEADERS
+        )
+    )
+
+
 async def _build_agent(
     system_prompt: str = prompts.CHAT,
     model_name: str | None = None,
@@ -63,14 +91,15 @@ async def _build_agent(
         resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
         if not resolved_api_key:
             raise ValueError("byok mode requires an API key")
-        provider = OpenAIProvider(api_key=resolved_api_key)
+        # Only ever the public OpenAI host, so the default client may honour a corporate proxy.
+        provider = _provider(OPENAI_API_BASE_URL, resolved_api_key, cached_async_http_client(provider="openai"))
         model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
         if model_name and mode.is_cloud_model(model_name):
             raise ValueError(f"refusing cloud model {model_name!r} in ollama mode")
         base_url = mode.ollama_openai_base_url()
         resolved = await _resolve_ollama_model(model_name)
-        provider = OpenAIProvider(base_url=base_url, api_key="ollama")
+        provider = _provider(base_url, "ollama", _loopback_http_client())
         model = OpenAIModel(resolved, provider=provider)
     return Agent(model=model, system_prompt=system_prompt)
 

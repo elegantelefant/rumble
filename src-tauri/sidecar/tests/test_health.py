@@ -123,3 +123,12 @@ async def test_models_surfaces_refused_cloud_default_model(client, monkeypatch, 
     resp = await client.get("/models")
 
     assert "OLLAMA_DEFAULT_MODEL" in resp.json()["error"]
+
+
+async def test_models_ollama_bypasses_inherited_proxy_env(client, monkeypatch, fake_ollama, hostile_env):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("llama3.2:latest")
+
+    resp = await client.get("/models")
+
+    assert [m["id"] for m in resp.json()["models"]] == ["llama3.2:latest"]
