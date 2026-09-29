@@ -73,8 +73,11 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
   "delete all local data"; on Windows the data directory is in the roaming profile, which can sync
   client documents to domain servers ([#57]).
 - **Mode switches restart the sidecar** — the sidecar reads its mode only at spawn, so a switch in
-  Settings respawns it; requests fail with "sidecar not running" for the seconds that takes. The mode
-  is not persisted: every launch starts in local mode. Routing and egress per mode: see
+  Settings respawns it; requests fail with "sidecar not running" for the seconds that takes. The
+  replaced sidecar gets at most `GRACEFUL_SHUTDOWN_TIMEOUT_S` (3 s, `src-tauri/sidecar/main.py`)
+  to finish in-flight requests, then they are cancelled — so a draft or review job running across a
+  switch is lost (it ends "cancelled during shutdown" and must be rerun). The mode is not
+  persisted: every launch starts in local mode. Routing and egress per mode: see
   [NETWORK.md](NETWORK.md) ([#41], [#52], [#53]).
 - **Unconditional privacy copy** — some screens and the README say data never leaves the device
   regardless of mode ([#56]).
