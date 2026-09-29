@@ -8,8 +8,11 @@ vi.mock("../src/api/sidecar", () => ({
 }))
 
 // The composable holds module-level state, so each test needs a fresh module.
-async function freshUseModels() {
+// Local mode unless a test says otherwise: the fallback depends on it.
+async function freshUseModels(mode: "ollama" | "byok" = "ollama") {
   vi.resetModules()
+  const { backendMode } = await import("../src/composables/backendMode")
+  backendMode.value = mode
   const mod = await import("../src/composables/models")
   return mod.useModels()
 }
@@ -56,6 +59,31 @@ describe("useModels", () => {
 
     expect(models.value).toHaveLength(1)
     expect(models.value[0].id).toBe("elefant-local")
+  })
+
+  it("offers no local fallback outside ollama mode, and retries on the next load", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    const failure = new Error("sidecar restarting")
+    vi.mocked(listModels).mockRejectedValue(failure)
+    const { models, loadModels, loaded } = await freshUseModels("byok")
+    await loadModels()
+    expect(models.value).toEqual([])
+    expect(loaded.value).toBe(false)
+    expect(consoleError).toHaveBeenCalledWith("Failed to load models from sidecar:", failure)
+    consoleError.mockRestore()
+  })
+
+  it("discards a load that started before the list was invalidated", async () => {
+    let answer!: (value: Awaited<ReturnType<typeof listModels>>) => void
+    vi.mocked(listModels).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const { models, loadModels, loaded } = await freshUseModels()
+    const { invalidateModels } = await import("../src/composables/models")
+    const staleLoad = loadModels()
+    invalidateModels()
+    answer({ models: [{ id: "llama3.2", provider: "ollama", name: "llama3.2", default: true }] })
+    await staleLoad
+    expect(models.value).toEqual([])
+    expect(loaded.value).toBe(false)
   })
 
   it("does not re-fetch once loaded", async () => {

@@ -879,7 +879,7 @@ These patterns are specific to how Rumble uses Tauri:
 
 ### Sidecar Lifecycle
 1. Tauri Core picks a random port
-2. Spawns `rumble-sidecar --port <N> --data-dir <app_data_dir>`
+2. Spawns `rumble-sidecar --port <N> --data-dir <app_local_data_dir>`
 3. Health-checks `GET /health/ready` until responsive
 4. Frontend proxies all API calls through Tauri commands to `http://localhost:<N>`
 

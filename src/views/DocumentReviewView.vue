@@ -1,10 +1,10 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
 import { computed, onMounted, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
+import { backendMode, loadBackendMode } from "../composables/backendMode";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
 
@@ -13,12 +13,10 @@ const toasts = useToast();
 // Only local (Ollama) mode keeps a document on this device; BYOK and Premium
 // send its text to a provider for review. Read the same mode as TopBar's pill
 // and make no claim until it is known — including when reading it fails.
-const isLocalMode = ref(false);
-onMounted(async () => {
-  isLocalMode.value = await invoke<string>("get_backend_mode")
-    .then((mode) => mode === "ollama")
-    .catch(() => false);
-});
+// Shared rather than read on mount: this view is kept alive, so a mount-time
+// read would go stale after a switch in Settings.
+const isLocalMode = computed(() => backendMode.value === "ollama");
+onMounted(loadBackendMode);
 
 type ReviewStatus = "idle" | "running" | "ready";
 
@@ -251,14 +249,16 @@ async function askQuestion() {
     timestamp: now,
   });
 
-  // Add a placeholder assistant message that fills incrementally via SSE
-  const assistantMsg: ChatMessage = {
+  // Add a placeholder assistant message that fills incrementally via SSE.
+  // Mutate the element read back from the reactive array, not the plain
+  // object pushed into it, or the deltas never re-render.
+  session.messages.push({
     id: generateId(),
     role: "assistant",
     content: "",
     timestamp: formatTimestamp(),
-  };
-  session.messages.push(assistantMsg);
+  });
+  const assistantMsg = session.messages[session.messages.length - 1];
 
   try {
     const fullText = await streamMessage(session.chatId, content, (chunk) => {

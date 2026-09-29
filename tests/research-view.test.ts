@@ -4,6 +4,7 @@
 import { mount } from "@vue/test-utils"
 import ResearchView from "../src/views/ResearchView.vue"
 import { TOAST_KEY } from "../src/composables/toast"
+import { backendMode } from "../src/composables/backendMode"
 
 vi.mock("../src/modules/backend/backendClient", () => ({
   backendRegistry: { value: [] },
@@ -27,6 +28,8 @@ function mountResearch() {
 }
 
 beforeEach(() => {
+  // Every launch starts in local mode, where the fallback model is offered.
+  backendMode.value = "ollama"
   vi.clearAllMocks()
 })
 

@@ -172,9 +172,9 @@ Elefant - Rumble/               # Windows / Linux
 
 - **Backend mode**: Ollama (default, local-first). BYOK and Premium modes available in Settings.
 - **Sidecar**: Tauri spawns `rumble-sidecar` on a random port, health-checks, then proxies all API calls to it.
-- **Data**: SQLite database stored in the platform-specific app data directory:
+- **Data**: SQLite database stored in the platform-specific local app data directory (see SECURITY.md, "Where data lives"):
   - macOS: `~/Library/Application Support/com.ielegante.rumble/`
-  - Windows: `%APPDATA%/com.ielegante.rumble/`
+  - Windows: `%LOCALAPPDATA%/com.ielegante.rumble/` (moved from `%APPDATA%` on first launch of a build with #57)
   - Linux: `~/.local/share/com.ielegante.rumble/`
 - **Settings**: `settings.json` in the app *local* data directory (not the Windows roaming profile), written when you press Save in Settings. Provider keys are not in it; they stay in the OS keychain.
   - macOS: `~/Library/Application Support/com.ielegante.rumble/`

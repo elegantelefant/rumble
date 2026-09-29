@@ -11,6 +11,12 @@ from app import create_app
 
 DEFAULT_PORT = 11435
 
+# How long a shutdown waits for in-flight requests before cancelling them.
+# Unbounded, a sidecar the host has replaced (a mode switch) or left (a crash)
+# lingers for as long as its slowest LLM call — a replaced byok sidecar kept
+# talking to OpenAI after the switch to ollama.
+GRACEFUL_SHUTDOWN_TIMEOUT_S = 3
+
 
 class _StartupPrinter(uvicorn.config.Config):
     """Defers PORT announcement until uvicorn has bound the socket."""
@@ -52,7 +58,13 @@ def cli(argv: list[str] | None = None):
     watch_stdin = os.environ.get("RUMBLE_SIDECAR_WATCH_STDIN") == "1"
     app = create_app(data_dir=args.data_dir, secret=secret, dev=args.dev, watch_stdin=watch_stdin)
 
-    config = uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=args.port,
+        log_level="warning",
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_TIMEOUT_S,
+    )
     server = uvicorn.Server(config)
     app.state.server = server
 

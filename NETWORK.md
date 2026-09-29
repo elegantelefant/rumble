@@ -14,23 +14,27 @@ outbound traffic blocked. [Proving it](#proving-it) says how to check that on yo
 
 ## Modes, as the code has them
 
-The host has three modes — `ollama` (shown as *local*), `byok`, `premium` — and starts in `ollama`.
-Nothing in the UI calls `set_backend_mode` yet, so a packaged build stays in `ollama` mode
-(pending [#40]). Separately, the sidecar picks its provider from its own environment, not from the
-host's mode: `BYOK_API_KEY` present → OpenAI, absent → Ollama (pending [#52], fix in PR [#66]). The
-host never passes `BYOK_API_KEY` ([#35]), so the key can only arrive by inheritance from the
-environment rumble was launched in.
-<!-- src-tauri/src/lib.rs:63-67,342-358,644; src-tauri/sidecar/services/llm.py:61-68; src-tauri/sidecar/routes/health.py:14-18; src-tauri/src/lib.rs:411-425 -->
+The host has three modes — `ollama` (shown as *local*), `byok`, `premium` — and starts in `ollama` on
+every launch. Settings → Providers switches it through `set_backend_mode`; the UI offers BYOK only
+in dev builds and shows Premium as unavailable, so a packaged build stays in `ollama` mode unless
+something else calls `set_backend_mode` (the host itself accepts all three). The
+sidecar takes its mode only from its spawn environment (`RUMBLE_BACKEND_MODE`, failing closed to
+`ollama`, PR [#66]), and a mode switch respawns it. The host sets `BYOK_API_KEY` to the keychain's
+`byok_openai` key in `byok` mode only; in every other mode it sets it empty, overwriting any key
+inherited from the environment rumble was launched in ([#35]). Saving that key in `byok` respawns
+the sidecar with it; deleting it drops the host to `ollama` and respawns. The webview has no shell
+permission, so it cannot start a sidecar of its own with a different environment.
+<!-- src-tauri/src/lib.rs:495-635,675-714; src-tauri/capabilities/default.json; src-tauri/sidecar/services/mode.py:28-40; src-tauri/sidecar/services/llm.py:77-91; src/views/SettingsView.vue -->
 
 ## Egress initiators
 
 | Initiator | Mode | Trigger | Destination · payload | Off-switch |
 |---|---|---|---|---|
-| **Host router** (`resolve_url`)<!-- src-tauri/src/lib.rs:23,28-57,87-106,192-198,235-258 --> | `premium`: every path. `ollama`/`byok`: any path matching `CLOUD_ONLY_PREFIXES` (`/billing`, `/auth`, `/documents`, `/search`, … 28 unversioned prefixes) | A webview `api_call`. No current call site hits a cloud prefix (`src/api/sidecar.ts`), and `premium` is unreachable from the UI ([#40]) | `https://api.elefant.com` · the request body as the UI sent it, plus the keychain `auth_token` as a Bearer header if one is stored. That host has no working TLS endpoint today ([#60]) | None in code. **Pending [#41]**: `ollama`/`byok` return only 127.0.0.1 sidecar URLs and `Err` for everything else |
-| **Sidecar → Ollama**<!-- src-tauri/sidecar/services/llm.py:18-20,25-47,66-68; src-tauri/sidecar/routes/health.py:11,35-36,59-60 --> | Whenever `BYOK_API_KEY` is absent (the packaged default) | `/ready`, `/models`, model resolution (`GET /api/tags`); chat, draft, review, research, clarify, translate (chat completions) — `/health` itself does not touch Ollama | `OLLAMA_BASE_URL`, default `http://localhost:11434` — loopback · prompts including document text. Non-loopback `OLLAMA_BASE_URL` is refused and cloud/remote models are rejected per request ([#53], fixed by PR [#66]) | Nothing — enforced in code; `/ready` reports the refusal reason |
-| **Sidecar → BYOK provider**<!-- src-tauri/sidecar/services/llm.py:61-64 --> | Whenever `BYOK_API_KEY` is in the sidecar's environment — **regardless of host mode** ([#52]) | The same LLM routes as above | OpenAI's API, pinned by explicit base_url ([#74], fixed by PR [#66]) · prompts including document text, and the key. Keys saved in Settings go to the keychain and are never read by the sidecar ([#35]) | Don't launch rumble from an environment that sets `BYOK_API_KEY`. Sidecar-side enforcement landed (PR [#66]); **pending [#52]**: the host does not yet pass the mode (v1 ships Ollama-only) |
-| **Webview** (CSP)<!-- src-tauri/tauri.conf.json:21; src/api/sidecar.ts:72-86 --> | All modes — the CSP is static | Page `fetch`. The one direct fetch today is chat streaming to `http://127.0.0.1:{port}` ([#55]) | `connect-src 'self' http://127.0.0.1 https://api.elefant.com` — **the cloud host is allowed in every mode** (flagged, [#41]-adjacent; [plan] §2 L3: tighten per mode). No webview code fetches it today. Note: a CSP host source without a port matches only the scheme's default port, so `http://127.0.0.1` may not cover the sidecar's random port either — unverified, [#55]-adjacent | Edit `csp` in `tauri.conf.json`. **Pending**: per-mode CSP |
-| **`tauri-plugin-opener`**<!-- src-tauri/src/lib.rs:640; src-tauri/capabilities/default.json:8 --> | All | None today: the plugin is registered and granted `opener:default`, but nothing in `src/` or `lib.rs` calls it | Would hand a URL to the system browser; the browser, not rumble, makes the request | Remove the plugin and its capability |
+| **Host router** (`resolve_url`)<!-- src-tauri/src/lib.rs:28-29,58-159,298-327 --> | None. `ollama`/`byok`: every path goes to the sidecar on `127.0.0.1`, except the cloud contract (`/api/v1`, `/api/v1/…`, judged after percent-decoding, case-folding and dropping empty segments), which fails with "This feature requires Elefant Premium." `premium`: every path fails the same way until premium routing is built against the [payload contract] | A webview `api_call` | Loopback only: `resolve_url` never returns a non-loopback URL. The keychain `auth_token` is read and attached as a Bearer header only for a non-sidecar URL, of which there are none today ([#72], fixed) | Nothing — enforced in code. **Pending**: premium routing, gated on the [payload contract] |
+| **Sidecar → Ollama**<!-- src-tauri/sidecar/services/llm.py:77-91; src-tauri/sidecar/routes/health.py:21-38,41-68; src-tauri/src/lib.rs:618-635 --> | `ollama`, the packaged default (and `premium`, whose sidecar runs as `ollama`) | `/ready`, `/models`, model resolution (`GET /api/tags`); chat, draft, review, research, clarify, translate (chat completions) — `/health` itself does not touch Ollama | `OLLAMA_BASE_URL`, default `http://localhost:11434` — loopback · prompts including document text. Non-loopback `OLLAMA_BASE_URL` is refused and cloud/remote models are rejected per request ([#53], fixed by PR [#66]) | Nothing — enforced in code; `/ready` reports the refusal reason |
+| **Sidecar → BYOK provider**<!-- src-tauri/sidecar/services/llm.py:77-84; src-tauri/src/lib.rs:495-566,618-635,675-683 --> | `byok` only — the sidecar branches on `RUMBLE_BACKEND_MODE`, never on whether a key is present (PR [#66]) | The same LLM routes as above | OpenAI's API, pinned by explicit base_url ([#74], fixed by PR [#66]) · prompts including document text, and the key. The OpenAI key saved in Settings reaches the sidecar only in `byok` mode ([#35]) | Stay in local mode. Settings offers BYOK only in dev builds (`BYOK_SELECTABLE` in `src/views/SettingsView.vue`) — a UI gate only: the host accepts `byok` from `set_backend_mode` in every build |
+| **Webview** (CSP)<!-- src-tauri/tauri.conf.json:21; src/api/sidecar.ts:61-90 --> | All modes — the CSP is static | Page `fetch`. None today: chat streaming goes through the host's `stream_message` command over an IPC channel ([#55]), and nothing in `src/` fetches | `connect-src 'self' ipc: http://ipc.localhost https://api.elefant.com` — loopback is no longer allowed; **the cloud host is allowed in every mode** (flagged, [#41]-adjacent; [plan] §2 L3: tighten per mode). No webview code fetches it today | Edit `csp` in `tauri.conf.json`. **Pending**: per-mode CSP |
+| **`tauri-plugin-opener`**<!-- src-tauri/src/lib.rs:932; src-tauri/capabilities/default.json:8 --> | All | None today: the plugin is registered and granted `opener:default`, but nothing in `src/` or `lib.rs` calls it | Would hand a URL to the system browser; the browser, not rumble, makes the request | Remove the plugin and its capability |
 | **Ollama install**<!-- outside rumble; instructed at src/views/SetupView.vue:103 --> | Setup | The user installs Ollama | ollama.com · the installer download | Install once, then block ([Offline model install](#offline-model-install)) |
 | **`ollama pull`**<!-- outside rumble; instructed at src/views/SetupView.vue:158 --> | Setup | The user pulls a model | registry.ollama.ai (and its download CDN) · model name out, weights in | [Offline model install](#offline-model-install) |
 | **Ollama's updater**<!-- outside rumble --> | Any — Ollama runs independently of rumble | The Ollama desktop app checks ollama.com for updates | ollama.com · version check and download | Ollama's, not rumble's: block at the firewall, or run a package-managed `ollama serve` without the desktop app |
@@ -43,9 +47,9 @@ outside rumble and outside this table; a whole-machine block covers them too.
 
 ### Loopback only (not egress)
 
-- Host → sidecar on `127.0.0.1:{random port}`, with the shared secret. The stored premium Bearer token also rides on these loopback requests today ([#72], open — scope it to cloud-bound requests).<!-- src-tauri/src/lib.rs:364-374,376-396,398-425 -->
-- Sidecar binds `127.0.0.1` only.<!-- src-tauri/sidecar/main.py:52 -->
-- Settings' sync "Test connection" is a mock and makes no request.<!-- src/views/SettingsView.vue:204-223; src/modules/backend/backendClient.ts:114-120 -->
+- Host → sidecar on `127.0.0.1:{random port}`, with the shared secret and never the premium Bearer token ([#72], fixed).<!-- src-tauri/src/lib.rs:58-65,98-104,298-327 -->
+- Sidecar binds `127.0.0.1` only.<!-- src-tauri/sidecar/main.py:61-67 -->
+- Settings' sync "Test connection" is a mock and makes no request.<!-- src/views/SettingsView.vue:264-283; src/modules/backend/backendClient.ts:114-120 -->
 
 ## Offline model install
 
@@ -89,3 +93,4 @@ network adapter is the equivalent.
 [#60]: https://github.com/elegantelefant/rumble/issues/60
 [#66]: https://github.com/elegantelefant/rumble/pull/66
 [plan]: agent_docs/2026-09-22-credible-delightful-local-first-plan.md
+[payload contract]: agent_docs/2026-09-22-premium-payload-contract.md
