@@ -19,7 +19,7 @@ A local-first legal-AI desktop app on Tauri v2: a Vue 3 frontend in a webview, a
 | `.github/workflows/` | `test.yml` (vitest, pytest, cargo test), `contract-drift.yml`, `webdriver.yml`, `build.yml` (tag `v*` → dmg/msi/deb/AppImage draft release) |
 | `agent_docs/` | Date-versioned; `2026-09-02-contract-0207-migration-scoping.md` holds the contract decision |
 
-Routing in one line: the frontend never `fetch`es (except SSE `streamMessage`); every call is `invoke('api_call')` and `resolve_url` sends it to the sidecar on `127.0.0.1:{port}` or refuses it ("requires Elefant Premium": `/api/v1/*` in local/BYOK, everything in Premium until the L0 payload contract) — it never returns a cloud URL. Cloud auth is a keychain bearer, attached only to non-sidecar URLs; the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
+Routing in one line: the frontend never `fetch`es; HTTP calls go through `invoke('api_call')` (except `extract_document` and chat streaming's `stream_message`, which have their own host commands, mode-guarded the same way) and `resolve_url` sends it to the sidecar on `127.0.0.1:{port}` or refuses it ("requires Elefant Premium": `/api/v1/*` in local/BYOK, everything in Premium until the L0 payload contract) — it never returns a cloud URL. Cloud auth is a keychain bearer, attached only to non-sidecar URLs (of which there are none today); the sidecar's shared secret arrives by env (`RUMBLE_SIDECAR_SECRET`), never argv (#8).
 
 ## Commands (from `package.json`, `pyproject.toml`, CI; nothing else exists)
 

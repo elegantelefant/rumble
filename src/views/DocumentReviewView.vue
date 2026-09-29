@@ -249,14 +249,16 @@ async function askQuestion() {
     timestamp: now,
   });
 
-  // Add a placeholder assistant message that fills incrementally via SSE
-  const assistantMsg: ChatMessage = {
+  // Add a placeholder assistant message that fills incrementally via SSE.
+  // Mutate the element read back from the reactive array, not the plain
+  // object pushed into it, or the deltas never re-render.
+  session.messages.push({
     id: generateId(),
     role: "assistant",
     content: "",
     timestamp: formatTimestamp(),
-  };
-  session.messages.push(assistantMsg);
+  });
+  const assistantMsg = session.messages[session.messages.length - 1];
 
   try {
     const fullText = await streamMessage(session.chatId, content, (chunk) => {
