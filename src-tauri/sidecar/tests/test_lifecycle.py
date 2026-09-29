@@ -1,11 +1,12 @@
 # ABOUTME: Tests for the stdin-EOF watcher and pidfile reaping in app.py's lifespan.
-# ABOUTME: Covers the watch_stdin gate, EOF-driven shutdown, and stray-process reaping.
+# ABOUTME: Covers the watch_stdin gate, EOF-driven shutdown (incl. a real sidecar process), and stray reaping.
 import asyncio
 import os
 import signal
 import subprocess
 import sys
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -309,6 +310,35 @@ def test_terminate_logs_error_when_stray_survives_sigkill(monkeypatch, caplog):
         _terminate(STRAY_PID)
 
     assert any(r.levelname == "ERROR" and "survived SIGKILL" in r.message for r in caplog.records)
+
+
+SIDECAR_DIR = Path(__file__).resolve().parent.parent
+SIDECAR_EXIT_TIMEOUT_SECONDS = 15
+
+
+def test_real_sidecar_exits_and_removes_pidfile_when_host_closes_stdin(tmp_path):
+    env = {**os.environ, "RUMBLE_SIDECAR_SECRET": "death-path-test", "RUMBLE_SIDECAR_WATCH_STDIN": "1"}
+    proc = subprocess.Popen(
+        [sys.executable, "main.py", "--port", "0", "--data-dir", str(tmp_path)],
+        cwd=SIDECAR_DIR,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        assert proc.stdout.readline().startswith(b"PORT:")  # lifespan startup done
+        assert (tmp_path / "sidecar.pid").read_text() == str(proc.pid)
+
+        proc.stdin.close()  # what the OS does when the host dies
+
+        assert proc.wait(timeout=SIDECAR_EXIT_TIMEOUT_SECONDS) == 0
+        assert not (tmp_path / "sidecar.pid").exists()
+    finally:
+        proc.kill()
+        proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
 
 
 def test_watch_stdin_none_logs_and_returns(monkeypatch, caplog):
