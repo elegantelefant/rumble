@@ -201,6 +201,21 @@ async function saveSettings() {
   }
 }
 
+const isDeletingData = ref(false);
+
+// The host shows the native confirmation; false means the user cancelled and nothing was deleted.
+async function deleteAllLocalData() {
+  isDeletingData.value = true;
+  try {
+    const deleted = await invoke<boolean>("delete_all_local_data");
+    if (deleted) toast.addToast("All local chats and jobs were deleted.", "success");
+  } catch (error) {
+    toast.addToast(typeof error === "string" ? error : String(error), "error");
+  } finally {
+    isDeletingData.value = false;
+  }
+}
+
 async function testSync() {
   const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
   try {
@@ -356,6 +371,19 @@ const selectedProviderDetails = computed(() =>
           Workspace path
           <input v-model="workspaceStorage.workspacePath" class="input mt-1" />
         </label>
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--error)] bg-red-50 p-4">
+          <p class="text-xs text-[var(--primary-600)]">
+            Permanently deletes every chat, message and document job stored on this device. You'll be asked to confirm.
+          </p>
+          <button
+            class="btn-secondary border-[var(--error)] text-[var(--error)]"
+            type="button"
+            :disabled="isDeletingData"
+            @click="deleteAllLocalData"
+          >
+            Delete all local data
+          </button>
+        </div>
         <div class="grid gap-3 md:grid-cols-2">
           <div>
             <h4 class="text-sm font-semibold text-[var(--primary-700)]">Briefcases</h4>
