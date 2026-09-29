@@ -271,9 +271,11 @@ async def test_a_failed_compaction_does_not_block_startup_and_retries(tmp_path, 
         return await real_execute(self, sql, *args, **kwargs)
 
     monkeypatch.setattr(aiosqlite.Connection, "execute", full_disk_vacuum)
-    with caplog.at_level("ERROR"):
-        await db.init_db(str(tmp_path))
     try:
+        # Inside the try: if init_db raised with the connection open, the non-daemon
+        # aiosqlite thread would keep pytest from exiting.
+        with caplog.at_level("ERROR"):
+            await db.init_db(str(tmp_path))
         assert any("could not compact" in r.message for r in caplog.records)
         version = await (await db._get_db().execute("PRAGMA user_version")).fetchone()
         assert version[0] == 0
