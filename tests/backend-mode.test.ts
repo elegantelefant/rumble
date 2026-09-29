@@ -1,5 +1,5 @@
 // ABOUTME: Tests for the shared backend-mode composable's ordering and knock-on effects.
-// ABOUTME: Covers stale reads racing a switch, and the model list being dropped after a switch.
+// ABOUTME: Covers stale reads racing a switch, the switch result, and the model list being dropped after a switch.
 
 import { invoke } from "@tauri-apps/api/core"
 import { listModels } from "../src/api/sidecar"
@@ -37,9 +37,10 @@ describe("backend mode composable", () => {
     vi.mocked(listModels).mockResolvedValue({
       models: [{ id: "llama3.2:latest", provider: "ollama", name: "llama3.2:latest", default: true }],
     })
+    backendMode.value = "ollama"
     const { models, loadModels } = useModels()
     await loadModels()
-    vi.mocked(invoke).mockResolvedValue(undefined)
+    vi.mocked(invoke).mockResolvedValue(true)
 
     await setBackendMode("byok")
     expect(models.value).toEqual([])
@@ -49,5 +50,10 @@ describe("backend mode composable", () => {
     })
     await loadModels()
     expect(models.value.map((m) => m.id)).toEqual(["gpt-4o-mini"])
+  })
+
+  it("reports whether the host actually changed mode", async () => {
+    vi.mocked(invoke).mockResolvedValue(false)
+    expect(await setBackendMode("ollama")).toBe(false)
   })
 })

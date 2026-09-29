@@ -4,6 +4,7 @@
 import { mount } from "@vue/test-utils"
 import TranslationView from "../src/views/TranslationView.vue"
 import { TOAST_KEY } from "../src/composables/toast"
+import { backendMode } from "../src/composables/backendMode"
 
 vi.mock("../src/modules/backend/backendClient", () => ({
   backendRegistry: { value: [] },
@@ -26,6 +27,8 @@ function mountTranslation() {
 }
 
 beforeEach(() => {
+  // Every launch starts in local mode, where the fallback model is offered.
+  backendMode.value = "ollama"
   vi.clearAllMocks()
 })
 

@@ -101,12 +101,17 @@ watch(backendMode, (mode) => {
 });
 
 async function chooseMode(mode: BackendMode) {
-  if (mode === backendMode.value) return;
+  // Unknown after a failed read: ask the host before treating this as a switch.
+  if (backendMode.value === null) await loadBackendMode();
+  if (mode === backendMode.value) {
+    selectedMode.value = mode;
+    return;
+  }
   switchingMode.value = true;
   try {
-    await setBackendMode(mode);
+    const changed = await setBackendMode(mode);
     const label = modeOptions.find((option) => option.id === mode)?.label ?? mode;
-    toast.addToast(`Switched to ${label}. The local AI service is restarting.`, "success");
+    if (changed) toast.addToast(`Switched to ${label}. The local AI service is restarting.`, "success");
   } catch (error) {
     toast.addToast(`Could not switch mode: ${error}`, "error");
     selectedMode.value = backendMode.value;
@@ -212,12 +217,18 @@ async function addSecret() {
     toast.addToast("Enter the provider key before saving.", "error");
     return;
   }
+  let failure: string | null = null;
   if (provider?.requiresKey) {
     try {
       await invoke("store_api_key", { provider: newSecret.provider, key: newSecret.key });
     } catch (error) {
-      toast.addToast(`Failed to store API key: ${error}`, "error");
-      return;
+      failure = String(error);
+      // The host can save the key and then fail to restart the local service;
+      // the keychain, not the error, says whether the key is there.
+      if ((await storedKey(newSecret.provider)) !== newSecret.key) {
+        toast.addToast(`Failed to store API key: ${failure}`, "error");
+        return;
+      }
     }
   }
   secrets.value.unshift({
@@ -233,7 +244,20 @@ async function addSecret() {
   newSecret.key = "";
   newSecret.scope = "global";
   newSecret.notes = "";
-  toast.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
+  if (failure) {
+    toast.addToast(failure, "error");
+  } else {
+    toast.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
+  }
+}
+
+/** The keychain's key for a provider; undefined when it can't be read. */
+async function storedKey(provider: string): Promise<string | null | undefined> {
+  try {
+    return await invoke<string | null>("get_api_key", { provider });
+  } catch {
+    return undefined;
+  }
 }
 
 async function removeSecret(id: string) {
@@ -242,9 +266,14 @@ async function removeSecret(id: string) {
     try {
       await invoke("delete_api_key", { provider: secret.provider });
     } catch (e) {
-      console.error("Failed to delete keychain entry:", e);
-      toast.addToast("Could not remove credential from system keychain.", "error");
-      return;
+      // Removed but the local service didn't restart: the keychain says so.
+      if ((await storedKey(secret.provider)) === null) {
+        toast.addToast(String(e), "error");
+      } else {
+        console.error("Failed to delete keychain entry:", e);
+        toast.addToast("Could not remove credential from system keychain.", "error");
+        return;
+      }
     } finally {
       // Deleting the OpenAI key in BYOK mode drops the host back to local mode.
       await loadBackendMode();

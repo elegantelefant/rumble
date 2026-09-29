@@ -291,7 +291,7 @@ describe("SettingsView", () => {
 describe("SettingsView processing mode", () => {
   const BYOK_REFUSAL = "Add an OpenAI API key in Settings before switching to BYOK."
 
-  function hostInMode(mode: string, setMode: (args: Record<string, unknown>) => Promise<unknown> = async () => undefined) {
+  function hostInMode(mode: string, setMode: (args: Record<string, unknown>) => Promise<unknown> = async () => true) {
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
       if (cmd === "get_backend_mode") return mode
       if (cmd === "set_backend_mode") return setMode(args!)
@@ -314,6 +314,7 @@ describe("SettingsView processing mode", () => {
     const calls: Record<string, unknown>[] = []
     hostInMode("ollama", async (args) => {
       calls.push(args)
+      return true
     })
     const wrapper = mountSettings()
     await vi.advanceTimersByTimeAsync(0)
@@ -416,5 +417,97 @@ describe("SettingsView processing mode", () => {
     await vi.advanceTimersByTimeAsync(0)
     expect((radio(wrapper, "ollama").element as HTMLInputElement).checked).toBe(true)
   })
+
+  it("with the mode unknown, asks the host first and does nothing when it is already in that mode", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    let reads = 0
+    const switches: Record<string, unknown>[] = []
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "get_backend_mode") {
+        reads++
+        if (reads === 1) throw "IPC hiccup"
+        return "ollama"
+      }
+      if (cmd === "set_backend_mode") switches.push(args!)
+      return true
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await radio(wrapper, "ollama").setValue(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(switches).toEqual([])
+    expect(mockAddToast).not.toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalledWith("Failed to read backend mode:", "IPC hiccup")
+    consoleError.mockRestore()
+  })
+
+  it("does not say the service is restarting when the host did not change mode", async () => {
+    hostInMode("ollama", async () => false)
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await radio(wrapper, "byok").setValue(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockAddToast).not.toHaveBeenCalled()
+  })
 })
 
+describe("SettingsView key changes that the local service fails to follow", () => {
+  const SAVED_BUT = "Key saved, but the local AI service didn't restart: spawn failed"
+  const REMOVED_BUT = "Key removed, but the local AI service didn't restart: spawn failed"
+
+  async function addOpenAiKey(wrapper: ReturnType<typeof mountSettings>, key: string) {
+    await wrapper.find("select").setValue("openai")
+    await wrapper.find('input[type="password"]').setValue(key)
+    await wrapper.findAll("button").find((b) => b.text() === "Save secret")!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+  }
+
+  it("lists a key the host saved before failing to restart, and says so", async () => {
+    let stored: string | null = null
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "store_api_key") {
+        stored = args!.key as string
+        throw SAVED_BUT
+      }
+      if (cmd === "get_api_key") return args?.provider === "openai" ? stored : null
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await addOpenAiKey(wrapper, "sk-new")
+    expect(wrapper.findAll("button").some((b) => b.text() === "Remove")).toBe(true)
+    expect(mockAddToast).toHaveBeenCalledWith(SAVED_BUT, "error")
+  })
+
+  it("does not list a key the keychain refused", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "store_api_key") throw "keychain locked"
+      if (cmd === "get_api_key") return null
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await addOpenAiKey(wrapper, "sk-new")
+    expect(wrapper.findAll("button").some((b) => b.text() === "Remove")).toBe(false)
+    expect(mockAddToast).toHaveBeenCalledWith("Failed to store API key: keychain locked", "error")
+  })
+
+  it("drops a key the host removed before failing to restart, and says so", async () => {
+    let stored: string | null = "sk-old"
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "delete_api_key") {
+        stored = null
+        throw REMOVED_BUT
+      }
+      if (cmd === "get_api_key") return args?.provider === "openai" ? stored : null
+      if (cmd === "get_backend_mode") return "ollama"
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await wrapper.findAll("button").find((b) => b.text() === "Remove")!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(wrapper.findAll("button").some((b) => b.text() === "Remove")).toBe(false)
+    expect(mockAddToast).toHaveBeenCalledWith(REMOVED_BUT, "error")
+  })
+})

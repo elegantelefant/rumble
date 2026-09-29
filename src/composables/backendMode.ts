@@ -2,7 +2,6 @@
 // ABOUTME: TopBar, Settings and DocumentReviewView read it here so a mode switch updates all of them at once.
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { invalidateModels } from "./models";
 
 export type BackendMode = "ollama" | "byok" | "premium";
 export type ConfidentialityState = "local" | "byok" | "hybrid" | "unknown";
@@ -58,15 +57,17 @@ export async function loadBackendMode(): Promise<void> {
 }
 
 /**
- * Switches the host (which respawns the sidecar). The shared mode changes only
- * once the host confirms; on failure it re-reads the host's mode and rethrows its string.
+ * Switches the host. Resolves true when the mode changed and the sidecar is
+ * restarting, false when the host was already in that mode. The shared mode
+ * changes only once the host confirms; on failure it re-reads the host's mode
+ * and rethrows its string.
  */
-export async function setBackendMode(mode: BackendMode): Promise<void> {
+export async function setBackendMode(mode: BackendMode): Promise<boolean> {
   try {
-    await invoke("set_backend_mode", { mode });
+    const changed = await invoke<boolean>("set_backend_mode", { mode });
     latestRead++;
     backendMode.value = mode;
-    invalidateModels();
+    return changed;
   } catch (error) {
     await loadBackendMode();
     throw typeof error === "string" ? error : String(error);
