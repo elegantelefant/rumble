@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: "TranslationView" });
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { translate } from "../api/sidecar";
 import { useModels } from "../composables/models";
@@ -37,6 +37,10 @@ watch(modelOptions, (list) => {
 }, { immediate: true });
 
 onMounted(() => {
+  void loadModels();
+});
+// Kept alive: after a mode switch invalidates the list, reload on return.
+onActivated(() => {
   void loadModels();
 });
 

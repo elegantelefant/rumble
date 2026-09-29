@@ -2,6 +2,7 @@
 // ABOUTME: TopBar, Settings and DocumentReviewView read it here so a mode switch updates all of them at once.
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { invalidateModels } from "./models";
 
 export type BackendMode = "ollama" | "byok" | "premium";
 export type ConfidentialityState = "local" | "byok" | "hybrid" | "unknown";
@@ -37,24 +38,35 @@ export const MODE_TO_STATE: Record<BackendMode, ConfidentialityState> = {
 // null until read, and after a failed read — never a guess.
 export const backendMode = ref<BackendMode | null>(null);
 
+// Only the newest read may land: a read that started before a switch
+// completed must not overwrite the switched mode.
+let latestRead = 0;
+
 export function confidentialityOf(mode: BackendMode | null): ConfidentialityState {
   return (mode && MODE_TO_STATE[mode]) ?? "unknown";
 }
 
 export async function loadBackendMode(): Promise<void> {
+  const read = ++latestRead;
   try {
-    backendMode.value = await invoke<BackendMode>("get_backend_mode");
+    const mode = await invoke<BackendMode>("get_backend_mode");
+    if (read === latestRead) backendMode.value = mode;
   } catch (error) {
     console.error("Failed to read backend mode:", error);
-    backendMode.value = null;
+    if (read === latestRead) backendMode.value = null;
   }
 }
 
-/** Switches the host (which respawns the sidecar); on failure re-reads the host's mode and rethrows its string. */
+/**
+ * Switches the host (which respawns the sidecar). The shared mode changes only
+ * once the host confirms; on failure it re-reads the host's mode and rethrows its string.
+ */
 export async function setBackendMode(mode: BackendMode): Promise<void> {
   try {
     await invoke("set_backend_mode", { mode });
+    latestRead++;
     backendMode.value = mode;
+    invalidateModels();
   } catch (error) {
     await loadBackendMode();
     throw typeof error === "string" ? error : String(error);

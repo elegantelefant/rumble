@@ -4,7 +4,7 @@
 import { mount, flushPromises } from "@vue/test-utils"
 import TopBar from "../src/modules/navigation/TopBar.vue"
 import { invoke } from "@tauri-apps/api/core"
-import { backendMode, setBackendMode } from "../src/composables/backendMode"
+import { backendMode, loadBackendMode, setBackendMode } from "../src/composables/backendMode"
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -99,4 +99,33 @@ describe("TopBar confidentiality indicator", () => {
     await flushPromises()
     expect(wrapper.text()).toContain("Local & Confidential")
   })
+
+  it("keeps the current pill while a switch is pending, changing only once the host confirms", async () => {
+    vi.mocked(invoke).mockResolvedValue("byok")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    let confirm!: () => void
+    vi.mocked(invoke).mockImplementation(() => new Promise((resolve) => (confirm = () => resolve(undefined))))
+    const switching = setBackendMode("ollama")
+    await flushPromises()
+    expect(wrapper.text()).toContain("Direct to Provider")
+    expect(wrapper.text()).not.toContain("Local & Confidential")
+    confirm()
+    await switching
+    await flushPromises()
+    expect(wrapper.text()).toContain("Local & Confidential")
+  })
+
+  it("stops claiming a mode when a later read fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(invoke).mockResolvedValue("ollama")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    vi.mocked(invoke).mockRejectedValue("IPC error")
+    await loadBackendMode()
+    await flushPromises()
+    expect(wrapper.text()).toContain("Mode unavailable")
+    consoleError.mockRestore()
+  })
 })
+

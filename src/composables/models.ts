@@ -19,6 +19,12 @@ const models = ref<ModelOption[]>([...FALLBACK_MODELS]);
 const loaded = ref(false);
 const loading = ref(false);
 
+/** Forgets the list, e.g. after a mode switch: the other mode's models must not be offered. */
+export function invalidateModels() {
+  models.value = [];
+  loaded.value = false;
+}
+
 export function useModels() {
   const availableModels = computed(() => models.value.filter((m) => m.available));
 

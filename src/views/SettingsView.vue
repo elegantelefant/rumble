@@ -106,7 +106,7 @@ async function chooseMode(mode: BackendMode) {
   try {
     await setBackendMode(mode);
     const label = modeOptions.find((option) => option.id === mode)?.label ?? mode;
-    toast.addToast(`Switched to ${label}. The local AI service restarted.`, "success");
+    toast.addToast(`Switched to ${label}. The local AI service is restarting.`, "success");
   } catch (error) {
     toast.addToast(`Could not switch mode: ${error}`, "error");
     selectedMode.value = backendMode.value;
@@ -245,6 +245,9 @@ async function removeSecret(id: string) {
       console.error("Failed to delete keychain entry:", e);
       toast.addToast("Could not remove credential from system keychain.", "error");
       return;
+    } finally {
+      // Deleting the OpenAI key in BYOK mode drops the host back to local mode.
+      await loadBackendMode();
     }
   }
   secrets.value = secrets.value.filter((s) => s.id !== id);

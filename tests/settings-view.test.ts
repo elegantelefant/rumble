@@ -105,6 +105,7 @@ describe("SettingsView", () => {
     const removeBtn = wrapper.findAll("button").find((b) => b.text() === "Remove")
     expect(removeBtn).toBeDefined()
     await removeBtn!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
     expect(wrapper.text()).not.toContain("Test runtime")
   })
 
@@ -309,7 +310,7 @@ describe("SettingsView processing mode", () => {
     expect((radio(wrapper, "ollama").element as HTMLInputElement).checked).toBe(true)
   })
 
-  it("switches the host's mode and says the local service restarted", async () => {
+  it("switches the host's mode and says the local service is restarting", async () => {
     const calls: Record<string, unknown>[] = []
     hostInMode("ollama", async (args) => {
       calls.push(args)
@@ -320,7 +321,7 @@ describe("SettingsView processing mode", () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(calls).toEqual([{ mode: "byok" }])
     expect(mockAddToast).toHaveBeenCalledWith(
-      "Switched to Your own key (OpenAI). The local AI service restarted.",
+      "Switched to Your own key (OpenAI). The local AI service is restarting.",
       "success",
     )
   })
@@ -356,4 +357,64 @@ describe("SettingsView processing mode", () => {
     expect((byok.element as HTMLInputElement).disabled).toBe(true)
     expect(byok.element.closest("label")!.textContent).toContain("Not available in this version.")
   })
+
+  it("after a refused switch shows the mode the host reports, not a guess", async () => {
+    let hostMode = "ollama"
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_backend_mode") return hostMode
+      if (cmd === "set_backend_mode") {
+        hostMode = "premium"
+        throw BYOK_REFUSAL
+      }
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await radio(wrapper, "byok").setValue(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect((radio(wrapper, "premium").element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it("does not ask the host to switch to the mode it is already in", async () => {
+    const calls: Record<string, unknown>[] = []
+    hostInMode("ollama", async (args) => {
+      calls.push(args)
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await radio(wrapper, "ollama").trigger("change")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toEqual([])
+    expect(mockAddToast).not.toHaveBeenCalled()
+  })
+
+  it("locks the mode control while a switch is in progress", async () => {
+    let finish!: () => void
+    hostInMode("ollama", () => new Promise<void>((resolve) => (finish = resolve)))
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await radio(wrapper, "byok").setValue(true)
+    const fieldset = radio(wrapper, "byok").element.closest("fieldset")!
+    expect(fieldset.hasAttribute("disabled")).toBe(true)
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fieldset.hasAttribute("disabled")).toBe(false)
+  })
+
+  it("follows the host back to local mode when the OpenAI key is removed in BYOK", async () => {
+    let hostMode = "byok"
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "get_backend_mode") return hostMode
+      if (cmd === "get_api_key") return args?.provider === "openai" ? "sk-stored" : null
+      if (cmd === "delete_api_key") hostMode = "ollama"
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect((radio(wrapper, "byok").element as HTMLInputElement).checked).toBe(true)
+    await wrapper.findAll("button").find((b) => b.text() === "Remove")!.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect((radio(wrapper, "ollama").element as HTMLInputElement).checked).toBe(true)
+  })
 })
+
