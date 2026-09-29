@@ -13,6 +13,8 @@ from models.generated import (
     ChatMessagesResponse,
     ChatTitleResponse,
     ClarifyResponse,
+    ErrorResponse,
+    ExtractDocumentResponse,
     HealthResponse,
     JobCreatedResponse,
     JobResultResponse,
@@ -164,3 +166,22 @@ async def test_research_result_matches_contract(client):
     resp = await client.get(f"/research/{report_id}/result")
     assert resp.status_code == 200
     ResearchResultResponse(**resp.json())
+
+
+# --- Extract ---
+
+
+async def test_extract_matches_contract(client):
+    resp = await client.post(
+        "/extract", files={"file": ("notes.txt", b"clause one", "text/plain")}
+    )
+    assert resp.status_code == 200
+    ExtractDocumentResponse(**resp.json())
+
+
+async def test_extract_rejection_matches_contract(client):
+    resp = await client.post(
+        "/extract", files={"file": ("contract.doc", b"anything", "application/msword")}
+    )
+    assert resp.status_code == 422
+    ErrorResponse(**resp.json())

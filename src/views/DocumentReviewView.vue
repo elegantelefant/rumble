@@ -1,13 +1,24 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { backendRegistry } from "../modules/backend/backendClient";
-import { createChat, createReviewJob, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
+import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
 
 const toasts = useToast();
+
+// Only local (Ollama) mode keeps a document on this device; BYOK and Premium
+// send its text to a provider for review. Read the same mode as TopBar's pill
+// and make no claim until it is known — including when reading it fails.
+const isLocalMode = ref(false);
+onMounted(async () => {
+  isLocalMode.value = await invoke<string>("get_backend_mode")
+    .then((mode) => mode === "ollama")
+    .catch(() => false);
+});
 
 type ReviewStatus = "idle" | "running" | "ready";
 
@@ -27,15 +38,6 @@ type ReviewSession = {
   chatId: string | null;
   fileText: string;
 };
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-    reader.readAsText(file);
-  });
-}
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const customPrompt = ref("");
@@ -69,9 +71,10 @@ function triggerFilePicker() {
 async function registerFile(file: File) {
   let fileText: string;
   try {
-    fileText = await readFileAsText(file);
-  } catch {
-    toasts.addToast(`Could not read ${file.name}. Only plain-text files are supported.`, "error");
+    fileText = await extractDocument(file);
+  } catch (err) {
+    const message = typeof err === "string" ? err : err instanceof Error ? err.message : `Could not read ${file.name}.`;
+    toasts.addToast(message, "error");
     return;
   }
   if (!fileText.trim()) {
@@ -111,6 +114,9 @@ function handleFiles(files: FileList | null) {
 function handleInputChange(event: Event) {
   const input = event.target as HTMLInputElement | null;
   handleFiles(input?.files ?? null);
+  // Reset so picking the identical file again still changes the input's
+  // value and fires `change` — otherwise the browser never re-fires it.
+  if (input) input.value = "";
 }
 
 function handleDrop(event: DragEvent) {
@@ -345,7 +351,9 @@ const workflowSteps = [
             @drop="handleDrop"
           >
             <div class="text-base font-medium">Drop files here or browse</div>
-            <p class="text-xs text-[var(--primary-600)]">PDF, DOCX, TXT supported. Files never leave this device.</p>
+            <p class="text-xs text-[var(--primary-600)]">
+              PDF, DOCX, TXT supported.<template v-if="isLocalMode"> Files never leave this device.</template>
+            </p>
             <div class="flex flex-wrap items-center justify-center gap-3">
               <button class="btn-primary" type="button" @click="triggerFilePicker">Browse Files</button>
               <input

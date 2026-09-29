@@ -7,6 +7,7 @@ import { TOAST_KEY } from "../src/composables/toast"
 import {
   createChat,
   createReviewJob,
+  extractDocument,
   sendMessage,
   waitForJob,
 } from "../src/api/sidecar"
@@ -14,22 +15,13 @@ import {
 vi.mock("../src/api/sidecar", () => ({
   createChat: vi.fn(),
   createReviewJob: vi.fn(),
+  extractDocument: vi.fn(),
   sendMessage: vi.fn(),
   streamMessage: vi.fn(),
   waitForJob: vi.fn(),
 }))
 
 const mockAddToast = vi.fn()
-
-class SyncFileReader {
-  result: string | null = null
-  onload: (() => void) | null = null
-  onerror: (() => void) | null = null
-  readAsText() {
-    this.result = "clause one\nclause two"
-    this.onload?.()
-  }
-}
 
 function mountReview() {
   return mount(DocumentReviewView, {
@@ -49,11 +41,7 @@ async function uploadFile(wrapper: ReturnType<typeof mountReview>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.stubGlobal("FileReader", SyncFileReader)
-})
-
-afterEach(() => {
-  vi.unstubAllGlobals()
+  vi.mocked(extractDocument).mockResolvedValue("clause one\nclause two")
 })
 
 describe("DocumentReviewView initial review", () => {
