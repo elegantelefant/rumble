@@ -17,7 +17,7 @@ so they cannot obtain the secret and cannot call the sidecar's API.
 point the attacker can read the app's own environment, its keychain entries, and its local SQLite
 database directly — a request secret adds no protection against that level of access.
 
-Known issue: the secret is currently also exposed to the webview for chat streaming — see #55.
+Known issue: the secret is currently also exposed to the webview for chat streaming — see [#55].
 
 ## The packaged app always requires a secret
 
@@ -34,7 +34,73 @@ sidecar from source during development. It must never be used in a packaged buil
 machine, or any environment reachable by another user or process you do not fully trust. The
 sidecar logs a loud warning on startup whenever it runs this way.
 
+## Network
+
+What leaves the machine, when, and how to switch it off is in [NETWORK.md](NETWORK.md). The claim
+is "offline after setup", not "offline".
+
+## Where data lives
+
+- **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri app data
+  directory for identifier `com.ielegante.rumble`: `~/Library/Application Support/com.ielegante.rumble/`
+  on macOS, `%APPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
+  on Linux. It holds chats, messages and jobs; a job row stores its full request and result,
+  which includes document text. (`src-tauri/src/lib.rs` `spawn_sidecar`,
+  `src-tauri/sidecar/services/db.py`.) Settings shows a hardcoded path that isn't this one ([#22]).
+- **OS keychain** — service `elefant-rumble`: the premium `auth_token` and any `byok_<provider>`
+  keys saved in Settings (`src-tauri/src/lib.rs`, keychain helpers).
+- **Ollama's models** — Ollama's own store (`~/.ollama/models`), managed by Ollama, not rumble.
+
+## Encryption at rest
+
+Rumble relies on full-disk encryption — FileVault, BitLocker, LUKS — and does not encrypt its
+database itself. Application-level encryption such as SQLCipher would add almost nothing against
+the realistic threats. Against a lost or stolen machine, disk encryption already covers the
+database, and also the WAL files, temp files, swap, exported `.docx` files and Ollama's models,
+which SQLCipher would not. Against code running as the same user, the database key would have to
+sit in that same user's keychain, where the attacker can read it. Firms should require disk
+encryption on any machine running rumble.
+
+The Settings screen currently claims "Local storage uses SQLCipher for encryption". That is false
+([#19]).
+
+## Known issues
+
+- **Secret handed to webview JavaScript** — chat streaming fetches the sidecar directly from the
+  webview and obtains the shared secret via the `sidecar_secret` command, so any script in the
+  webview can read it ([#55]). The CSP's `script-src 'self'` limits which scripts that could be.
+- **Data retention** — jobs, and the document text inside them, are never deleted; there is no
+  "delete all local data"; on Windows the data directory is in the roaming profile, which can sync
+  client documents to domain servers ([#57]).
+- **Health check without the secret** — the host's `sidecar_status` calls `/health` without the
+  secret header, so a packaged build always reports health "unreachable". Cosmetic today; a false
+  signal while debugging ([#69]).
+- **Mode is not enforced where egress happens** — see [NETWORK.md](NETWORK.md) ([#41], [#52], [#53]).
+- **Unconditional privacy copy** — some screens and the README say data never leaves the device
+  regardless of mode ([#56]).
+
+## Build and update integrity
+
+- **Builds are unsigned and unnotarized.** `.github/workflows/build.yml` has no signing step, so
+  macOS Gatekeeper will warn on first launch. A signed, notarized macOS build is pending ([plan](agent_docs/2026-09-22-credible-delightful-local-first-plan.md)
+  §3 R4, gated on Apple Developer enrolment).
+- **No auto-updater.** None is in the build; updates are a manual download.
+- **Supply chain.** CI actions are pinned by tag, not commit SHA; `uv sync` runs without
+  `--locked`; releases publish no checksums, SBOM or build provenance. SHA-pinned actions,
+  locked installs, CycloneDX SBOMs, build attestation and release checksums are planned ([plan](agent_docs/2026-09-22-credible-delightful-local-first-plan.md)
+  §2 L3).
+
 ## Reporting a vulnerability
 
 Please don't report security vulnerabilities in public GitHub issues.
 Report them privately to dpo@elefant.legal.
+
+[#19]: https://github.com/elegantelefant/rumble/issues/19
+[#22]: https://github.com/elegantelefant/rumble/issues/22
+[#41]: https://github.com/elegantelefant/rumble/issues/41
+[#52]: https://github.com/elegantelefant/rumble/issues/52
+[#53]: https://github.com/elegantelefant/rumble/issues/53
+[#55]: https://github.com/elegantelefant/rumble/issues/55
+[#56]: https://github.com/elegantelefant/rumble/issues/56
+[#57]: https://github.com/elegantelefant/rumble/issues/57
+[#69]: https://github.com/elegantelefant/rumble/issues/69
