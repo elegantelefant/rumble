@@ -162,25 +162,26 @@ async def test_build_agent_refuses_requested_model_ollama_marks_remote(monkeypat
 
 
 @pytest.mark.parametrize(
-    ("default", "refusal"),
+    ("default", "requested", "refusal"),
     [
-        ("llama3.2", "remote"),  # the configured default
-        ("not-pulled", "no local Ollama model"),  # the first-pulled fallback
+        ("llama3.2", None, "remote"),  # the configured default
+        ("not-pulled", None, "no local Ollama model"),  # the first-pulled fallback
+        ("not-pulled", "llama3.2", "remote"),  # a model requested by name
     ],
 )
 async def test_build_agent_refuses_model_ollama_marks_remote_after_an_earlier_local_resolution(
-    monkeypatch, fake_ollama, default, refusal
+    monkeypatch, fake_ollama, default, requested, refusal
 ):
     # e.g. `ollama cp gpt-oss:120b-cloud llama3.2` while the sidecar runs
     monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
     monkeypatch.setenv("OLLAMA_DEFAULT_MODEL", default)
     fake_ollama.set_tags("llama3.2:latest")
     _mock_provider(monkeypatch)
-    await llm._build_agent()
+    await llm._build_agent(model_name=requested)
     fake_ollama.set_tags("llama3.2:latest", remote=("llama3.2:latest",))
 
     with pytest.raises(ValueError, match=refusal):
-        await llm._build_agent()
+        await llm._build_agent(model_name=requested)
 
 
 @pytest.mark.parametrize("name", ["gpt-oss:120b-CLOUD", "qwen3.5:cloud ", " gemma3-Cloud"])
