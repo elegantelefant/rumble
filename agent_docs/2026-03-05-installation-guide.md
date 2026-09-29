@@ -176,3 +176,7 @@ Elefant - Rumble/               # Windows / Linux
   - macOS: `~/Library/Application Support/com.ielegante.rumble/`
   - Windows: `%APPDATA%/com.ielegante.rumble/`
   - Linux: `~/.local/share/com.ielegante.rumble/`
+- **Settings**: `settings.json` in the app *local* data directory (not the Windows roaming profile), written when you press Save in Settings. Provider keys are not in it; they stay in the OS keychain.
+  - macOS: `~/Library/Application Support/com.ielegante.rumble/`
+  - Windows: `%LOCALAPPDATA%/com.ielegante.rumble/`
+  - Linux: `~/.local/share/com.ielegante.rumble/`

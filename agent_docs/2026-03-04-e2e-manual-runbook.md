@@ -295,14 +295,14 @@
 |---|------|----------|------------|--------|-------|
 | 8.9 | Templates folder path | Shows path | LIKELY OK | [ ] | |
 | 8.10 | Workspace path | Shows path | LIKELY OK | [ ] | |
-| 8.11 | Briefcases list | 3 items | LIKELY OK | [ ] | |
+| 8.11 | Briefcases list | Empty on first run; saved names after Save + relaunch (#18) | LIKELY OK | [ ] | |
 
 ### 8d. Appearance Tab
 
 | # | Step | Expected | Prediction | Status | Notes |
 |---|------|----------|------------|--------|-------|
-| 8.12 | Sidebar position dropdowns | Left/Right options | LIKELY OK — but values are not persisted anywhere | [ ] | |
-| 8.13 | Theme dropdown | 3 options | LIKELY OK — but values are not persisted | [ ] | |
+| 8.12 | Sidebar position dropdowns | Left/Right options | LIKELY OK — persisted to settings.json on Save (#18), not yet applied to the layout | [ ] | |
+| 8.13 | Theme dropdown | 3 options | LIKELY OK — persisted on Save (#18), not yet applied | [ ] | |
 | 8.14 | "Show chat history" checkbox | Toggleable | LIKELY OK | [ ] | |
 
 ### 8e. Sync Tab
@@ -328,7 +328,7 @@
 |----|----------|-------|
 | B8.1 | Low | `saveSettings` uses raw `setTimeout` instead of `mockSaveSettings` — inconsistent with other views |
 | B8.2 | Low | `testSync` ignores `mockTestSync` entirely — hardcoded toast |
-| B8.3 | Low | Settings values (appearance, sync config) are not persisted — lost on page refresh |
+| B8.3 | Low | ~~Settings values (appearance, sync config) are not persisted — lost on page refresh~~ Fixed by #18: saved to `settings.json` in the app local data dir, loaded when Settings opens |
 | B8.4 | Low | Form is not disabled during save — user can change values while "saving" |
 
 ---
@@ -450,7 +450,7 @@
 | B7.2 | Translation | History click discards unsaved input silently |
 | B8.1 | Settings | `saveSettings` uses raw setTimeout, not mock |
 | B8.2 | Settings | `testSync` ignores mock function |
-| B8.3 | Settings | Settings not persisted across refresh |
+| B8.3 | Settings | ~~Settings not persisted across refresh~~ fixed (#18) |
 | B8.4 | Settings | Form not disabled during save |
 | B9.1 | Toasts | No manual dismiss despite pointer-events-auto |
 | B9.2 | Toasts | Timer leak on unmount |
