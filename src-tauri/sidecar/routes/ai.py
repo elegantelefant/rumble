@@ -2,10 +2,12 @@
 # ABOUTME: Each endpoint takes a typed request, calls LLM once, and returns structured JSON.
 
 import json
+import logging
 import re
+import typing
 
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from models.generated import (
     ChatTitleRequest,
@@ -22,6 +24,8 @@ from models.generated import (
     TranslateResponse,
 )
 from services import llm, prompts
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ai"])
 
@@ -48,14 +52,121 @@ def _parse_llm_json(raw: str) -> dict:
         raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
 
+def _list_item_type(annotation):
+    """Return X if annotation is list[X] (optionally wrapped in Optional/Union), else None."""
+    for candidate in (annotation, *typing.get_args(annotation)):
+        if typing.get_origin(candidate) is list:
+            args = typing.get_args(candidate)
+            if args:
+                return args[0]
+    return None
+
+
+def _list_item_submodel(annotation) -> type[BaseModel] | None:
+    """Return X if annotation is list[X] (optionally wrapped in Optional/Union) and X is a BaseModel, else None."""
+    item_type = _list_item_type(annotation)
+    if item_type is not None and isinstance(item_type, type) and issubclass(item_type, BaseModel):
+        return item_type
+    return None
+
+
+def _nested_submodel(annotation) -> type[BaseModel] | None:
+    """Return X if annotation is X (optionally wrapped in Optional/Union) and X is a BaseModel, else None.
+
+    Relies on isinstance(dict[str, Any], type) being False (true from Python 3.11 on),
+    so a dict[str, Any] field like SearchResult.metadata is correctly skipped rather
+    than raising. pyproject pins requires-python = ">=3.12", but backporting this
+    helper to an older runtime would need re-checking that assumption or it would
+    raise TypeError instead of the intended clean 502.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in typing.get_args(annotation):
+        if isinstance(arg, type) and issubclass(arg, BaseModel):
+            return arg
+    return None
+
+
+def _drop_invalid_optional_fields(model_class: type[BaseModel], filtered: dict) -> None:
+    """Drop optional fields whose value doesn't match the declared type, in place.
+
+    An LLM inventing a value that doesn't fit an optional field (a ReviewIssue.kind
+    we didn't enumerate, a warnings string where a list was expected) shouldn't 502
+    the whole payload when the field already has a perfectly good default to fall
+    back on. Required fields are left untouched, so a missing or wrong-typed
+    required field still fails model_class(**filtered) and raises the usual 502.
+
+    A list-valued field is validated item by item rather than as a whole: one
+    malformed source shouldn't take every other, valid source down with it.
+    """
+    known_fields = model_class.model_fields
+    for name in list(filtered):
+        field = known_fields[name]
+        if field.is_required():
+            continue
+        value = filtered[name]
+        if isinstance(value, list):
+            item_type = _list_item_type(field.annotation)
+            if item_type is not None:
+                kept = []
+                for index, item in enumerate(value):
+                    try:
+                        TypeAdapter(item_type).validate_python(item)
+                        kept.append(item)
+                    except ValidationError:
+                        logger.warning(
+                            "Dropping invalid item %d in %s.%s: %r",
+                            index, model_class.__name__, name, item,
+                        )
+                filtered[name] = kept
+                continue
+        try:
+            TypeAdapter(field.annotation).validate_python(value)
+        except ValidationError:
+            del filtered[name]
+
+
+def _filter_submodel_item(submodel: type[BaseModel], item):
+    """Drop unknown keys from one list item, one level into any nested submodel field,
+    and drop any optional field whose value doesn't match its declared type."""
+    if not isinstance(item, dict):
+        return item
+    known_fields = submodel.model_fields
+    filtered_item = {k: v for k, v in item.items() if k in known_fields}
+    for name, field in known_fields.items():
+        if not isinstance(filtered_item.get(name), dict):
+            continue
+        nested = _nested_submodel(field.annotation)
+        if nested is not None:
+            nested_fields = nested.model_fields
+            filtered_item[name] = {k: v for k, v in filtered_item[name].items() if k in nested_fields}
+    _drop_invalid_optional_fields(submodel, filtered_item)
+    return filtered_item
+
+
 def _safe_construct(model_class, data: dict):
     """Construct a Pydantic model, dropping unknown keys to survive extra='forbid'.
 
+    Also filters one level into any list[SubModel] field (e.g. ReviewResponse.issues,
+    ResearchResultResponse.sources), and one further level into a nested submodel
+    field inside such an item (e.g. SearchResult.source): those submodels are
+    extra='forbid' too, so an unexpected key inside them would otherwise still raise.
+    Wrong-typed optional fields (top-level and, via _filter_submodel_item, inside
+    list items) are dropped rather than failing the whole payload.
+
     Raises a clean 502 (rather than an unhandled 500) if the LLM's JSON is
-    missing required fields or has values of the wrong type.
+    missing a required field or has a required field of the wrong type.
     """
-    known_fields = set(model_class.model_fields.keys())
+    known_fields = model_class.model_fields
     filtered = {k: v for k, v in data.items() if k in known_fields}
+    for name, value in filtered.items():
+        if not isinstance(value, list):
+            continue
+        submodel = _list_item_submodel(known_fields[name].annotation)
+        if submodel is not None:
+            # Rebinding an existing key doesn't resize the dict, so this is safe during iteration.
+            filtered[name] = [_filter_submodel_item(submodel, item) for item in value]
+    _drop_invalid_optional_fields(model_class, filtered)
     try:
         return model_class(**filtered)
     except ValidationError as exc:

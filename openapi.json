@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.307.0"
+    "version": "0.312.0"
   },
   "paths": {
     "/health": {
@@ -3190,6 +3190,16 @@
           },
           "401": {
             "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -22701,6 +22711,7 @@
           "channel-integrations"
         ],
         "summary": "Deactivate Channel Integration",
+        "description": "Set active = false. Idempotent: a retried or double-clicked DELETE on an\nalready-inactive row deactivates again (a no-op) rather than removing it \u2014\nDELETE no longer branches on server-side active state. Use POST\n.../remove for the distinct, non-idempotent removal.",
         "operationId": "deactivate_channel_integration",
         "parameters": [
           {
@@ -22736,6 +22747,81 @@
           },
           "404": {
             "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/channel-integrations/{id}/remove": {
+      "post": {
+        "tags": [
+          "channel-integrations"
+        ],
+        "summary": "Remove Channel Integration",
+        "description": "Permanently hide an inactive integration with no active sibling on its\nchannel, retaining its audit trail and credentials. Deliberately distinct\nfrom deactivate: this is the one destructive (non-reactivatable) operation\non this resource, so it never runs as a side effect of a retried DELETE.",
+        "operationId": "remove_channel_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The integration is still active, or its channel has an active sibling integration.",
             "content": {
               "application/json": {
                 "schema": {
@@ -29983,6 +30069,11 @@
                 "type": "null"
               }
             ]
+          },
+          "attachedDocumentCount": {
+            "type": "integer",
+            "title": "Attacheddocumentcount",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -30134,6 +30225,23 @@
             "type": "array",
             "title": "Currencyverdicts",
             "description": "Display-safe currency findings persisted with this assistant message."
+          },
+          "currencyStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clean",
+                  "needs_repair",
+                  "unchecked"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currencystatus",
+            "description": "Status of this turn's legislation-currency assessment: 'unchecked' means the check did not run, which an empty currency_verdicts list alone does not distinguish from a clean result. None on turns persisted before the status was recorded."
           },
           "tokenCount": {
             "anyOf": [
@@ -34215,6 +34323,39 @@
       },
       "EntitlementsResponse": {
         "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "stripe",
+              "admin_grant",
+              "none"
+            ],
+            "title": "Source",
+            "default": "none"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
           "searchWebRequestsMonthly": {
             "type": "integer",
             "title": "Searchwebrequestsmonthly"
@@ -34934,6 +35075,18 @@
             ],
             "title": "Briefcaseid",
             "description": "Optional briefcase to file the ingested document into once the ingest job completes. Must be OWNED by the caller (same rule as adding an item directly); the per-plan save cap is checked eagerly here and again in the worker."
+          },
+          "chatId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chatid",
+            "description": "Optional Ask Elf conversation this upload is being attached to. Only ever narrows: the confirm is refused (409, detail.reason 'chat_document_limit_reached') once that chat already holds CHAT_MAX_DOCUMENTS documents, so a wrong or absent id costs the caller the cap's protection rather than granting anything."
           }
         },
         "additionalProperties": false,
@@ -41222,6 +41375,10 @@
             ],
             "title": "Familytier"
           },
+          "icon": {
+            "type": "string",
+            "title": "Icon"
+          },
           "fileSupported": {
             "type": "boolean",
             "title": "Filesupported",
@@ -41239,7 +41396,8 @@
           "id",
           "provider",
           "name",
-          "displayName"
+          "displayName",
+          "icon"
         ],
         "title": "ModelInfo"
       },
@@ -49610,6 +49768,7 @@
           "mapping": {
             "answer": "#/components/schemas/StreamAnswerEvent",
             "context": "#/components/schemas/StreamContextEvent",
+            "currency_status": "#/components/schemas/StreamCurrencyStatusEvent",
             "currency_verdicts": "#/components/schemas/StreamCurrencyVerdictsEvent",
             "deliberation_prompt": "#/components/schemas/StreamDeliberationPromptEvent",
             "delta": "#/components/schemas/StreamDeltaEvent",
@@ -49657,6 +49816,9 @@
           },
           {
             "$ref": "#/components/schemas/StreamCurrencyVerdictsEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamCurrencyStatusEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -49820,6 +49982,32 @@
           "hidden_by_wall"
         ],
         "title": "StreamContextValue",
+        "type": "object"
+      },
+      "StreamCurrencyStatusEvent": {
+        "additionalProperties": false,
+        "description": "The turn's currency assessment status (#4288).\n\nMirrors `CurrencyAssessment.status` in services/currency_check.py. Emitted on\nevery assessed turn, so `unchecked` \u2014 the fail-open outcome, which carries no\nverdicts \u2014 is a state the client can render instead of being byte-identical to\na turn that was checked and came back clean.",
+        "properties": {
+          "type": {
+            "const": "currency_status",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              "clean",
+              "needs_repair",
+              "unchecked"
+            ],
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamCurrencyStatusEvent",
         "type": "object"
       },
       "StreamCurrencyVerdictValue": {
