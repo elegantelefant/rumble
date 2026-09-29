@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use reqwest::Client;
 use tauri::image::Image;
+use tauri::ipc::Channel;
 use tauri::path::BaseDirectory;
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, State};
@@ -393,6 +394,135 @@ async fn extract_document(
     .await
 }
 
+// --- Chat streaming ---
+
+/// The client's 30s total budget would cut a long local generation off
+/// mid-stream, so the stream gets its own, much longer one.
+const STREAM_TIMEOUT_SECS: u64 = 600;
+
+/// One event of a chat stream, as the frontend receives it over the channel.
+/// Exactly one `Done` or `Error` ends every stream.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
+enum StreamEvent {
+    Delta(String),
+    Done(String),
+    Error(String),
+}
+
+/// Accumulates SSE bytes and yields the payloads of complete `data:` lines.
+/// Only complete lines are decoded, so a UTF-8 character split across two
+/// network chunks is never cut in half.
+#[derive(Default)]
+struct SseLines {
+    buffer: Vec<u8>,
+}
+
+impl SseLines {
+    fn push(&mut self, bytes: &[u8]) -> Vec<String> {
+        self.buffer.extend_from_slice(bytes);
+        let mut payloads = Vec::new();
+        while let Some(end) = self.buffer.iter().position(|b| *b == b'\n') {
+            let line: Vec<u8> = self.buffer.drain(..=end).collect();
+            // sse-starlette ends lines with \r\n; trim covers both.
+            let line = String::from_utf8_lossy(&line);
+            if let Some(payload) = line.trim().strip_prefix("data:") {
+                let payload = payload.trim();
+                if !payload.is_empty() {
+                    payloads.push(payload.to_string());
+                }
+            }
+        }
+        payloads
+    }
+}
+
+/// Posts to the sidecar's SSE stream endpoint and relays each text delta to
+/// `on_delta`, in order. Returns the complete text from the sidecar's `done`
+/// event, or the message from its `error` event. The shared secret is
+/// attached here, host-side; the webview never sees it (#55).
+async fn relay_sse(
+    http: &Client,
+    url: &str,
+    secret: &str,
+    body: serde_json::Value,
+    mut on_delta: impl FnMut(String) -> Result<(), String>,
+) -> Result<String, String> {
+    let mut response = http
+        .post(url)
+        .header(SECRET_HEADER, secret)
+        .json(&body)
+        .timeout(Duration::from_secs(STREAM_TIMEOUT_SECS))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Stream request failed ({}): {}", status.as_u16(), text));
+    }
+
+    let mut lines = SseLines::default();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        for payload in lines.push(&chunk) {
+            // Non-JSON data lines are skipped, as the sidecar never sends them.
+            let Ok(event) = serde_json::from_str::<serde_json::Value>(&payload) else {
+                continue;
+            };
+            let value = event.get("value").and_then(|v| v.as_str()).unwrap_or_default();
+            match event.get("type").and_then(|t| t.as_str()) {
+                Some("delta") => on_delta(value.to_string())?,
+                Some("done") => return Ok(value.to_string()),
+                Some("error") => return Err(value.to_string()),
+                _ => {}
+            }
+        }
+    }
+    Err("stream ended before completion".to_string())
+}
+
+/// Streams a chat reply from the sidecar through `on_event`. Tauri delivers
+/// channel messages in order, but not in order with this command's own
+/// response (a payload of 8 KB or more travels by a separate fetch), so the
+/// frontend settles on the channel's terminal event rather than on this
+/// command returning — and every path, failures included, sends exactly one.
+#[tauri::command]
+async fn stream_message(
+    state: State<'_, AppState>,
+    chat_id: String,
+    text: String,
+    model: Option<String>,
+    on_event: Channel<StreamEvent>,
+) -> Result<(), String> {
+    stream_chat(&state, chat_id, text, model, &on_event).await
+}
+
+async fn stream_chat(
+    state: &AppState,
+    chat_id: String,
+    text: String,
+    model: Option<String>,
+    on_event: &Channel<StreamEvent>,
+) -> Result<(), String> {
+    let outcome = async {
+        let chat_id = Uuid::parse_str(&chat_id).map_err(|_| "invalid chat id".to_string())?;
+        let url = state.sidecar_url(&format!("/chats/{}/stream", chat_id))?;
+        let body = serde_json::json!({ "text": text, "model": model });
+        relay_sse(&state.http, &url, &state.secret, body, |delta| {
+            on_event.send(StreamEvent::Delta(delta)).map_err(|e| e.to_string())
+        })
+        .await
+    }
+    .await;
+
+    let terminal = match outcome {
+        Ok(full_text) => StreamEvent::Done(full_text),
+        Err(message) => StreamEvent::Error(message),
+    };
+    on_event.send(terminal).map_err(|e| e.to_string())
+}
+
 // --- Keychain helpers ---
 
 fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
@@ -642,15 +772,6 @@ fn kill_sidecar(state: &AppState) {
     *port = None;
 }
 
-/// Returns the shared secret for the one frontend path that talks to the
-/// sidecar directly (SSE streaming, which can't go through `api_call`).
-/// Kept separate from `sidecar_status` so the secret doesn't appear in
-/// routine status payloads that end up in devtools or log captures.
-#[tauri::command]
-fn sidecar_secret(state: State<'_, AppState>) -> String {
-    state.secret.clone()
-}
-
 #[tauri::command]
 async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -814,6 +935,7 @@ pub fn run() {
             // API proxy
             api_call,
             extract_document,
+            stream_message,
             // Auth / keychain
             auth_store_token,
             auth_get_token,
@@ -826,7 +948,6 @@ pub fn run() {
             set_backend_mode,
             // Sidecar
             sidecar_status,
-            sidecar_secret,
             // Document export
             export_draft_docx,
         ])
@@ -1579,6 +1700,196 @@ mod tests {
         )
         .await;
         assert_eq!(result.unwrap_err(), EXTRACT_TIMEOUT_MESSAGE);
+    }
+
+    // --- SseLines ---
+
+    #[test]
+    fn sse_lines_yields_data_payloads_from_crlf_lines() {
+        let mut lines = SseLines::default();
+        let payloads = lines.push(b"event: message\r\ndata: {\"a\":1}\r\n\r\n");
+        assert_eq!(payloads, vec!["{\"a\":1}".to_string()]);
+    }
+
+    #[test]
+    fn sse_lines_holds_a_partial_line_until_it_completes() {
+        let mut lines = SseLines::default();
+        assert!(lines.push(b"data: {\"type\":\"del").is_empty());
+        assert_eq!(lines.push(b"ta\"}\n"), vec!["{\"type\":\"delta\"}".to_string()]);
+    }
+
+    #[test]
+    fn sse_lines_keeps_a_utf8_character_split_across_chunks() {
+        let mut lines = SseLines::default();
+        let line = "data: 合同\n".as_bytes();
+        // Split inside the three-byte encoding of 合.
+        assert!(lines.push(&line[..7]).is_empty());
+        assert_eq!(lines.push(&line[7..]), vec!["合同".to_string()]);
+    }
+
+    // --- relay_sse (wiremock) ---
+
+    fn sse_body(events: &[serde_json::Value]) -> String {
+        events
+            .iter()
+            .map(|e| format!("event: message\r\ndata: {}\r\n\r\n", e))
+            .collect()
+    }
+
+    async fn relay_against(body: String, status: u16) -> (Result<String, String>, Vec<String>, MockServer) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chats/c/stream"))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(body),
+            )
+            .mount(&server)
+            .await;
+        let mut deltas = Vec::new();
+        let result = relay_sse(
+            &Client::new(),
+            &format!("{}/chats/c/stream", server.uri()),
+            "test-secret",
+            serde_json::json!({"text": "hi"}),
+            |d| {
+                deltas.push(d);
+                Ok(())
+            },
+        )
+        .await;
+        (result, deltas, server)
+    }
+
+    #[tokio::test]
+    async fn relay_forwards_deltas_in_order_and_returns_done_text() {
+        let body = sse_body(&[
+            serde_json::json!({"type": "status", "value": "generating"}),
+            serde_json::json!({"type": "delta", "value": "Hel"}),
+            serde_json::json!({"type": "delta", "value": "lo"}),
+            serde_json::json!({"type": "done", "value": "Hello"}),
+        ]);
+        let (result, deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(deltas, vec!["Hel".to_string(), "lo".to_string()]);
+        assert_eq!(result.unwrap(), "Hello");
+    }
+
+    #[tokio::test]
+    async fn relay_sends_secret_header_and_no_bearer_token() {
+        let body = sse_body(&[serde_json::json!({"type": "done", "value": ""})]);
+        let (_result, _deltas, server) = relay_against(body, 200).await;
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].headers.get(SECRET_HEADER).unwrap(), "test-secret");
+        assert!(requests[0].headers.get("authorization").is_none());
+    }
+
+    #[tokio::test]
+    async fn relay_error_event_becomes_err_with_its_message() {
+        let body = sse_body(&[
+            serde_json::json!({"type": "delta", "value": "par"}),
+            serde_json::json!({"type": "error", "value": "ollama unreachable"}),
+        ]);
+        let (result, _deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(result.unwrap_err(), "ollama unreachable");
+    }
+
+    #[tokio::test]
+    async fn relay_non_success_status_becomes_err_with_status() {
+        let (result, deltas, _server) =
+            relay_against("{\"detail\":\"chat not found\"}".to_string(), 404).await;
+        let err = result.unwrap_err();
+        assert!(err.contains("(404)"), "got: {}", err);
+        assert!(err.contains("chat not found"), "got: {}", err);
+        assert!(deltas.is_empty());
+    }
+
+    #[tokio::test]
+    async fn relay_stream_ending_without_terminal_event_is_err() {
+        let body = sse_body(&[serde_json::json!({"type": "delta", "value": "cut"})]);
+        let (result, _deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(result.unwrap_err(), "stream ended before completion");
+    }
+
+    /// A channel that records every message it is sent, as the JSON the webview would receive.
+    fn recording_channel() -> (Channel<StreamEvent>, std::sync::Arc<Mutex<Vec<serde_json::Value>>>) {
+        let sent = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let sink = sent.clone();
+        let channel = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(json) = body {
+                sink.lock().unwrap().push(serde_json::from_str(&json).unwrap());
+            }
+            Ok(())
+        });
+        (channel, sent)
+    }
+
+    const CHAT_ID: &str = "78072e58-05d6-496b-820d-9e09d9e7d0cc";
+
+    #[tokio::test]
+    async fn stream_chat_sends_deltas_then_exactly_one_done() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/chats/{}/stream", CHAT_ID)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body(&[
+                serde_json::json!({"type": "delta", "value": "Hel"}),
+                serde_json::json!({"type": "delta", "value": "lo"}),
+                serde_json::json!({"type": "done", "value": "Hello"}),
+            ])))
+            .mount(&server)
+            .await;
+        let state = make_state(BackendMode::Ollama, Some(server.address().port()));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![
+                serde_json::json!({"type": "delta", "value": "Hel"}),
+                serde_json::json!({"type": "delta", "value": "lo"}),
+                serde_json::json!({"type": "done", "value": "Hello"}),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_chat_rejects_a_non_uuid_chat_id_with_one_error_event() {
+        let state = make_state(BackendMode::Ollama, Some(1));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, "../health".into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "error", "value": "invalid chat id"})]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_chat_without_a_sidecar_sends_one_error_event() {
+        let state = make_state(BackendMode::Ollama, None);
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "error", "value": "sidecar not running"})]
+        );
+    }
+
+    #[test]
+    fn stream_event_serializes_as_type_and_value() {
+        assert_eq!(
+            serde_json::to_value(StreamEvent::Delta("x".into())).unwrap(),
+            serde_json::json!({"type": "delta", "value": "x"})
+        );
+        assert_eq!(
+            serde_json::to_value(StreamEvent::Error("e".into())).unwrap(),
+            serde_json::json!({"type": "error", "value": "e"})
+        );
     }
 
     // --- validate_user_path ---
