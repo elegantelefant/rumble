@@ -158,7 +158,14 @@ _ROUTING_ENVS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_
 
 @pytest.fixture
 def hostile_env(monkeypatch):
-    """Every inherited env that could re-route or re-key sidecar traffic; routing ones point at this recording decoy."""
+    """Every inherited env that could re-route or re-key sidecar traffic; routing ones point at this recording decoy.
+
+    httpx reads proxy envs when a client is built, so llm's cached Ollama client is dropped on both sides:
+    one built by an earlier test, before these envs existed, would pass whatever its trust_env.
+    """
+    from services import llm
+
+    llm._loopback_http_client.cache_clear()
     decoy = RecordingServer({})
     for name in _ROUTING_ENVS:
         monkeypatch.setenv(name, decoy.url)
@@ -169,6 +176,7 @@ def hostile_env(monkeypatch):
     monkeypatch.setenv("OPENAI_PROJECT_ID", "env-project")
     monkeypatch.setenv("BYOK_API_KEY", "byok-key")
     yield decoy
+    llm._loopback_http_client.cache_clear()
     decoy.close()
 
 
