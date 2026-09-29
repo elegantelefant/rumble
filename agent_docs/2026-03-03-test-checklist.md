@@ -336,18 +336,18 @@
 
 ## 3. Rust — Unit + Integration Tests
 
-### 3.1 resolve_url (Unit — existing)
+### 3.1 resolve_url (Unit — existing; two-branch rule since #41, never a cloud URL)
 
 | # | Test | Status |
 |---|------|--------|
-| 221 | Premium always routes to cloud | [x] |
-| 222 | Ollama routes cloud-only to cloud | [x] |
+| 221 | Premium refuses every path ("requires Elefant Premium") until the L0 payload contract | [x] |
+| 222 | Ollama/BYOK refuse the cloud contract (`/api/v1`, `/api/v1/…`), judged on the parsed, case-folded path | [x] |
 | 223 | Ollama routes sidecar paths to sidecar | [x] |
 | 224 | BYOK routes same as Ollama | [x] |
-| 225 | Unknown path → sidecar (fail-open) | [x] |
+| 225 | Unknown path → sidecar | [x] |
 | 226 | No sidecar → error for sidecar path | [x] |
-| 227 | No sidecar → still routes cloud-only | [x] |
-| 228 | `/me` cloud-only, `/models` not (no false positive) | [x] |
+| 227 | A path that would change the host (`@evil.example/x`, `//host/x`) → error | [x] |
+| 228 | Lookalike prefixes (`/api/v10/x`, `/api/v1x`) → sidecar; no result is ever non-loopback | [x] |
 
 ### 3.2 scan_folder (Unit — missing)
 
