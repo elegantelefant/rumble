@@ -5,6 +5,7 @@ set -euo pipefail
 
 DEFAULT_DURATION_SECONDS=60
 SAMPLE_INTERVAL_SECONDS="${EGRESS_SAMPLE_INTERVAL_SECONDS:-1}"
+case "$SAMPLE_INTERVAL_SECONDS" in ''|*[!0-9]*) echo "EGRESS_SAMPLE_INTERVAL_SECONDS must be a positive integer" >&2; exit 2;; esac
 OLLAMA_PROCESS_NAME="ollama"
 PF_ANCHOR="com.apple/rumble-egress-smoke"
 EXIT_PEERS_SEEN=1
@@ -91,7 +92,7 @@ sample_peers() {
 }
 
 observe() {
-  [[ $# -eq 2 ]] || usage
+  [[ $# -eq 2 ]] || usage  # dispatcher always passes exactly two; extras were rejected below
   local app_pid="$1" duration="$2" pids seen="" deadline samples=0
   [[ "$app_pid" =~ ^[0-9]+$ && "$duration" =~ ^[0-9]+$ && "$duration" -gt 0 ]] || usage
   ps -p "$app_pid" >/dev/null || { echo "no such process: $app_pid" >&2; exit "$EXIT_USAGE"; }
@@ -129,7 +130,7 @@ EOF
 case "${1:-}" in
   procedure) print_procedure ;;
   observe)
-    [[ -n "${2:-}" ]] || usage
+    [[ -n "${2:-}" && $# -le 3 ]] || usage
     observe "$2" "${3:-$DEFAULT_DURATION_SECONDS}"
     ;;
   *) usage ;;
