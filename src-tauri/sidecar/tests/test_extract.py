@@ -57,30 +57,40 @@ def test_unreadable_docx_message_hides_parser_internals():
     assert "zip" not in str(info.value).lower()
 
 
-def _inflated_docx_bytes(padding_bytes: int) -> bytes:
-    """A valid .docx whose document.xml ends in a comment that deflates ~1000:1, as a crafted upload would."""
+def _padded_docx_bytes(filler: bytes) -> bytes:
+    """A valid .docx with `filler` added to its body; repetitive filler deflates ~1000:1, as a crafted upload would."""
     source = zipfile.ZipFile(io.BytesIO(_docx_bytes(["Clause."])))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
         for member in source.infolist():
             part = source.read(member.filename)
             if member.filename == "word/document.xml":
-                part += b"<!--" + b" " * padding_bytes + b"-->"
+                part = part.replace(b"</w:body>", filler + b"</w:body>")
             archive.writestr(member.filename, part)
     return buf.getvalue()
 
 
 def test_docx_over_the_uncompressed_limit_is_refused(monkeypatch):
     monkeypatch.setattr(extract_service, "MAX_DOCX_UNCOMPRESSED_BYTES", 1024 * 1024)
-    data = _inflated_docx_bytes(2 * 1024 * 1024)
+    data = _padded_docx_bytes(b"<!--" + b" " * 2 * 1024 * 1024 + b"-->")
     assert len(data) < 64 * 1024  # small on the wire, like the 232 KB original
     with pytest.raises(ExtractionError, match=DOCX_TOO_LARGE):
         extract_docx(data)
 
 
-def test_docx_under_the_uncompressed_limit_is_extracted(monkeypatch):
+def test_docx_over_the_tag_limit_is_refused(monkeypatch):
+    # python-docx's template alone has ~25,000 tags
+    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_TAGS", 50_000)
+    data = _padded_docx_bytes(b"<w:p/>" * 40_000)  # 240 KB of XML, well under the byte limit
+    with pytest.raises(ExtractionError, match=DOCX_TOO_LARGE):
+        extract_docx(data)
+
+
+def test_docx_under_both_limits_is_extracted(monkeypatch):
     monkeypatch.setattr(extract_service, "MAX_DOCX_UNCOMPRESSED_BYTES", 4 * 1024 * 1024)
-    assert extract_docx(_inflated_docx_bytes(2 * 1024 * 1024)) == "Clause."
+    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_TAGS", 100_000)
+    data = _padded_docx_bytes(b"<!--" + b" " * 2 * 1024 * 1024 + b"-->" + b"<w:p/>" * 40_000)
+    assert extract_docx(data) == "Clause."
 
 
 FIXTURES = Path(__file__).parent / "fixtures"

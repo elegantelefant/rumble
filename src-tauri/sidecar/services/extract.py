@@ -22,12 +22,17 @@ DOCX_TOO_LARGE = "This Word document is too large or complex to process."
 
 # A .docx is a zip, and python-docx inflates every part into memory and builds
 # an XML tree from each XML part: a 232 KB upload of repetitive XML took 1.6 GB
-# and 69 s. zipfile stops each member at its declared size, so the declared
-# sizes bound what python-docx can inflate. At this cap the worst case measured
-# ~19 s and ~600 MB; a contract's text is a few MB, but a document of images
-# totalling more than this is refused.
+# and 69 s. Two bounds, both checked before python-docx runs:
+# - bytes: zipfile stops each member at its declared size, so the declared sizes
+#   bound what python-docx can inflate. A document of images totalling more is refused.
+# - tags: the tree costs ~350 bytes per element whatever the element's size, and
+#   every element needs a "<", so counting them bounds it. Worst case at this cap,
+#   one million empty paragraphs: ~8 s, ~400 MB. A heavily formatted page runs to
+#   well under a thousand, so this admits documents of over a thousand pages.
 MAX_DOCX_UNCOMPRESSED_MB = 32
 MAX_DOCX_UNCOMPRESSED_BYTES = MAX_DOCX_UNCOMPRESSED_MB * 1024 * 1024
+MAX_DOCX_XML_TAGS = 1_000_000
+_INFLATE_CHUNK_BYTES = 1024 * 1024
 
 
 class ExtractionError(Exception):
@@ -68,19 +73,29 @@ def extract_pdf(data: bytes) -> str:
     return text
 
 
-def _docx_uncompressed_bytes(data: bytes) -> int:
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        return sum(member.file_size for member in archive.infolist())
+def _docx_over_limit(archive: zipfile.ZipFile) -> str | None:
+    """Which bound the archive exceeds, if any; inflates in chunks only once the byte bound holds."""
+    members = archive.infolist()
+    uncompressed = sum(member.file_size for member in members)
+    if uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+        return f"{uncompressed} bytes uncompressed"
+    tags = 0
+    for member in members:
+        with archive.open(member) as part:
+            while chunk := part.read(_INFLATE_CHUNK_BYTES):
+                tags += chunk.count(b"<")
+    return f"{tags} XML tags" if tags > MAX_DOCX_XML_TAGS else None
 
 
 def extract_docx(data: bytes) -> str:
     try:
-        uncompressed = _docx_uncompressed_bytes(data)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            over_limit = _docx_over_limit(archive)
     except Exception as exc:
         logger.warning("DOCX parse failed: %s", exc)
         raise ExtractionError(UNREADABLE_DOCX) from exc
-    if uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
-        logger.warning("DOCX refused: %d bytes uncompressed", uncompressed)
+    if over_limit:
+        logger.warning("DOCX refused: %s", over_limit)
         raise ExtractionError(DOCX_TOO_LARGE)
 
     try:
