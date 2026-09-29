@@ -47,6 +47,13 @@ is "offline after setup", not "offline".
   on Linux. It holds chats, messages and jobs; a job row stores its full request and result,
   which includes document text. (`src-tauri/src/lib.rs` `spawn_sidecar`,
   `src-tauri/sidecar/services/db.py`.) Settings shows a hardcoded path that isn't this one ([#22]).
+- **Settings** — `settings.json` in the Tauri app *local* data directory:
+  `~/Library/Application Support/com.ielegante.rumble/` on macOS,
+  `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows (not the roaming profile),
+  `~/.local/share/com.ielegante.rumble/` on Linux. It holds the preferences saved from Settings:
+  appearance, workspace and templates paths, briefcase and attached-resource names, sync options
+  and the local Ollama host/port/model. Plain JSON, never provider keys. (`src-tauri/src/lib.rs`
+  `load_settings`/`save_settings`.)
 - **OS keychain** — service `elefant-rumble`: the premium `auth_token` and any `byok_<provider>`
   keys saved in Settings (`src-tauri/src/lib.rs`, keychain helpers).
 - **Ollama's models** — Ollama's own store (`~/.ollama/models`), managed by Ollama, not rumble.
