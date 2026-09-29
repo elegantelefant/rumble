@@ -396,9 +396,24 @@ async fn extract_document(
 
 // --- Chat streaming ---
 
-/// The client's 30s total budget would cut a long local generation off
-/// mid-stream, so the stream gets its own, much longer one.
-const STREAM_TIMEOUT_SECS: u64 = 600;
+/// How long a chat stream may go without sending anything before it counts
+/// as stalled. The first token after a whole document's prompt evaluation on
+/// a CPU can be slow; the sidecar sends a `status` event straight away.
+const STREAM_IDLE_TIMEOUT_SECS: u64 = 300;
+/// Overall safety cap on one stream. It must override the client's 30s total
+/// budget, which would cut a long local generation off mid-stream.
+const STREAM_MAX_SECS: u64 = 3600;
+const STREAM_IDLE_MESSAGE: &str = "The model stopped responding.";
+
+struct StreamTimeouts {
+    idle: Duration,
+    total: Duration,
+}
+
+const STREAM_TIMEOUTS: StreamTimeouts = StreamTimeouts {
+    idle: Duration::from_secs(STREAM_IDLE_TIMEOUT_SECS),
+    total: Duration::from_secs(STREAM_MAX_SECS),
+};
 
 /// One event of a chat stream, as the frontend receives it over the channel.
 /// Exactly one `Done` or `Error` ends every stream.
@@ -440,21 +455,26 @@ impl SseLines {
 /// Posts to the sidecar's SSE stream endpoint and relays each text delta to
 /// `on_delta`, in order. Returns the complete text from the sidecar's `done`
 /// event, or the message from its `error` event. The shared secret is
-/// attached here, host-side; the webview never sees it (#55).
+/// attached here, host-side; the webview never sees it (#55). Silence longer
+/// than `timeouts.idle`, before the headers or between chunks, ends the stream
+/// with STREAM_IDLE_MESSAGE.
 async fn relay_sse(
     http: &Client,
     url: &str,
     secret: &str,
     body: serde_json::Value,
+    timeouts: &StreamTimeouts,
     mut on_delta: impl FnMut(String) -> Result<(), String>,
 ) -> Result<String, String> {
-    let mut response = http
+    let request = http
         .post(url)
         .header(SECRET_HEADER, secret)
         .json(&body)
-        .timeout(Duration::from_secs(STREAM_TIMEOUT_SECS))
-        .send()
+        .timeout(timeouts.total)
+        .send();
+    let mut response = tokio::time::timeout(timeouts.idle, request)
         .await
+        .map_err(|_| STREAM_IDLE_MESSAGE.to_string())?
         .map_err(|e| e.to_string())?;
 
     let status = response.status();
@@ -464,7 +484,11 @@ async fn relay_sse(
     }
 
     let mut lines = SseLines::default();
-    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+    while let Some(chunk) = tokio::time::timeout(timeouts.idle, response.chunk())
+        .await
+        .map_err(|_| STREAM_IDLE_MESSAGE.to_string())?
+        .map_err(|e| e.to_string())?
+    {
         for payload in lines.push(&chunk) {
             // Non-JSON data lines are skipped, as the sidecar never sends them.
             let Ok(event) = serde_json::from_str::<serde_json::Value>(&payload) else {
@@ -509,7 +533,7 @@ async fn stream_chat(
         let chat_id = Uuid::parse_str(&chat_id).map_err(|_| "invalid chat id".to_string())?;
         let url = state.sidecar_url(&format!("/chats/{}/stream", chat_id))?;
         let body = serde_json::json!({ "text": text, "model": model });
-        relay_sse(&state.http, &url, &state.secret, body, |delta| {
+        relay_sse(&state.http, &url, &state.secret, body, &STREAM_TIMEOUTS, |delta| {
             on_event.send(StreamEvent::Delta(delta)).map_err(|e| e.to_string())
         })
         .await
@@ -1753,6 +1777,7 @@ mod tests {
             &format!("{}/chats/c/stream", server.uri()),
             "test-secret",
             serde_json::json!({"text": "hi"}),
+            &STREAM_TIMEOUTS,
             |d| {
                 deltas.push(d);
                 Ok(())
@@ -1877,6 +1902,86 @@ mod tests {
         assert_eq!(
             *sent.lock().unwrap(),
             vec![serde_json::json!({"type": "error", "value": "sidecar not running"})]
+        );
+    }
+
+    /// A one-shot SSE server that writes each (delay, event) chunk after its
+    /// delay, so a test can control the gaps between chunks.
+    fn slow_sse_server(chunks: Vec<(u64, serde_json::Value)>) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/chats/c/stream", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0u8; 8192];
+            let _ = socket.read(&mut request);
+            let _ = socket.write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n",
+            );
+            for (delay_ms, event) in chunks {
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                let data = format!("data: {}\r\n\r\n", event);
+                let _ = socket.write_all(format!("{:x}\r\n{}\r\n", data.len(), data).as_bytes());
+            }
+            let _ = socket.write_all(b"0\r\n\r\n");
+        });
+        url
+    }
+
+    const TEST_TIMEOUTS: StreamTimeouts = StreamTimeouts {
+        idle: Duration::from_millis(300),
+        total: Duration::from_secs(10),
+    };
+
+    #[tokio::test]
+    async fn relay_stream_that_keeps_sending_outlasts_the_idle_timeout() {
+        // Six gaps of 100ms: 600ms in all, twice the idle timeout, never idle.
+        let mut chunks: Vec<(u64, serde_json::Value)> = (0..5)
+            .map(|i| (100, serde_json::json!({"type": "delta", "value": i.to_string()})))
+            .collect();
+        chunks.push((100, serde_json::json!({"type": "done", "value": "01234"})));
+        let url = slow_sse_server(chunks);
+
+        let result =
+            relay_sse(&Client::new(), &url, "s", serde_json::json!({}), &TEST_TIMEOUTS, |_| Ok(())).await;
+
+        assert_eq!(result.unwrap(), "01234");
+    }
+
+    #[tokio::test]
+    async fn relay_stream_that_goes_silent_ends_with_the_idle_message() {
+        let url = slow_sse_server(vec![
+            (0, serde_json::json!({"type": "status", "value": "generating"})),
+            (1000, serde_json::json!({"type": "done", "value": "too late"})),
+        ]);
+
+        let result =
+            relay_sse(&Client::new(), &url, "s", serde_json::json!({}), &TEST_TIMEOUTS, |_| Ok(())).await;
+
+        assert_eq!(result.unwrap_err(), STREAM_IDLE_MESSAGE);
+    }
+
+    #[tokio::test]
+    async fn stream_chat_posts_the_text_and_model_to_the_sidecar() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/chats/{}/stream", CHAT_ID)))
+            .and(body_json(serde_json::json!({"text": "hi", "model": "llama3.2"})))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body(&[
+                serde_json::json!({"type": "done", "value": "ok"}),
+            ])))
+            .mount(&server)
+            .await;
+        let state = make_state(BackendMode::Ollama, Some(server.address().port()));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), Some("llama3.2".into()), &channel)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "done", "value": "ok"})]
         );
     }
 
