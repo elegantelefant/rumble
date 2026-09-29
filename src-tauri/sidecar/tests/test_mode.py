@@ -77,7 +77,10 @@ def test_ollama_api_base_refuses_lookalike_hosts(monkeypatch, url):
         mode.ollama_api_base()
 
 
-@pytest.mark.parametrize("name", ["qwen3.5:cloud", "gemma3-cloud", "gpt-oss:120b-cloud", "deepseek-v3.1:671b-cloud"])
+@pytest.mark.parametrize(
+    "name",
+    ["qwen3.5:cloud", "gemma3-cloud", "gpt-oss:120b-cloud", "deepseek-v3.1:671b-cloud", "x:120b-CLOUD", "qwen3.5:cloud "],
+)
 def test_is_cloud_model_true(name):
     assert mode.is_cloud_model(name)
 

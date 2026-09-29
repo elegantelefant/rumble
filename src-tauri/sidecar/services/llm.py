@@ -5,7 +5,6 @@ import logging
 import os
 from collections.abc import AsyncIterator
 
-import httpx
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.openai import OpenAIModel
@@ -15,40 +14,37 @@ from services import mode, prompts
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "llama3.2")
-
 _resolved_ollama_model: str | None = None
 
 
-async def _resolve_ollama_model() -> str:
-    """Return the configured default model if available, else the first pulled model.
+async def _resolve_ollama_model(model_name: str | None = None) -> str:
+    """Return the /api/tags name of a local model: the requested one, else OLLAMA_DEFAULT_MODEL, else the first pulled.
 
-    Cloud-named models (services.mode.is_cloud_model) are filtered out of the
-    candidate list first, so the "first pulled model" fallback can never
-    silently land on one.
+    Every candidate, the configured default included, is checked against
+    Ollama's own metadata (services.mode.local_model). A requested name that
+    isn't a pulled local model is refused rather than passed through: what an
+    unlisted name resolves to is Ollama's decision, so it can't be verified local.
     """
+    if model_name:
+        resolved = mode.local_model(model_name, await mode.ollama_tags())
+        if resolved is None:
+            raise ValueError(f"model {model_name!r} is not a pulled local Ollama model")
+        return resolved
+
     global _resolved_ollama_model
     if _resolved_ollama_model:
         return _resolved_ollama_model
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{mode.ollama_api_base()}/api/tags")
-            resp.raise_for_status()
-            models = [m["name"] for m in resp.json().get("models", []) if not mode.is_cloud_model(m["name"])]
-    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
-        logger.warning("Cannot reach Ollama to resolve model — using default %s", OLLAMA_DEFAULT_MODEL)
-        return OLLAMA_DEFAULT_MODEL
-
-    if OLLAMA_DEFAULT_MODEL in models:
-        _resolved_ollama_model = OLLAMA_DEFAULT_MODEL
-    elif models:
-        _resolved_ollama_model = models[0]
-        logger.info("Default model %s not found; using %s", OLLAMA_DEFAULT_MODEL, _resolved_ollama_model)
-    else:
-        _resolved_ollama_model = OLLAMA_DEFAULT_MODEL
-
-    return _resolved_ollama_model
+    tags = await mode.ollama_tags()
+    resolved = mode.default_model(tags)
+    if resolved is None:
+        local = mode.local_model_names(tags)
+        if not local:
+            raise ValueError("no local Ollama model is pulled")
+        resolved = local[0]
+        logger.info("Default model not pulled; using %s", resolved)
+    _resolved_ollama_model = resolved
+    return resolved
 
 
 async def _build_agent(
@@ -73,7 +69,7 @@ async def _build_agent(
         if model_name and mode.is_cloud_model(model_name):
             raise ValueError(f"refusing cloud model {model_name!r} in ollama mode")
         base_url = mode.ollama_openai_base_url()
-        resolved = model_name or await _resolve_ollama_model()
+        resolved = await _resolve_ollama_model(model_name)
         provider = OpenAIProvider(base_url=base_url, api_key="ollama")
         model = OpenAIModel(resolved, provider=provider)
     return Agent(model=model, system_prompt=system_prompt)

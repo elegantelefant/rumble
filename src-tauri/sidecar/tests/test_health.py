@@ -1,5 +1,5 @@
 # ABOUTME: Tests for health, readiness, and model listing endpoints.
-# ABOUTME: Verifies mode detection via RUMBLE_BACKEND_MODE, Ollama fallback, and BYOK static model list.
+# ABOUTME: Verifies mode detection via RUMBLE_BACKEND_MODE, cloud-model filtering, refusal reasons, and BYOK models.
 
 
 async def test_health_returns_ok(client):
@@ -58,31 +58,68 @@ async def test_models_ollama_returns_list_or_empty(client, monkeypatch):
     assert isinstance(data["models"], list)
 
 
-async def test_models_ollama_filters_cloud_models(client, monkeypatch):
-    from routes import health
-
-    class _FakeResponse:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return {"models": [{"name": "qwen3.5:cloud"}, {"name": "llama3.2"}]}
-
-    class _FakeAsyncClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def get(self, _url):
-            return _FakeResponse()
-
+async def test_models_ollama_filters_cloud_models(client, monkeypatch, fake_ollama):
     monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
-    monkeypatch.setattr(health.httpx, "AsyncClient", lambda timeout=5.0: _FakeAsyncClient())
+    fake_ollama.set_tags("qwen3.5:cloud", "llama3.2")
 
     resp = await client.get("/models")
     ids = [m["id"] for m in resp.json()["models"]]
 
     assert "llama3.2" in ids
     assert "qwen3.5:cloud" not in ids
+
+
+async def test_models_ollama_hides_models_ollama_marks_remote(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("mymodel:latest", "llama3.2:latest", remote=("mymodel:latest",))
+
+    resp = await client.get("/models")
+
+    assert [m["id"] for m in resp.json()["models"]] == ["llama3.2:latest"]
+
+
+async def test_ready_ollama_ready_when_reachable(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("llama3.2:latest")
+
+    resp = await client.get("/ready")
+
+    assert resp.json()["status"] == "ready"
+
+
+async def test_ready_surfaces_refused_non_loopback_base_url(client, monkeypatch):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://evil.example.com:11434")
+
+    resp = await client.get("/ready")
+
+    assert "must be loopback" in resp.json()["error"]
+
+
+async def test_models_surfaces_refused_non_loopback_base_url(client, monkeypatch):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://evil.example.com:11434")
+
+    resp = await client.get("/models")
+
+    assert "must be loopback" in resp.json()["error"]
+
+
+async def test_ready_surfaces_refused_cloud_default_model(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_DEFAULT_MODEL", "gpt-oss:120b-cloud")
+    fake_ollama.set_tags("llama3.2:latest")
+
+    resp = await client.get("/ready")
+
+    assert "OLLAMA_DEFAULT_MODEL" in resp.json()["error"]
+
+
+async def test_models_surfaces_refused_cloud_default_model(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_DEFAULT_MODEL", "gpt-oss:120b-cloud")
+    fake_ollama.set_tags("llama3.2:latest")
+
+    resp = await client.get("/models")
+
+    assert "OLLAMA_DEFAULT_MODEL" in resp.json()["error"]

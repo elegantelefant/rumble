@@ -25,16 +25,14 @@ async def ready() -> dict:
         # BYOK mode: just check key is present
         return {"status": "ready", "mode": "byok"}
 
-    # Ollama mode: check if Ollama is reachable
+    # Ollama mode: check Ollama is reachable and the configured default isn't refused
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{mode_service.ollama_api_base()}/api/tags")
-            resp.raise_for_status()
-            return {"status": "ready", "mode": "ollama"}
+        mode_service.default_model(await mode_service.ollama_tags())
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"status": "not_ready", "mode": "ollama", "error": "ollama unreachable"}
     except ValueError as exc:
         return {"status": "not_ready", "mode": "ollama", "error": str(exc)}
+    return {"status": "ready", "mode": "ollama"}
 
 
 @router.get("/models")
@@ -53,15 +51,15 @@ async def list_models() -> dict:
 
     # Ollama mode: query local models, filtering out cloud models
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{mode_service.ollama_api_base()}/api/tags")
-            resp.raise_for_status()
-            data = resp.json()
-            names = [m["name"] for m in data.get("models", []) if not mode_service.is_cloud_model(m["name"])]
-            models = [
-                {"id": name, "provider": "ollama", "name": name, "default": i == 0}
-                for i, name in enumerate(names)
-            ]
-            return {"models": models}
-    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException, ValueError):
-        return {"models": []}
+        tags = await mode_service.ollama_tags()
+        mode_service.default_model(tags)
+    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
+        return {"models": [], "error": "ollama unreachable"}
+    except ValueError as exc:
+        return {"models": [], "error": str(exc)}
+    names = mode_service.local_model_names(tags)
+    models = [
+        {"id": name, "provider": "ollama", "name": name, "default": i == 0}
+        for i, name in enumerate(names)
+    ]
+    return {"models": models}

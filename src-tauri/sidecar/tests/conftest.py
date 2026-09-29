@@ -1,8 +1,10 @@
 # ABOUTME: Shared fixtures for sidecar tests.
-# ABOUTME: Provides ephemeral DB, FastAPI test client, and LLM mock.
+# ABOUTME: Provides ephemeral DB, FastAPI test client, LLM mock, and a real loopback fake Ollama server.
 
 import json
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -83,6 +85,75 @@ def _fake_run_single_turn(user_text, system_prompt, model_name=None, api_key=Non
     if "research" in system_prompt.lower():
         return json.dumps({"result": f"Research: {user_text}", "sources": []})
     return json.dumps({"text": user_text})
+
+
+# serve_forever's shutdown poll; its 0.5s default would add half a second to every test's teardown.
+_SERVER_POLL_S = 0.01
+
+
+class RecordingServer:
+    """A real HTTP server on 127.0.0.1 that records each request and answers from `responses` (path -> JSON)."""
+
+    def __init__(self, responses: dict[str, dict]):
+        self.responses = responses
+        self.requests: list[dict] = []
+        server = self
+
+        class _Handler(BaseHTTPRequestHandler):
+            def _answer(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                self.rfile.read(length)
+                server.requests.append({"method": self.command, "path": self.path, "headers": dict(self.headers)})
+                body = server.responses.get(self.path)
+                payload = json.dumps(body if body is not None else {"error": "not found"}).encode()
+                self.send_response(200 if body is not None else 404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            do_GET = do_POST = _answer
+
+            def log_message(self, *_args):
+                pass
+
+        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self.url = f"http://127.0.0.1:{self._httpd.server_address[1]}"
+        threading.Thread(target=self._httpd.serve_forever, args=(_SERVER_POLL_S,), daemon=True).start()
+
+    def set_tags(self, *names: str, remote: tuple[str, ...] = ()):
+        """Serve these /api/tags items; names in `remote` carry the remote_host/remote_model Ollama sets on cloud models."""
+        self.responses["/api/tags"] = {
+            "models": [
+                {"name": n, **({"remote_host": "https://ollama.com:443", "remote_model": n} if n in remote else {})}
+                for n in names
+            ]
+        }
+
+    def close(self):
+        self._httpd.shutdown()
+        self._httpd.server_close()
+
+
+_CHAT_COMPLETION = {
+    "id": "chatcmpl-test",
+    "object": "chat.completion",
+    "created": 0,
+    "model": "llama3.2:latest",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": "local reply"}, "finish_reason": "stop"}],
+}
+
+
+@pytest.fixture
+def fake_ollama(monkeypatch):
+    """A real loopback Ollama stand-in: `.set_tags(...)` what it serves, read `.requests` for what it received."""
+    from services import llm
+
+    server = RecordingServer({"/api/tags": {"models": []}, "/v1/chat/completions": _CHAT_COMPLETION})
+    monkeypatch.setenv("OLLAMA_BASE_URL", server.url)
+    monkeypatch.setattr(llm, "_resolved_ollama_model", None)
+    yield server
+    server.close()
 
 
 @pytest.fixture(autouse=True)
