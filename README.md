@@ -6,6 +6,7 @@ Runs on **macOS** (Apple Silicon + Intel), **Windows**, and **Linux**.
 
 **End users:** See [Getting Started](agent_docs/2026-03-05-getting-started.md) for installation and usage.
 **Build maintainers:** See [Installation Guide](agent_docs/2026-03-05-installation-guide.md) for CI/CD and build-from-source.
+**Security reviewers:** See [SECURITY.md](SECURITY.md) and [NETWORK.md](NETWORK.md).
 
 ---
 
