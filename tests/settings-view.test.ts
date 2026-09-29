@@ -293,6 +293,17 @@ describe("SettingsView", () => {
       expect(saveButton().attributes("disabled")).toBeUndefined()
     })
 
+    it("locks the form against edits until saved settings have loaded", async () => {
+      let finishLoad!: (value: unknown) => void
+      mockCommands({ load_settings: () => new Promise((resolve) => (finishLoad = resolve)) })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(wrapper.find("fieldset").attributes("disabled")).toBeDefined()
+      finishLoad(saved)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(wrapper.find("fieldset").attributes("disabled")).toBeUndefined()
+    })
+
     it("does not save while the load is still pending", async () => {
       mockCommands({ load_settings: () => new Promise(() => {}), save_settings: () => null })
       const wrapper = mountSettings()
