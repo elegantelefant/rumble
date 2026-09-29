@@ -178,6 +178,17 @@ fn move_to_trash(path: String) -> Result<(), String> {
 
 // --- API proxy ---
 
+/// The host's one HTTP client. `no_proxy()` turns off env and system proxies, so
+/// loopback traffic (document text, the shared secret, the bearer token) never
+/// transits a configured proxy (#73). Cloud calls go direct too.
+pub fn http_client() -> Client {
+    Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
 async fn make_http_request(
     http: &Client,
     url: &str,
@@ -537,7 +548,11 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // are visible to any process on the machine via `ps`, which would
         // defeat the point of the secret. `--secret` stays available for
         // manual dev runs.
-        .env("RUMBLE_SIDECAR_SECRET", &state.secret);
+        .env("RUMBLE_SIDECAR_SECRET", &state.secret)
+        // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
+        // do, so a closed/redirected stdin there can't be mistaken for the host
+        // dying.
+        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1");
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
@@ -757,10 +772,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             mode: Mutex::new(BackendMode::Ollama),
-            http: Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .expect("failed to build HTTP client"),
+            http: http_client(),
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),
             secret: uuid::Uuid::new_v4().to_string(),
