@@ -48,22 +48,34 @@ is "offline after setup", not "offline".
   stores its full request and result, which includes document text. (`src-tauri/src/lib.rs`
   `sidecar_data_dir`, `src-tauri/sidecar/services/db.py`; paths per `app_local_data_dir` → the `dirs`
   crate's `data_local_dir`.) Settings shows a hardcoded path that isn't this one ([#22]).
-  - **Windows roaming, resolved.** Earlier builds used `%APPDATA%\com.ielegante.rumble\` (Roaming),
-    which roaming profiles and folder redirection copy to domain servers. On startup rumble moves the
-    database from there to `%LOCALAPPDATA%` once, if the old one exists and the new one doesn't, and
-    logs it; if both exist it leaves both alone and uses the local one. On macOS and Linux the two
-    directories are the same, so nothing moves.
+  - **Windows roaming.** Earlier builds used `%APPDATA%\com.ielegante.rumble\` (Roaming), which
+    roaming profiles and folder redirection copy to domain servers. On startup rumble copies the
+    database from there into `%LOCALAPPDATA%` if the old one exists and the new one doesn't, and only
+    once the copy is complete removes the roaming files; until then the roaming copy is untouched and
+    the sidecar keeps using it if anything fails. If the roaming files can't be removed (or both
+    directories already hold a database) rumble uses the local copy and **the roaming copy stays**,
+    still subject to roaming — delete it by hand. Rumble reports this on stderr, which release Windows
+    builds discard (`windows_subsystem = "windows"` in `src-tauri/src/main.rs`), so there it is silent.
+    On macOS and Linux the two directories are the same, so nothing moves.
   - **Retention.** Jobs older than 30 days are deleted each time the sidecar starts
-    (`DEFAULT_JOB_RETENTION_DAYS`; override with `RUMBLE_JOB_RETENTION_DAYS`, a whole number of days,
-    in the environment rumble is launched from — there is no Settings control yet). Chats and their
-    messages are kept until you delete them. Deletes run with SQLite's `secure_delete` on, so a
-    deleted row's content is overwritten in the database file; copies outside it — WAL frames not yet
-    checkpointed, SSD remapping, backups — are beyond what rumble can erase, which is what full-disk
-    encryption is for (below).
-  - **Delete all local data.** Settings → Templates & workspace storage, after a native confirmation:
-    stops the sidecar, deletes `rumble.db` and its `-wal`/`-shm` files (and any left in the old
-    Windows roaming directory), then restarts the sidecar with an empty database. It does not touch
-    keychain entries (remove those under Providers), exported `.docx` files, or Ollama's models.
+    (`DEFAULT_JOB_RETENTION_DAYS`; override with `RUMBLE_JOB_RETENTION_DAYS`, a whole number of days
+    from 1 to 36500, in the environment rumble is launched from — there is no Settings control yet).
+    Chats and their messages have no retention and no per-chat delete in the UI; *Delete all local
+    data* removes them. After a purge that deleted anything, rumble checkpoints and truncates the WAL,
+    and `secure_delete` is on, so the purged text is no longer in `rumble.db` or `rumble.db-wal`
+    (a test greps both files for it). A database from an earlier build is `VACUUM`ed once on first
+    start, erasing content those builds deleted without `secure_delete`. What rumble can't reach:
+    filesystem and SSD remnants of overwritten blocks, backups and snapshots — full-disk encryption
+    (below) is the answer to those.
+  - **Delete all local data.** Settings → Templates & workspace storage, after a native confirmation.
+    Refused while the local service is still starting. Otherwise it stops the sidecar, waits for it
+    to close the database, deletes `rumble.db`, its `-wal`/`-shm` files and any migration leftovers
+    (in the local directory and the old Windows roaming one), then restarts the sidecar with an empty
+    database. If the sidecar doesn't close in time, nothing is deleted. It assumes one Rumble instance
+    per data directory — a second one (a dev build beside the packaged app) keeps its own connection
+    open, so the dialog asks you to close other Rumble windows first. Not touched: keychain entries
+    (BYOK keys can be removed under Providers; the premium `auth_token` has no UI to remove it — delete
+    the `elefant-rumble` keychain item), exported `.docx` files, and Ollama's models.
   - **Backups.** Time Machine, File History and similar tools copy the database like any other file.
     Exclude the directory above if your policy requires it; a backup keeps whatever retention or
     delete-all later removes.
@@ -92,8 +104,8 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
 - **Secret handed to webview JavaScript** — chat streaming fetches the sidecar directly from the
   webview and obtains the shared secret via the `sidecar_secret` command, so any script in the
   webview can read it ([#55]). The CSP's `script-src 'self'` limits which scripts that could be.
-- **Data retention** — only jobs expire; chats are kept until deleted, and the 30-day job retention
-  has no Settings control yet ([#57]).
+- **Data retention** — only jobs expire; chats have no retention and no per-chat delete in the UI,
+  and the 30-day job retention has no Settings control yet ([#57]).
 - **Health check without the secret** — the host's `sidecar_status` calls `/health` without the
   secret header, so a packaged build always reports health "unreachable". Cosmetic today; a false
   signal while debugging ([#69]).
