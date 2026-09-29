@@ -69,7 +69,7 @@ is "offline after setup", not "offline".
     (a test greps both files for it). The truncation can't complete while another connection holds a
     read transaction on the database — a second Rumble instance on the same directory — so this, too,
     assumes one instance. A database from an earlier build is `VACUUM`ed once on first
-    start, erasing content those builds deleted without `secure_delete`. What rumble can't reach:
+    start (retried on the next start if it fails), erasing content those builds deleted without `secure_delete`. What rumble can't reach:
     filesystem and SSD remnants of overwritten blocks, backups and snapshots — full-disk encryption
     (below) is the answer to those.
   - **Delete all local data.** Settings → Templates & workspace storage, after a native confirmation.
