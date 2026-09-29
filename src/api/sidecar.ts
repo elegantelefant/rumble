@@ -70,8 +70,9 @@ type StreamEvent = { type: "delta" | "done" | "error"; value: string };
  * channel — so the secret never reaches webview JavaScript and there is no
  * cross-origin fetch (#55). The promise settles on the channel's terminal
  * event, never on invoke resolving: Tauri orders channel messages among
- * themselves, not against the command's own response. Rejects with a string,
- * as invoke does.
+ * themselves, not against the command's own response. Rejects with the host's
+ * error message (a string), or with invoke's own rejection if the command
+ * cannot be invoked at all.
  */
 export function streamMessage(
   chatId: string,
