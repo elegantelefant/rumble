@@ -1,14 +1,29 @@
 # ABOUTME: Async SQLite database layer for chat persistence.
-# ABOUTME: Manages schema creation, chat CRUD, and message storage via aiosqlite.
+# ABOUTME: Manages schema creation, chat CRUD, message and job storage, and job retention via aiosqlite.
 
+import logging
+import os
+import sqlite3
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
 import aiosqlite
 
+logger = logging.getLogger(__name__)
+
 _db: aiosqlite.Connection | None = None
+
+# Jobs hold full document text in request/result, so they are not kept forever (#57).
+DEFAULT_JOB_RETENTION_DAYS = 30
+# A century: far beyond any real policy, and well inside what datetime arithmetic can represent.
+MAX_JOB_RETENTION_DAYS = 36500
+JOB_RETENTION_ENV = "RUMBLE_JOB_RETENTION_DAYS"
+
+# PRAGMA user_version once the database has been compacted to erase what earlier
+# builds deleted without secure_delete.
+SCHEMA_VERSION_COMPACTED = 1
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -61,12 +76,40 @@ async def init_db(data_dir: str | None = None) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
     else:
         path = Path("rumble.db")
+    existed = path.exists()
     _db = await aiosqlite.connect(str(path))
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")
     await _db.execute("PRAGMA foreign_keys=ON")
+    # Zero a deleted row's content in its page rather than leaving it in free space.
+    await _db.execute("PRAGMA secure_delete=ON")
     await _db.executescript(SCHEMA)
     await _db.commit()
+    await _compact_once(existed, path)
+
+
+async def _compact_once(existed: bool, path: Path) -> None:
+    """VACUUM a database from before secure_delete, once: its free pages still hold deleted content."""
+    cursor = await _db.execute("PRAGMA user_version")
+    if (await cursor.fetchone())[0] >= SCHEMA_VERSION_COMPACTED:
+        return
+    if existed:
+        try:
+            await _db.execute("VACUUM")
+            await _checkpoint()
+        except sqlite3.Error as exc:
+            # Best effort: a full disk or a lock must not stop the sidecar starting. user_version
+            # stays unset, so the next start tries again.
+            logger.error("could not compact %s (will retry next start): %s", path, exc)
+            return
+        logger.warning("compacted %s once to erase content deleted by earlier builds", path)
+    await _db.execute(f"PRAGMA user_version = {SCHEMA_VERSION_COMPACTED}")
+    await _db.commit()
+
+
+async def _checkpoint() -> None:
+    """Copy the WAL into the database file and truncate it, so superseded pages leave the WAL too."""
+    await _get_db().execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
 
 async def close_db() -> None:
@@ -215,3 +258,41 @@ async def set_job_result(job_id: str, result: str | None = None, error: str | No
         (status, result, error, now, job_id),
     )
     await db.commit()
+
+
+# --- Retention ---
+
+def job_retention_days() -> int:
+    """RUMBLE_JOB_RETENTION_DAYS as a whole number of days (1 to MAX_JOB_RETENTION_DAYS), else the default."""
+    raw = os.environ.get(JOB_RETENTION_ENV)
+    if raw is None:
+        return DEFAULT_JOB_RETENTION_DAYS
+    try:
+        days = int(raw)
+    except ValueError:
+        days = 0
+    if not 1 <= days <= MAX_JOB_RETENTION_DAYS:
+        logger.warning(
+            "Ignoring %s=%r (need a whole number of days from 1 to %d); keeping jobs %d days",
+            JOB_RETENTION_ENV,
+            raw,
+            MAX_JOB_RETENTION_DAYS,
+            DEFAULT_JOB_RETENTION_DAYS,
+        )
+        return DEFAULT_JOB_RETENTION_DAYS
+    return days
+
+
+async def purge_jobs_older_than(days: int, now: datetime | None = None) -> int:
+    """Delete jobs created more than `days` before `now`; return how many. Chats and messages are kept."""
+    cutoff = ((now or datetime.now(UTC)) - timedelta(days=days)).isoformat()
+    db = _get_db()
+    # _now()'s UTC isoformat() strings sort chronologically: fixed width through the seconds, and
+    # where isoformat() omits zero microseconds, "+" sorts before ".".
+    cursor = await db.execute("DELETE FROM jobs WHERE created_at < ?", (cutoff,))
+    await db.commit()
+    if cursor.rowcount:
+        # secure_delete zeroes the rows in the pages it writes to the WAL; the database file and
+        # the WAL's older frames keep the old text until a checkpoint replaces and truncates them.
+        await _checkpoint()
+    return cursor.rowcount

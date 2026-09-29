@@ -1,5 +1,5 @@
 # ABOUTME: FastAPI application factory for the rumble sidecar.
-# ABOUTME: Wires up lifespan (DB init/close, pidfile, stdin watcher), shared-secret auth, and route modules.
+# ABOUTME: Wires up lifespan (DB init/close, job retention purge, pidfile, stdin watcher), shared-secret auth, and route modules.
 import asyncio
 import logging
 import os
@@ -17,7 +17,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from services.db import close_db, init_db
+from services.db import close_db, init_db, job_retention_days, purge_jobs_older_than
 from services.jobs import shutdown as shutdown_jobs
 
 logger = logging.getLogger(__name__)
@@ -185,7 +185,10 @@ def _write_pidfile(pidfile: Path) -> None:
 
 
 def _remove_pidfile(pidfile: Path) -> None:
-    pidfile.unlink(missing_ok=True)
+    """Only this sidecar's own: the host reads the pidfile's absence as "this data dir's
+    database is closed", so removing a sibling instance's would claim that falsely."""
+    if _read_pidfile(pidfile) == os.getpid():
+        pidfile.unlink(missing_ok=True)
 
 
 def _watch_stdin_for_eof(loop: asyncio.AbstractEventLoop, server) -> None:
@@ -218,10 +221,22 @@ async def lifespan(app: FastAPI):
     if pidfile is not None:
         _reap_strays(app.state.data_dir, pidfile)
 
-    await init_db(app.state.data_dir)
-
-    if pidfile is not None:
-        _write_pidfile(pidfile)
+    try:
+        await init_db(app.state.data_dir)
+        retention_days = job_retention_days()
+        purged = await purge_jobs_older_than(retention_days)
+        if pidfile is not None:
+            _write_pidfile(pidfile)
+    except BaseException:
+        # aiosqlite's worker thread is non-daemon: a failed startup that left the database
+        # open would keep the process alive with nothing serving.
+        await close_db()
+        if pidfile is not None:
+            _remove_pidfile(pidfile)
+        raise
+    if purged:
+        # WARNING, not INFO: nothing configures logging, so only WARNING and above reach the host's stderr log.
+        logger.warning("retention: deleted %d job(s) older than %d days", purged, retention_days)
 
     if app.state.watch_stdin:
         loop = asyncio.get_running_loop()

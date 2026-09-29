@@ -17,7 +17,7 @@ use trash::delete;
 use walkdir::WalkDir;
 use docx_rs::{Docx, Paragraph, Run};
 use percent_encoding::percent_decode_str;
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
 
 const SERVICE_NAME: &str = "elefant-rumble";
@@ -844,10 +844,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     // Find a free port synchronously via tauri's async runtime
     let port = tauri::async_runtime::block_on(find_available_port())?;
 
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {}", e))?;
+    let data_dir = sidecar_data_dir(app)?;
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
@@ -949,6 +946,274 @@ fn kill_sidecar(state: &AppState) {
     }
     let mut port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
     *port = None;
+}
+
+// --- Local data lifecycle ---
+
+/// The sidecar's SQLite files, placed in this order by a migration so that
+/// `rumble.db` arriving last means the copy is complete.
+const DB_FILES: &[&str] = &["rumble.db-wal", "rumble.db-shm", "rumble.db"];
+const DB_MAIN_FILE: &str = "rumble.db";
+/// Without `rumble.db` beside them, these in the new dir can only be a failed migration's.
+const DB_SIDE_FILES: &[&str] = &["rumble.db-wal", "rumble.db-shm"];
+/// Written by the sidecar once its database is open, removed after it closes (app.py lifespan).
+const SIDECAR_PIDFILE: &str = "sidecar.pid";
+/// In the names of a migration's copies until they are renamed into place.
+const MIGRATION_TEMP_MARKER: &str = ".migrating-";
+const SIDECAR_STOP_TIMEOUT: Duration = Duration::from_secs(10);
+const SIDECAR_STOP_POLL: Duration = Duration::from_millis(100);
+const SIDECAR_STOP_TIMEOUT_MESSAGE: &str =
+    "Rumble couldn't stop its local service. Quit and reopen Rumble, then try again.";
+const SIDECAR_STARTING_MESSAGE: &str = "Rumble's local service is still starting. Try again in a moment.";
+const SIDECAR_PIDFILE_MISSING_MESSAGE: &str = "Another Rumble instance may be using your local data. \
+     Close it, restart Rumble, then try again.";
+const SIDECAR_RESTART_FAILED_MESSAGE: &str =
+    "Your local data was deleted, but Rumble's local service didn't restart. Quit and reopen Rumble.";
+
+#[derive(Debug, PartialEq)]
+enum Migration {
+    /// Same directory (macOS, Linux), or nothing at the old one.
+    NotNeeded,
+    /// Both directories hold a database: left alone, never merged.
+    BothPresent,
+    /// `files` now live in the new dir; `left_behind` couldn't be removed from the old one.
+    Copied { files: Vec<&'static str>, left_behind: Vec<String> },
+}
+
+/// Copies the sidecar's database from `old` to `new` when `old` has one and `new`
+/// doesn't, and only once the copy is complete removes it from `old`: until then
+/// `old` is never touched, so any failure leaves it whole for the sidecar to use.
+/// Keyed on the database file, not the directory: on Windows WebView2 creates its
+/// own folder under the local data dir before setup runs.
+fn migrate_data_dir(old: &Path, new: &Path) -> Result<Migration, String> {
+    if old == new || !old.join(DB_MAIN_FILE).is_file() {
+        return Ok(Migration::NotNeeded);
+    }
+    if new.join(DB_MAIN_FILE).is_file() {
+        return Ok(Migration::BothPresent);
+    }
+    std::fs::create_dir_all(new).map_err(|e| format!("failed to create {}: {}", new.display(), e))?;
+    // A WAL left here by an earlier failed run would be replayed over the database we copy in.
+    for name in DB_SIDE_FILES {
+        remove_if_present(&new.join(name))?;
+    }
+    remove_migration_temps(new)?;
+
+    let files: Vec<&'static str> = DB_FILES.iter().copied().filter(|n| old.join(n).is_file()).collect();
+    if let Err(e) = copy_into_place(old, new, &files) {
+        let _ = remove_migration_temps(new);
+        for name in DB_SIDE_FILES {
+            let _ = remove_if_present(&new.join(name));
+        }
+        return Err(e);
+    }
+
+    // The database first: once it is gone the old dir can never be migrated again.
+    let mut left_behind = Vec::new();
+    if let Err(e) = remove_if_present(&old.join(DB_MAIN_FILE)) {
+        left_behind.push(e);
+    } else {
+        for name in DB_SIDE_FILES.iter().chain(std::iter::once(&SIDECAR_PIDFILE)) {
+            if let Err(e) = remove_if_present(&old.join(name)) {
+                left_behind.push(e);
+            }
+        }
+    }
+    Ok(Migration::Copied { files, left_behind })
+}
+
+/// Copies every file to a temp name in `new` (a copy works across volumes; the roaming
+/// profile can be redirected), then renames each into place in DB_FILES order.
+fn copy_into_place(old: &Path, new: &Path, files: &[&str]) -> Result<(), String> {
+    let mut temps = Vec::new();
+    for name in files {
+        let temp = new.join(format!("{}{}{}", name, MIGRATION_TEMP_MARKER, Uuid::new_v4()));
+        std::fs::copy(old.join(name), &temp)
+            .map_err(|e| format!("failed to copy {}: {}", old.join(name).display(), e))?;
+        temps.push((temp, new.join(name)));
+    }
+    for (temp, dest) in temps {
+        std::fs::rename(&temp, &dest).map_err(|e| format!("failed to place {}: {}", dest.display(), e))?;
+    }
+    Ok(())
+}
+
+fn remove_if_present(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("failed to delete {}: {}", path.display(), e)),
+    }
+}
+
+fn remove_migration_temps(dir: &Path) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().contains(MIGRATION_TEMP_MARKER) {
+            remove_if_present(&entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+/// The directory a sidecar spawned now runs against: the old one only while a
+/// migration out of it has not succeeded.
+fn active_data_dir(old: &Path, new: &Path) -> PathBuf {
+    if old != new && old.join(DB_MAIN_FILE).is_file() && !new.join(DB_MAIN_FILE).is_file() {
+        old.to_path_buf()
+    } else {
+        new.to_path_buf()
+    }
+}
+
+/// The data directory the sidecar uses: the local (non-roaming) app data dir,
+/// after migrating a database left in the roaming one by earlier builds (#57).
+/// If the migration fails, the old directory is used so the data isn't orphaned.
+fn sidecar_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let (old, new) = data_dirs(app)?;
+    match migrate_data_dir(&old, &new) {
+        Ok(Migration::NotNeeded) => {}
+        Ok(Migration::Copied { files, left_behind }) => {
+            println!("[data] migrated {:?} from {} to {}", files, old.display(), new.display());
+            for e in left_behind {
+                eprintln!("[data] the old copy stays in {}: {}", old.display(), e);
+            }
+        }
+        Ok(Migration::BothPresent) => eprintln!(
+            "[data] databases found in both {} and {}; using the latter, leaving the former untouched",
+            old.display(),
+            new.display()
+        ),
+        Err(e) => eprintln!("[data] migration failed, staying in {}: {}", old.display(), e),
+    }
+    Ok(active_data_dir(&old, &new))
+}
+
+/// (roaming app data dir used by earlier builds, local app data dir used now)
+fn data_dirs(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let old = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {}", e))?;
+    let new = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("failed to resolve app local data dir: {}", e))?;
+    Ok((old, new))
+}
+
+/// Removes the sidecar's database files, pidfile and any migration temps from `dir`;
+/// other files are left alone.
+fn delete_local_data_files(dir: &Path) -> Result<(), String> {
+    for name in DB_FILES.iter().chain(std::iter::once(&SIDECAR_PIDFILE)) {
+        remove_if_present(&dir.join(name))?;
+    }
+    remove_migration_temps(dir)
+}
+
+/// Waits up to `timeout` for the sidecar to remove its pidfile, which it does only
+/// after closing the database.
+async fn wait_for_sidecar_exit(pidfile: &Path, timeout: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + timeout;
+    while pidfile.exists() {
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(SIDECAR_STOP_POLL).await;
+    }
+    true
+}
+
+/// Whether delete-all may stop the sidecar: only once it is running (`port_known`: the
+/// host records the port after PORT:, which follows the pidfile write) and its pidfile
+/// is there to wait on. A missing pidfile beside a running sidecar means another
+/// instance on this data dir overwrote it and then removed it on exit, so its absence
+/// would no longer mean "database closed".
+fn check_ready_to_delete(port_known: bool, pidfile: &Path) -> Result<(), String> {
+    if !port_known {
+        return Err(SIDECAR_STARTING_MESSAGE.to_string());
+    }
+    if !pidfile.is_file() {
+        return Err(SIDECAR_PIDFILE_MISSING_MESSAGE.to_string());
+    }
+    Ok(())
+}
+
+/// Deletes the local data in `dirs` once the sidecar has let go of `pidfile`, and
+/// nothing at all if it doesn't within `timeout`: deleting under a live SQLite
+/// connection could let its close unlink the next sidecar's WAL by path.
+async fn delete_after_sidecar_exit(pidfile: &Path, dirs: &[&Path], timeout: Duration) -> Result<(), String> {
+    if !wait_for_sidecar_exit(pidfile, timeout).await {
+        return Err(SIDECAR_STOP_TIMEOUT_MESSAGE.to_string());
+    }
+    for dir in dirs {
+        delete_local_data_files(dir)?;
+    }
+    Ok(())
+}
+
+/// Returns Ok(true) once chats, messages and jobs are deleted, Ok(false) when the
+/// user cancelled the confirmation (nothing is touched).
+///
+/// Assumes one Rumble instance per data dir: a second one (`pnpm tauri dev` beside
+/// the packaged app) keeps its own connection open, which the dialog asks the user
+/// to close first.
+#[tauri::command]
+async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
+    let confirmed = app
+        .dialog()
+        .message(
+            "This permanently deletes every chat, message, and document review, draft and research job \
+             stored by Rumble on this device, including the document text inside them.\n\n\
+             Close any other Rumble windows first.\n\n\
+             Not affected: API keys in the system keychain, .docx files you exported, and Ollama's models.",
+        )
+        .title("Delete all local data?")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Delete everything".to_string(),
+            "Cancel".to_string(),
+        ))
+        .blocking_show();
+    if !confirmed {
+        return Ok(false);
+    }
+
+    let state = app.state::<AppState>();
+    let (old, new) = data_dirs(&app)?;
+    let active = active_data_dir(&old, &new);
+    let port_known = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+    check_ready_to_delete(port_known, &active.join(SIDECAR_PIDFILE))?;
+    kill_sidecar(&state);
+    // The old dir too, so a database left there can't be migrated back in.
+    let deleted = delete_after_sidecar_exit(&active.join(SIDECAR_PIDFILE), &[&new, &old], SIDECAR_STOP_TIMEOUT).await;
+
+    // spawn_sidecar blocks on the runtime, which panics on an async worker thread.
+    let handle = app.clone();
+    let restarted = tauri::async_runtime::spawn_blocking(move || spawn_sidecar(&handle))
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r);
+
+    match (deleted, restarted) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Err(e)) => {
+            eprintln!("[sidecar] failed to restart after deleting local data: {}", e);
+            Err(SIDECAR_RESTART_FAILED_MESSAGE.to_string())
+        }
+        (Ok(()), Ok(())) => Ok(true),
+    }
+}
+
+/// Returns the shared secret for the one frontend path that talks to the
+/// sidecar directly (SSE streaming, which can't go through `api_call`).
+/// Kept separate from `sidecar_status` so the secret doesn't appear in
+/// routine status payloads that end up in devtools or log captures.
+#[tauri::command]
+fn sidecar_secret(state: State<'_, AppState>) -> String {
+    state.secret.clone()
 }
 
 #[tauri::command]
@@ -1132,6 +1397,8 @@ pub fn run() {
             sidecar_status,
             // Document export
             export_draft_docx,
+            // Local data lifecycle
+            delete_all_local_data,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -2069,6 +2336,236 @@ mod tests {
         )
         .await;
         assert_eq!(result.unwrap_err(), EXTRACT_TIMEOUT_MESSAGE);
+    }
+
+    // --- migrate_data_dir ---
+
+    fn write_files(dir: &Path, names: &[&str], tag: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        for name in names {
+            std::fs::write(dir.join(name), format!("{} {}", tag, name)).unwrap();
+        }
+    }
+
+    fn read(path: PathBuf) -> String {
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> =
+            entries(dir).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        names.sort();
+        names
+    }
+
+    fn roaming_and_local() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        let old = root.path().join("Roaming").join("com.ielegante.rumble");
+        let new = root.path().join("Local").join("com.ielegante.rumble");
+        (root, old, new)
+    }
+
+    /// A non-empty directory where rumble.db should land: the WAL and SHM get placed, the database doesn't.
+    fn block_db_placement(new: &Path) {
+        std::fs::create_dir_all(new.join("rumble.db").join("occupied")).unwrap();
+    }
+
+    #[test]
+    fn migration_copies_db_wal_and_shm_then_clears_the_old_dir() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+        write_files(&old, &[SIDECAR_PIDFILE], "old");
+
+        assert_eq!(
+            migrate_data_dir(&old, &new).unwrap(),
+            Migration::Copied { files: DB_FILES.to_vec(), left_behind: vec![] }
+        );
+        for name in DB_FILES {
+            assert_eq!(read(new.join(name)), format!("old {}", name));
+        }
+        assert!(names_in(&old).is_empty(), "left in old: {:?}", names_in(&old));
+    }
+
+    #[test]
+    fn migration_run_twice_is_a_no_op_the_second_time() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+        migrate_data_dir(&old, &new).unwrap();
+
+        assert_eq!(migrate_data_dir(&old, &new).unwrap(), Migration::NotNeeded);
+        assert_eq!(read(new.join("rumble.db")), "old rumble.db");
+    }
+
+    #[test]
+    fn failed_migration_leaves_the_old_dir_untouched_and_no_debris_in_the_new() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+        block_db_placement(&new);
+
+        assert!(migrate_data_dir(&old, &new).is_err());
+        for name in DB_FILES {
+            assert_eq!(read(old.join(name)), format!("old {}", name));
+        }
+        assert_eq!(names_in(&new), vec!["rumble.db"]); // only the obstacle
+        assert_eq!(active_data_dir(&old, &new), old);
+    }
+
+    #[test]
+    fn a_stale_wal_in_the_new_dir_is_never_replayed_over_the_migrated_db() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, &["rumble.db"], "old"); // cleanly closed: no WAL
+        write_files(&new, &["rumble.db-wal", "rumble.db-shm"], "stale");
+
+        migrate_data_dir(&old, &new).unwrap();
+
+        assert_eq!(read(new.join("rumble.db")), "old rumble.db");
+        assert!(!new.join("rumble.db-wal").exists());
+        assert!(!new.join("rumble.db-shm").exists());
+    }
+
+    #[test]
+    fn a_retry_after_a_crash_that_placed_a_wal_migrates_the_old_wal_intact() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+        // An earlier run crashed after placing its WAL; this run fails too; then one succeeds.
+        write_files(&new, &["rumble.db-wal"], "stale");
+        block_db_placement(&new);
+        assert!(migrate_data_dir(&old, &new).is_err());
+        assert_eq!(read(old.join("rumble.db-wal")), "old rumble.db-wal");
+
+        std::fs::remove_dir_all(new.join("rumble.db")).unwrap();
+        migrate_data_dir(&old, &new).unwrap();
+        for name in DB_FILES {
+            assert_eq!(read(new.join(name)), format!("old {}", name));
+        }
+    }
+
+    #[test]
+    fn a_crash_after_placing_the_db_but_before_clearing_old_uses_the_new_copy() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+        write_files(&new, DB_FILES, "old"); // the copy completed; the old files were not yet removed
+
+        assert_eq!(migrate_data_dir(&old, &new).unwrap(), Migration::BothPresent);
+        assert_eq!(active_data_dir(&old, &new), new);
+        assert_eq!(names_in(&old).len(), 3, "the old copy is left alone");
+    }
+
+    #[test]
+    fn migration_removes_temp_copies_left_by_an_earlier_run() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, &["rumble.db"], "old");
+        write_files(&new, &["rumble.db.migrating-0000"], "stale");
+
+        migrate_data_dir(&old, &new).unwrap();
+
+        assert_eq!(names_in(&new), vec!["rumble.db"]);
+    }
+
+    #[test]
+    fn migration_is_a_no_op_when_both_dirs_are_the_same() {
+        let (_root, old, _new) = roaming_and_local();
+        write_files(&old, DB_FILES, "old");
+
+        assert_eq!(migrate_data_dir(&old, &old).unwrap(), Migration::NotNeeded);
+        assert_eq!(names_in(&old).len(), 3);
+    }
+
+    #[test]
+    fn migration_ignores_a_local_dir_that_exists_without_a_db() {
+        let (_root, old, new) = roaming_and_local();
+        write_files(&old, &["rumble.db"], "old");
+        std::fs::create_dir_all(new.join("EBWebView")).unwrap();
+
+        assert_eq!(
+            migrate_data_dir(&old, &new).unwrap(),
+            Migration::Copied { files: vec!["rumble.db"], left_behind: vec![] }
+        );
+        assert_eq!(names_in(&new), vec!["EBWebView", "rumble.db"]);
+    }
+
+    #[test]
+    fn migration_is_a_no_op_when_the_old_dir_has_no_db() {
+        let (_root, old, new) = roaming_and_local();
+
+        assert_eq!(migrate_data_dir(&old, &new).unwrap(), Migration::NotNeeded);
+        assert!(!new.exists());
+        assert_eq!(active_data_dir(&old, &new), new);
+    }
+
+    // --- delete_local_data_files / delete_after_sidecar_exit ---
+
+    #[test]
+    fn delete_local_data_files_removes_db_files_pidfile_and_temps_only() {
+        let dir = tempfile::tempdir().unwrap();
+        write_files(dir.path(), DB_FILES, "x");
+        write_files(dir.path(), &[SIDECAR_PIDFILE, "rumble.db.migrating-1", "unrelated.txt"], "x");
+
+        delete_local_data_files(dir.path()).unwrap();
+
+        assert_eq!(names_in(dir.path()), vec!["unrelated.txt"]);
+    }
+
+    #[test]
+    fn delete_local_data_files_succeeds_when_nothing_is_there() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(delete_local_data_files(&dir.path().join("never-created")).is_ok());
+    }
+
+    #[test]
+    fn delete_is_refused_while_the_sidecar_is_starting() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+        assert_eq!(check_ready_to_delete(false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
+    }
+
+    #[test]
+    fn delete_is_refused_when_the_running_sidecar_has_no_pidfile() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        assert_eq!(check_ready_to_delete(true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
+    }
+
+    #[test]
+    fn delete_may_proceed_once_the_sidecar_runs_with_its_pidfile() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+        assert!(check_ready_to_delete(true, &pidfile).is_ok());
+    }
+
+    #[tokio::test]
+    async fn delete_waits_for_the_sidecar_to_release_the_db_then_deletes() {
+        let dir = tempfile::tempdir().unwrap();
+        write_files(dir.path(), DB_FILES, "x");
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+        let exiting_sidecar = {
+            let pidfile = pidfile.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(SIDECAR_STOP_POLL * 2).await;
+                std::fs::remove_file(pidfile).unwrap();
+            })
+        };
+
+        delete_after_sidecar_exit(&pidfile, &[dir.path()], SIDECAR_STOP_TIMEOUT).await.unwrap();
+
+        assert!(names_in(dir.path()).is_empty());
+        exiting_sidecar.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_deletes_nothing_when_the_sidecar_never_lets_go() {
+        let dir = tempfile::tempdir().unwrap();
+        write_files(dir.path(), DB_FILES, "x");
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+
+        let result = delete_after_sidecar_exit(&pidfile, &[dir.path()], SIDECAR_STOP_POLL * 3).await;
+
+        assert_eq!(result.unwrap_err(), SIDECAR_STOP_TIMEOUT_MESSAGE);
+        assert_eq!(names_in(dir.path()).len(), 4);
     }
 
     // --- SseLines ---
