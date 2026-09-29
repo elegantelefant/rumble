@@ -7,6 +7,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import aiosqlite
+import pytest
 import pytest_asyncio
 
 from app import _remove_pidfile, _write_pidfile, create_app, lifespan
@@ -213,3 +214,14 @@ def test_a_sidecar_removes_its_own_pidfile(tmp_path):
     _remove_pidfile(pidfile)
 
     assert not pidfile.exists()
+
+
+async def test_a_failed_startup_purge_closes_the_database(tmp_path, monkeypatch):
+    async def failing_purge(days):
+        raise RuntimeError("disk I/O error")
+
+    monkeypatch.setattr("app.purge_jobs_older_than", failing_purge)
+    with pytest.raises(RuntimeError):
+        async with lifespan(create_app(data_dir=str(tmp_path), dev=True)):
+            pass
+    assert db._db is None
