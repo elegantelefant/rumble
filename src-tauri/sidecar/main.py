@@ -47,10 +47,14 @@ def cli(argv: list[str] | None = None):
         )
         sys.exit(1)
 
-    app = create_app(data_dir=args.data_dir, secret=secret, dev=args.dev)
+    # Set by the Tauri host at spawn only; --dev runs and pytest never set it, so a
+    # closed/redirected stdin there can't trigger a shutdown.
+    watch_stdin = os.environ.get("RUMBLE_SIDECAR_WATCH_STDIN") == "1"
+    app = create_app(data_dir=args.data_dir, secret=secret, dev=args.dev, watch_stdin=watch_stdin)
 
     config = uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
     server = uvicorn.Server(config)
+    app.state.server = server
 
     original_startup = server.startup
 

@@ -433,7 +433,11 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // are visible to any process on the machine via `ps`, which would
         // defeat the point of the secret. `--secret` stays available for
         // manual dev runs.
-        .env("RUMBLE_SIDECAR_SECRET", &state.secret);
+        .env("RUMBLE_SIDECAR_SECRET", &state.secret)
+        // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
+        // do, so a closed/redirected stdin there can't be mistaken for the host
+        // dying.
+        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1");
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
