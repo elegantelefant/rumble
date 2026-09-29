@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use reqwest::Client;
 use tauri::image::Image;
+use tauri::ipc::Channel;
 use tauri::path::BaseDirectory;
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, State};
@@ -21,41 +22,15 @@ use uuid::Uuid;
 
 const SERVICE_NAME: &str = "elefant-rumble";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
-const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
-/// Paths that only the cloud API can handle (billing, auth, search, etc.).
-const CLOUD_ONLY_PREFIXES: &[&str] = &[
-    "/billing",
-    "/auth",
-    "/users",
-    "/organizations",
-    "/notifications",
-    "/webhooks",
-    "/whoami",
-    "/me",
-    "/search",
-    "/briefcase",
-    "/documents",
-    "/files",
-    "/corpus",
-    "/graph",
-    "/playbooks",
-    "/clause-databases",
-    "/legal-requests",
-    "/pipelines",
-    "/entitlements",
-    "/usage",
-    "/commencement",
-    "/reading-list",
-    "/model-performance",
-    "/memories",
-    "/memory",
-    "/orchestrate",
-    "/citations",
-    "/internal",
-];
+/// The vendored cloud contract (`openapi.json`) serves everything under this prefix.
+const CLOUD_API_PREFIX: &str = "/api/v1";
+const PREMIUM_REQUIRED: &str = "This feature requires Elefant Premium.";
+/// BYOK is OpenAI-only for now (#35): the sidecar only constructs an OpenAI provider.
+const BYOK_KEY_PROVIDER: &str = "openai";
+const BYOK_KEY_MISSING: &str = "Add an OpenAI API key in Settings before switching to BYOK.";
 
 // --- App state ---
 
@@ -72,44 +47,115 @@ struct AppState {
     http: Client,
     sidecar_port: Mutex<Option<u16>>,
     sidecar_child: Mutex<Option<CommandChild>>,
+    /// Bumped on every spawn; a sidecar's reader task may touch the port only
+    /// while its own generation is current.
+    sidecar_generation: Mutex<u64>,
     secret: String,
 }
 
-/// Whether a resolved URL points at our own local sidecar (as opposed to
-/// the cloud API) — used to decide whether to attach the shared secret.
-fn is_sidecar_url(url: &str) -> bool {
-    url.starts_with("http://127.0.0.1:")
+/// Whether a URL is our own sidecar — http on 127.0.0.1 at the sidecar's
+/// port, by parsed host and port, not by prefix — which decides whether it
+/// gets the shared secret.
+fn is_sidecar_url(url: &str, sidecar_port: Option<u16>) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|u| {
+        u.scheme() == "http"
+            && u.host_str() == Some("127.0.0.1")
+            && u.port().is_some()
+            && u.port() == sidecar_port
+    })
+}
+
+/// Only an absolute path (or none) may be appended to the sidecar's
+/// authority: `@evil.example/x` would turn `127.0.0.1:{port}` into userinfo
+/// and make evil.example the host; `//host/x` reads as a network path.
+fn check_request_path(path: &str) -> Result<(), String> {
+    if path.is_empty() || (path.starts_with('/') && !path.starts_with("//")) {
+        Ok(())
+    } else {
+        Err(format!("invalid request path: {:?}", path))
+    }
+}
+
+/// Whether a path addresses the cloud contract. Judged on the parsed path,
+/// percent-decoded, case-folded, with empty segments and `;` parameters
+/// dropped, so a query, dot segments, case, `%2F`, `//` or `;x` can't dodge
+/// the loud refusal.
+fn is_cloud_api_path(path: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(&format!("http://127.0.0.1{}", path)) else {
+        return false;
+    };
+    let decoded = percent_decode_str(url.path()).decode_utf8_lossy().to_ascii_lowercase();
+    let mut segments = decoded
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.split(';').next().unwrap_or_default());
+    CLOUD_API_PREFIX
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .all(|prefix| segments.next() == Some(prefix))
+}
+
+/// Where an api_call goes, with the sidecar port its URL was built from, so
+/// the credentials decision reads that same port rather than re-reading one
+/// a respawn may have changed in between.
+#[derive(Debug, PartialEq)]
+struct Target {
+    url: String,
+    sidecar_port: Option<u16>,
 }
 
 impl AppState {
-    /// Route a request path to the correct backend URL.
-    /// Premium mode: always cloud. Ollama/BYOK: cloud-only paths go to cloud,
-    /// everything else goes to the local sidecar.
-    fn resolve_url(&self, path: &str) -> Result<String, String> {
-        let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner());
-        if *mode == BackendMode::Premium {
-            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+    /// Route a request path to a backend URL. Ollama/BYOK: the local sidecar,
+    /// and a loud refusal for the cloud contract. Premium: refused until its
+    /// routing is built against the L0 payload contract
+    /// (agent_docs/2026-09-22-premium-payload-contract.md). Never returns a
+    /// non-loopback URL.
+    fn resolve_url(&self, path: &str) -> Result<Target, String> {
+        let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match mode {
+            BackendMode::Ollama | BackendMode::Byok if !is_cloud_api_path(path) => {
+                self.sidecar_target(path)
+            }
+            _ => Err(PREMIUM_REQUIRED.to_string()),
         }
+    }
 
-        let is_cloud_only = CLOUD_ONLY_PREFIXES
-            .iter()
-            .any(|prefix| path == *prefix || path.starts_with(&format!("{}/", prefix)));
+    fn sidecar_port(&self) -> Option<u16> {
+        *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
-        if is_cloud_only {
-            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+    /// Starts a new sidecar generation, retiring every earlier reader task.
+    fn next_sidecar_generation(&self) -> u64 {
+        let mut generation = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        *generation += 1;
+        *generation
+    }
+
+    /// Publishes or clears the sidecar port only while `generation` is
+    /// current. After a respawn, the replaced sidecar's reader must neither
+    /// clear the new port (its late Terminated) nor publish its own dead one.
+    fn set_port_if_current(&self, generation: u64, port: Option<u16>) -> bool {
+        let current = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        if *current != generation {
+            return false;
         }
-
-        self.sidecar_url(path)
+        *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = port;
+        true
     }
 
     /// Build a URL against the local sidecar only, ignoring backend mode —
     /// for operations like document extraction that never go to the cloud.
     fn sidecar_url(&self, path: &str) -> Result<String, String> {
-        let port = self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
-        match *port {
-            Some(p) => Ok(format!("http://127.0.0.1:{}{}", p, path)),
-            None => Err("sidecar not running".to_string()),
-        }
+        self.sidecar_target(path).map(|target| target.url)
+    }
+
+    fn sidecar_target(&self, path: &str) -> Result<Target, String> {
+        check_request_path(path)?;
+        let port = self.sidecar_port().ok_or("sidecar not running")?;
+        Ok(Target {
+            url: format!("http://127.0.0.1:{}{}", port, path),
+            sidecar_port: Some(port),
+        })
     }
 }
 
@@ -257,22 +303,28 @@ async fn api_call(
     body: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let url = state.resolve_url(&path)?;
-    let token = match auth_get_token_inner() {
-        Ok(t) => Some(t),
-        Err(e) => {
-            eprintln!("[keychain] failed to read auth token: {}", e);
-            None
-        }
-    };
-    // Only attach the shared secret when talking to our own local sidecar —
-    // never send it to the cloud API.
-    let secret = if is_sidecar_url(&url) {
-        Some(state.secret.as_str())
+    let target = state.resolve_url(&path)?;
+    let (token, secret) = request_credentials(&target, &state.secret, || {
+        auth_get_token_inner()
+            .map_err(|e| eprintln!("[keychain] failed to read auth token: {}", e))
+            .ok()
+    });
+    make_http_request(&state.http, &target.url, &method, body, params, token.as_deref(), secret).await
+}
+
+/// The credentials a request carries: the shared secret for our own sidecar,
+/// the premium bearer token for anything else — never both, and the keychain
+/// is not read at all for a sidecar-bound request (#72).
+fn request_credentials<'a>(
+    target: &Target,
+    secret: &'a str,
+    read_token: impl FnOnce() -> Option<String>,
+) -> (Option<String>, Option<&'a str>) {
+    if is_sidecar_url(&target.url, target.sidecar_port) {
+        (None, Some(secret))
     } else {
-        None
-    };
-    make_http_request(&state.http, &url, &method, body, params, token.as_deref(), secret).await
+        (read_token(), None)
+    }
 }
 
 const EXTRACT_FILENAME_HEADER: &str = "X-Rumble-Filename";
@@ -393,6 +445,164 @@ async fn extract_document(
     .await
 }
 
+// --- Chat streaming ---
+
+/// How long a chat stream may go without sending anything before it counts
+/// as stalled. The first token after a whole document's prompt evaluation on
+/// a CPU can be slow; the sidecar sends a `status` event straight away.
+const STREAM_IDLE_TIMEOUT_SECS: u64 = 300;
+/// Overall safety cap on one stream. It must override the client's 30s total
+/// budget, which would cut a long local generation off mid-stream.
+const STREAM_MAX_SECS: u64 = 3600;
+const STREAM_IDLE_MESSAGE: &str = "The model stopped responding.";
+
+struct StreamTimeouts {
+    idle: Duration,
+    total: Duration,
+}
+
+const STREAM_TIMEOUTS: StreamTimeouts = StreamTimeouts {
+    idle: Duration::from_secs(STREAM_IDLE_TIMEOUT_SECS),
+    total: Duration::from_secs(STREAM_MAX_SECS),
+};
+
+/// One event of a chat stream, as the frontend receives it over the channel.
+/// Exactly one `Done` or `Error` ends every stream.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
+enum StreamEvent {
+    Delta(String),
+    Done(String),
+    Error(String),
+}
+
+/// Accumulates SSE bytes and yields the payloads of complete `data:` lines.
+/// Only complete lines are decoded, so a UTF-8 character split across two
+/// network chunks is never cut in half.
+#[derive(Default)]
+struct SseLines {
+    buffer: Vec<u8>,
+}
+
+impl SseLines {
+    fn push(&mut self, bytes: &[u8]) -> Vec<String> {
+        self.buffer.extend_from_slice(bytes);
+        let mut payloads = Vec::new();
+        while let Some(end) = self.buffer.iter().position(|b| *b == b'\n') {
+            let line: Vec<u8> = self.buffer.drain(..=end).collect();
+            // sse-starlette ends lines with \r\n; trim covers both.
+            let line = String::from_utf8_lossy(&line);
+            if let Some(payload) = line.trim().strip_prefix("data:") {
+                let payload = payload.trim();
+                if !payload.is_empty() {
+                    payloads.push(payload.to_string());
+                }
+            }
+        }
+        payloads
+    }
+}
+
+/// Posts to the sidecar's SSE stream endpoint and relays each text delta to
+/// `on_delta`, in order. Returns the complete text from the sidecar's `done`
+/// event, or the message from its `error` event. The shared secret is
+/// attached here, host-side; the webview never sees it (#55). Silence longer
+/// than `timeouts.idle`, before the headers or between chunks, ends the stream
+/// with STREAM_IDLE_MESSAGE.
+async fn relay_sse(
+    http: &Client,
+    url: &str,
+    secret: &str,
+    body: serde_json::Value,
+    timeouts: &StreamTimeouts,
+    mut on_delta: impl FnMut(String) -> Result<(), String>,
+) -> Result<String, String> {
+    let request = http
+        .post(url)
+        .header(SECRET_HEADER, secret)
+        .json(&body)
+        .timeout(timeouts.total)
+        .send();
+    let mut response = tokio::time::timeout(timeouts.idle, request)
+        .await
+        .map_err(|_| STREAM_IDLE_MESSAGE.to_string())?
+        .map_err(|e| e.to_string())?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Stream request failed ({}): {}", status.as_u16(), text));
+    }
+
+    let mut lines = SseLines::default();
+    while let Some(chunk) = tokio::time::timeout(timeouts.idle, response.chunk())
+        .await
+        .map_err(|_| STREAM_IDLE_MESSAGE.to_string())?
+        .map_err(|e| e.to_string())?
+    {
+        for payload in lines.push(&chunk) {
+            // Non-JSON data lines are skipped, as the sidecar never sends them.
+            let Ok(event) = serde_json::from_str::<serde_json::Value>(&payload) else {
+                continue;
+            };
+            let value = event.get("value").and_then(|v| v.as_str()).unwrap_or_default();
+            match event.get("type").and_then(|t| t.as_str()) {
+                Some("delta") => on_delta(value.to_string())?,
+                Some("done") => return Ok(value.to_string()),
+                Some("error") => return Err(value.to_string()),
+                _ => {}
+            }
+        }
+    }
+    Err("stream ended before completion".to_string())
+}
+
+/// Streams a chat reply from the sidecar through `on_event`. Tauri delivers
+/// channel messages in order, but not in order with this command's own
+/// response (a payload of 8 KB or more travels by a separate fetch), so the
+/// frontend settles on the channel's terminal event rather than on this
+/// command returning — and every path, failures included, sends exactly one.
+#[tauri::command]
+async fn stream_message(
+    state: State<'_, AppState>,
+    chat_id: String,
+    text: String,
+    model: Option<String>,
+    on_event: Channel<StreamEvent>,
+) -> Result<(), String> {
+    stream_chat(&state, chat_id, text, model, &on_event).await
+}
+
+async fn stream_chat(
+    state: &AppState,
+    chat_id: String,
+    text: String,
+    model: Option<String>,
+    on_event: &Channel<StreamEvent>,
+) -> Result<(), String> {
+    let outcome = async {
+        // Chat is a sidecar feature in local/BYOK; premium chat waits on the L0
+        // payload contract like every other cloud call (same rule as resolve_url).
+        if *state.mode.lock().unwrap_or_else(|e| e.into_inner()) == BackendMode::Premium {
+            return Err(PREMIUM_REQUIRED.to_string());
+        }
+        let chat_id = Uuid::parse_str(&chat_id).map_err(|_| "invalid chat id".to_string())?;
+        let url = state.sidecar_url(&format!("/chats/{}/stream", chat_id))?;
+        let body = serde_json::json!({ "text": text, "model": model });
+        relay_sse(&state.http, &url, &state.secret, body, &STREAM_TIMEOUTS, |delta| {
+            on_event.send(StreamEvent::Delta(delta)).map_err(|e| e.to_string())
+        })
+        .await
+    }
+    .await;
+
+    let terminal = match outcome {
+        Ok(full_text) => StreamEvent::Done(full_text),
+        Err(message) => StreamEvent::Error(message),
+    };
+    on_event.send(terminal).map_err(|e| e.to_string())
+}
+
 // --- Keychain helpers ---
 
 fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
@@ -441,13 +651,15 @@ fn validate_provider(provider: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Sync, like set_backend_mode: a key change in byok mode respawns the sidecar.
 #[tauri::command]
-fn store_api_key(provider: String, key: String) -> Result<(), String> {
+fn store_api_key(app: AppHandle, state: State<'_, AppState>, provider: String, key: String) -> Result<(), String> {
     validate_provider(&provider)?;
     let entry_name = format!("byok_{}", provider);
     keyring_entry(&entry_name)?
         .set_password(&key)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    after_key_change(&state, &provider, KeyChange::Stored, || respawn_or_stop(&app))
 }
 
 #[tauri::command]
@@ -462,14 +674,52 @@ fn get_api_key(provider: String) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn delete_api_key(provider: String) -> Result<(), String> {
+fn delete_api_key(app: AppHandle, state: State<'_, AppState>, provider: String) -> Result<(), String> {
     validate_provider(&provider)?;
     let entry_name = format!("byok_{}", provider);
     match keyring_entry(&entry_name)?.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Ok(()) => {}
+        Err(keyring::Error::NoEntry) => {}
+        Err(e) => return Err(e.to_string()),
     }
+    after_key_change(&state, &provider, KeyChange::Deleted, || respawn_or_stop(&app))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum KeyChange {
+    Stored,
+    Deleted,
+}
+
+/// A byok sidecar holds the key it was spawned with, so a change to that key
+/// must reach it: a stored key respawns it; a deleted key drops the host to
+/// ollama — failing safe, never back to the old key — and respawns. Any
+/// other provider, or any other mode, leaves the sidecar alone.
+fn after_key_change(
+    state: &AppState,
+    provider: &str,
+    change: KeyChange,
+    respawn: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let mut mode = state.mode.lock().unwrap_or_else(|e| e.into_inner());
+    if provider != BYOK_KEY_PROVIDER || *mode != BackendMode::Byok {
+        return Ok(());
+    }
+    if change == KeyChange::Deleted {
+        *mode = BackendMode::Ollama;
+    }
+    drop(mode);
+    let done = match change {
+        KeyChange::Stored => "Key saved",
+        KeyChange::Deleted => "Key removed",
+    };
+    respawn().map_err(|e| format!("{}, but the local AI service didn't restart: {}", done, e))
+}
+
+/// Respawns the sidecar; if that fails, stops the running one rather than
+/// leave it on a key that was changed or deleted.
+fn respawn_or_stop(app: &AppHandle) -> Result<(), String> {
+    spawn_sidecar(app).inspect_err(|_| kill_sidecar(&app.state::<AppState>()))
 }
 
 // --- Backend mode commands ---
@@ -480,17 +730,67 @@ fn get_backend_mode(state: State<'_, AppState>) -> BackendMode {
     mode.clone()
 }
 
+/// Sync, not async: spawn_sidecar uses block_on, which must not run inside
+/// the async runtime.
 #[tauri::command]
-fn set_backend_mode(state: State<'_, AppState>, mode: String) -> Result<(), String> {
-    let parsed = match mode.as_str() {
-        "ollama" => BackendMode::Ollama,
-        "byok" => BackendMode::Byok,
-        "premium" => BackendMode::Premium,
-        other => return Err(format!("unknown backend mode: {}", other)),
+/// Ok(true) when the mode changed and the sidecar is restarting, Ok(false)
+/// when it was already in that mode and nothing happened.
+fn set_backend_mode(app: AppHandle, state: State<'_, AppState>, mode: String) -> Result<bool, String> {
+    apply_mode(&state, parse_mode(&mode)?, || spawn_sidecar(&app))
+}
+
+fn parse_mode(mode: &str) -> Result<BackendMode, String> {
+    match mode {
+        "ollama" => Ok(BackendMode::Ollama),
+        "byok" => Ok(BackendMode::Byok),
+        "premium" => Ok(BackendMode::Premium),
+        other => Err(format!("unknown backend mode: {}", other)),
+    }
+}
+
+/// Switches the host's mode and respawns the sidecar, which reads its mode
+/// only from its spawn environment (decision on PR #66). A failed respawn
+/// restores the previous mode: spawn_sidecar fails before it kills the running
+/// sidecar, so host and sidecar still agree. Ok(false): already in that mode.
+fn apply_mode(
+    state: &AppState,
+    requested: BackendMode,
+    respawn: impl FnOnce() -> Result<(), String>,
+) -> Result<bool, String> {
+    let previous = {
+        let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
+        if *current == requested {
+            return Ok(false);
+        }
+        std::mem::replace(&mut *current, requested)
     };
-    let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
-    *current = parsed;
-    Ok(())
+    respawn().map(|()| true).map_err(|e| {
+        *state.mode.lock().unwrap_or_else(|e| e.into_inner()) = previous;
+        e
+    })
+}
+
+/// The sidecar's mode env. "premium" never reaches the sidecar; the BYOK key
+/// is present only in byok mode. BYOK_API_KEY is always set, to "" outside
+/// byok, because the shell Command inherits the host's environment and has no
+/// env_remove: a key in the launching shell must not reach an ollama sidecar.
+fn sidecar_mode_env(
+    mode: &BackendMode,
+    byok_key: Option<String>,
+) -> Result<Vec<(&'static str, String)>, String> {
+    match mode {
+        BackendMode::Byok => {
+            let key = byok_key.filter(|k| !k.is_empty()).ok_or(BYOK_KEY_MISSING)?;
+            Ok(vec![
+                ("RUMBLE_BACKEND_MODE", "byok".to_string()),
+                ("BYOK_API_KEY", key),
+            ])
+        }
+        BackendMode::Ollama | BackendMode::Premium => Ok(vec![
+            ("RUMBLE_BACKEND_MODE", "ollama".to_string()),
+            ("BYOK_API_KEY", String::new()),
+        ]),
+    }
 }
 
 // --- Sidecar lifecycle ---
@@ -534,6 +834,13 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
 fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
 
+    let mode = state.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let byok_key = match mode {
+        BackendMode::Byok => get_api_key(BYOK_KEY_PROVIDER.to_string())?,
+        _ => None,
+    };
+    let mode_env = sidecar_mode_env(&mode, byok_key)?;
+
     // Find a free port synchronously via tauri's async runtime
     let port = tauri::async_runtime::block_on(find_available_port())?;
 
@@ -559,12 +866,16 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
         // do, so a closed/redirected stdin there can't be mistaken for the host
         // dying.
-        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1");
+        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1")
+        .envs(mode_env);
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar: {}", e))?;
 
+    // Retire the old sidecar's reader before killing it, so it can't publish
+    // or clear the port once this one owns it.
+    let generation = state.next_sidecar_generation();
     // Kill any existing sidecar before spawning a new one
     kill_sidecar(&state);
 
@@ -593,10 +904,10 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                                 match poll_health(&http_clone, p, &secret_clone).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();
-                                        let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
-                                        *sp = Some(p);
+                                        if st.set_port_if_current(generation, Some(p)) {
+                                            println!("[sidecar] ready on port {}", p);
+                                        }
                                         port_confirmed = true;
-                                        println!("[sidecar] ready on port {}", p);
                                     }
                                     Err(e) => {
                                         eprintln!("[sidecar] health check failed: {}", e);
@@ -615,9 +926,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         "[sidecar] terminated with code {:?}",
                         payload.code
                     );
-                    let st = state_handle.state::<AppState>();
-                    let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
-                    *sp = None;
+                    state_handle.state::<AppState>().set_port_if_current(generation, None);
                     break;
                 }
                 _ => {}
@@ -909,17 +1218,20 @@ fn sidecar_secret(state: State<'_, AppState>) -> String {
 
 #[tauri::command]
 async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let running = port.is_some();
+    Ok(sidecar_status_value(&state.http, state.sidecar_port(), &state.secret).await)
+}
 
+/// The status payload: whether a sidecar port is published and, if so, its
+/// /health body. /health is asked with the shared secret, without which the
+/// sidecar answers 401 (#69).
+async fn sidecar_status_value(http: &Client, port: Option<u16>, secret: &str) -> serde_json::Value {
     let mut result = serde_json::json!({
-        "running": running,
+        "running": port.is_some(),
         "port": port,
     });
-
     if let Some(p) = port {
         let url = format!("http://127.0.0.1:{}/health", p);
-        match state.http.get(&url).send().await {
+        match http.get(&url).header(SECRET_HEADER, secret).send().await {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
                     result["health"] = body;
@@ -930,8 +1242,7 @@ async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value,
             }
         }
     }
-
-    Ok(result)
+    result
 }
 
 // --- Tray icon ---
@@ -1041,6 +1352,7 @@ pub fn run() {
             http: http_client(),
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),
+            sidecar_generation: Mutex::new(0),
             secret: uuid::Uuid::new_v4().to_string(),
         })
         .setup(|app| {
@@ -1070,6 +1382,7 @@ pub fn run() {
             // API proxy
             api_call,
             extract_document,
+            stream_message,
             // Auth / keychain
             auth_store_token,
             auth_get_token,
@@ -1082,7 +1395,6 @@ pub fn run() {
             set_backend_mode,
             // Sidecar
             sidecar_status,
-            sidecar_secret,
             // Document export
             export_draft_docx,
             // Local data lifecycle
@@ -1111,168 +1423,355 @@ mod tests {
             http: Client::new(),
             sidecar_port: Mutex::new(port),
             sidecar_child: Mutex::new(None),
+            sidecar_generation: Mutex::new(0),
             secret: "test-secret".to_string(),
         }
     }
 
-    // --- resolve_url ---
+    // --- resolve_url: the per-mode routing table ---
+
+    const LOCAL_MODES: [BackendMode; 2] = [BackendMode::Ollama, BackendMode::Byok];
 
     #[test]
-    fn premium_always_routes_to_cloud() {
-        let state = make_state(BackendMode::Premium, None);
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "https://api.elefant.com/chats"
-        );
-        assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
-        );
-    }
-
-    #[test]
-    fn ollama_routes_cloud_only_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-        assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
-        );
-        assert_eq!(
-            state.resolve_url("/search").unwrap(),
-            "https://api.elefant.com/search"
-        );
-        assert_eq!(
-            state.resolve_url("/auth/login").unwrap(),
-            "https://api.elefant.com/auth/login"
-        );
-        assert_eq!(
-            state.resolve_url("/users").unwrap(),
-            "https://api.elefant.com/users"
-        );
-    }
-
-    #[test]
-    fn ollama_routes_sidecar_paths_to_sidecar() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/health").unwrap(),
-            "http://127.0.0.1:11435/health"
-        );
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "http://127.0.0.1:11435/chats"
-        );
-        assert_eq!(
-            state.resolve_url("/chats/abc-123/message").unwrap(),
-            "http://127.0.0.1:11435/chats/abc-123/message"
-        );
-        assert_eq!(
-            state.resolve_url("/clarify").unwrap(),
-            "http://127.0.0.1:11435/clarify"
-        );
-        assert_eq!(
-            state.resolve_url("/translate").unwrap(),
-            "http://127.0.0.1:11435/translate"
-        );
-        assert_eq!(
-            state.resolve_url("/draft").unwrap(),
-            "http://127.0.0.1:11435/draft"
-        );
-    }
-
-    #[test]
-    fn byok_routes_same_as_ollama() {
-        let state = make_state(BackendMode::Byok, Some(8080));
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "http://127.0.0.1:8080/chats"
-        );
-    }
-
-    #[test]
-    fn ollama_unknown_path_routes_to_sidecar() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/some-future-endpoint").unwrap(),
-            "http://127.0.0.1:11435/some-future-endpoint"
-        );
-    }
-
-    #[test]
-    fn ollama_no_sidecar_errors_for_sidecar_path() {
-        let state = make_state(BackendMode::Ollama, None);
-        assert!(state.resolve_url("/chats").is_err());
-    }
-
-    #[test]
-    fn ollama_no_sidecar_still_routes_cloud_only() {
-        let state = make_state(BackendMode::Ollama, None);
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-    }
-
-    #[test]
-    fn cloud_only_prefix_no_false_positive() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/me").unwrap(),
-            "https://api.elefant.com/me"
-        );
-        assert_eq!(
-            state.resolve_url("/models").unwrap(),
-            "http://127.0.0.1:11435/models"
-        );
-    }
-
-    #[test]
-    fn every_cloud_only_prefix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let result = state.resolve_url(prefix).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                prefix,
-                result
-            );
+    fn local_modes_route_sidecar_paths_to_the_sidecar() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode.clone(), Some(11435));
+            for path in ["/health", "/chats", "/chats/abc-123/message", "/draft", "/billing", "/search", "/some-future-endpoint"] {
+                assert_eq!(
+                    state.resolve_url(path).unwrap().url,
+                    format!("http://127.0.0.1:11435{}", path),
+                    "{:?} {}",
+                    mode,
+                    path
+                );
+            }
         }
     }
 
     #[test]
-    fn every_cloud_only_prefix_with_suffix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let path = format!("{}/sub-path", prefix);
-            let result = state.resolve_url(&path).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                path,
-                result
-            );
+    fn local_modes_refuse_the_cloud_contract() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode.clone(), Some(11435));
+            for path in ["/api/v1", "/api/v1/", "/api/v1/search/keyword", "/api/v1/billing/subscription"] {
+                assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{:?} {}", mode, path);
+            }
         }
     }
 
     #[test]
-    fn partial_prefix_does_not_falsely_match() {
+    fn local_modes_do_not_treat_lookalike_prefixes_as_cloud() {
         let state = make_state(BackendMode::Ollama, Some(11435));
-        // "/billing_extra" contains "/billing" as a substring but should NOT match
-        let result = state.resolve_url("/billing_extra").unwrap();
-        assert!(
-            result.starts_with("http://127.0.0.1:11435"),
-            "/billing_extra should NOT route to cloud, got: {}",
-            result
+        for path in ["/api/v10/x", "/api/v1x", "/api"] {
+            assert_eq!(state.resolve_url(path).unwrap().url, format!("http://127.0.0.1:11435{}", path));
+        }
+    }
+
+    #[test]
+    fn local_modes_error_when_the_sidecar_is_not_running() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode, None);
+            assert_eq!(state.resolve_url("/chats"), Err("sidecar not running".to_string()));
+        }
+    }
+
+    #[test]
+    fn premium_refuses_every_path_until_the_payload_contract_lands() {
+        let state = make_state(BackendMode::Premium, Some(11435));
+        for path in ["/chats", "/health", "/api/v1/search/keyword"] {
+            assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{}", path);
+        }
+    }
+
+    #[test]
+    fn resolve_url_never_returns_a_non_loopback_url() {
+        let paths = ["/chats", "/billing", "/api/v1/me", "/api/v1", "https://api.elefant.com/x", "/me"];
+        for mode in [BackendMode::Ollama, BackendMode::Byok, BackendMode::Premium] {
+            let state = make_state(mode, Some(11435));
+            for path in paths {
+                if let Ok(Target { url, .. }) = state.resolve_url(path) {
+                    assert!(url.starts_with("http://127.0.0.1:11435"), "{}", url);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_path_that_would_change_the_host_is_refused() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        for path in ["@evil.example/x", "evil.example/x", "//evil.example/x", "//api/v1/me", ".evil.example/x"] {
+            assert!(state.resolve_url(path).is_err(), "{}", path);
+            assert!(state.sidecar_url(path).is_err(), "{}", path);
+        }
+    }
+
+    #[test]
+    fn the_cloud_contract_is_judged_on_the_parsed_case_folded_path() {
+        let state = make_state(BackendMode::Byok, Some(11435));
+        for path in [
+            "/api/v1?x=1",
+            "/API/v1/me",
+            "/Api/V1",
+            "/./api/v1/me",
+            "/x/../api/v1/me",
+            "/api/v1#frag",
+            "/api%2Fv1/me",
+            "/%61pi/v1/me",
+            "/api/v1%2Fme",
+            "/api/v1;x",
+            "/api//v1/me",
+            "/api;x/v1/me",
+        ] {
+            assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{}", path);
+        }
+    }
+
+    #[test]
+    fn sidecar_url_accepts_an_empty_path_for_callers_that_append_their_own() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert_eq!(state.sidecar_url("").unwrap(), "http://127.0.0.1:11435");
+    }
+
+    // --- is_sidecar_url: parsed host and port, not a prefix ---
+
+    #[test]
+    fn only_http_127_0_0_1_at_the_sidecar_port_is_the_sidecar() {
+        assert!(is_sidecar_url("http://127.0.0.1:11435/chats", Some(11435)));
+        for url in [
+            "http://127.0.0.1:11435@evil.example/x",
+            "http://127.0.0.1.evil.example:11435/x",
+            "http://evil.example/?h=127.0.0.1:11435",
+            "http://127.0.0.1:9999/chats",
+            "https://127.0.0.1:11435/chats",
+            "http://127.0.0.1/chats",
+            "not a url",
+        ] {
+            assert!(!is_sidecar_url(url, Some(11435)), "{}", url);
+        }
+        assert!(!is_sidecar_url("http://127.0.0.1:11435/chats", None));
+    }
+
+    // --- request_credentials (#72) ---
+
+    fn target(url: &str, sidecar_port: Option<u16>) -> Target {
+        Target { url: url.to_string(), sidecar_port }
+    }
+
+    fn never_read_token() -> Option<String> {
+        panic!("the keychain must not be read for a sidecar request")
+    }
+
+    #[test]
+    fn sidecar_requests_carry_the_secret_and_never_read_the_token() {
+        let (token, secret) =
+            request_credentials(&target("http://127.0.0.1:11435/chats", Some(11435)), "s3cret", never_read_token);
+        assert_eq!((token, secret), (None, Some("s3cret")));
+    }
+
+    #[test]
+    fn a_respawn_after_resolving_does_not_turn_a_sidecar_request_into_a_cloud_one() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let resolved = state.resolve_url("/chats").unwrap();
+        kill_sidecar(&state);
+        *state.sidecar_port.lock().unwrap() = Some(22222);
+        let (token, secret) = request_credentials(&resolved, &state.secret, never_read_token);
+        assert_eq!((token, secret), (None, Some("test-secret")));
+    }
+
+    #[test]
+    fn cloud_requests_carry_the_bearer_and_never_the_secret() {
+        let (token, secret) =
+            request_credentials(&target("https://api.elefant.com/api/v1/me", None), "s3cret", || Some("bearer".to_string()));
+        assert_eq!((token, secret), (Some("bearer".to_string()), None));
+    }
+
+    #[test]
+    fn a_lookalike_sidecar_url_never_gets_the_secret() {
+        let (_, secret) =
+            request_credentials(&target("http://127.0.0.1:11435@evil.example/x", Some(11435)), "s3cret", || None);
+        assert_eq!(secret, None);
+    }
+
+    // --- parse_mode ---
+
+    #[test]
+    fn parse_mode_maps_each_mode_name() {
+        assert_eq!(parse_mode("ollama"), Ok(BackendMode::Ollama));
+        assert_eq!(parse_mode("byok"), Ok(BackendMode::Byok));
+        assert_eq!(parse_mode("premium"), Ok(BackendMode::Premium));
+        assert_eq!(parse_mode("Ollama"), Err("unknown backend mode: Ollama".to_string()));
+    }
+
+    // --- sidecar_mode_env: the BYOK key reaches the sidecar only in byok mode ---
+
+    fn env_value(env: &[(&'static str, String)], key: &str) -> Option<String> {
+        env.iter().find(|(k, _)| *k == key).map(|(_, v)| v.clone())
+    }
+
+    #[test]
+    fn byok_env_carries_the_mode_and_the_key() {
+        let env = sidecar_mode_env(&BackendMode::Byok, Some("sk-test".to_string())).unwrap();
+        assert_eq!(env_value(&env, "RUMBLE_BACKEND_MODE").as_deref(), Some("byok"));
+        assert_eq!(env_value(&env, "BYOK_API_KEY").as_deref(), Some("sk-test"));
+    }
+
+    #[test]
+    fn byok_without_a_key_is_refused() {
+        for key in [None, Some(String::new())] {
+            assert_eq!(sidecar_mode_env(&BackendMode::Byok, key), Err(BYOK_KEY_MISSING.to_string()));
+        }
+    }
+
+    #[test]
+    fn ollama_and_premium_envs_run_the_sidecar_in_ollama_mode_with_the_key_blanked() {
+        for mode in [BackendMode::Ollama, BackendMode::Premium] {
+            let env = sidecar_mode_env(&mode, Some("sk-leak".to_string())).unwrap();
+            assert_eq!(env_value(&env, "RUMBLE_BACKEND_MODE").as_deref(), Some("ollama"), "{:?}", mode);
+            assert_eq!(env_value(&env, "BYOK_API_KEY").as_deref(), Some(""), "{:?}", mode);
+            assert!(env.iter().all(|(_, v)| !v.contains("sk-leak")), "{:?}", mode);
+        }
+    }
+
+    // --- apply_mode: respawn on change ---
+
+    #[test]
+    fn same_mode_does_not_respawn() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let mut respawns = 0;
+        let changed = apply_mode(&state, BackendMode::Ollama, || {
+            respawns += 1;
+            Ok(())
+        });
+        assert_eq!((changed, respawns), (Ok(false), 0));
+    }
+
+    #[test]
+    fn a_mode_change_respawns_once_with_the_new_mode_already_set() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let mut seen = Vec::new();
+        let changed = apply_mode(&state, BackendMode::Byok, || {
+            seen.push(state.mode.lock().unwrap().clone());
+            Ok(())
+        });
+        assert_eq!(changed, Ok(true));
+        assert_eq!(seen, vec![BackendMode::Byok]);
+        assert_eq!(*state.mode.lock().unwrap(), BackendMode::Byok);
+    }
+
+    #[test]
+    fn a_failed_respawn_restores_the_previous_mode() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let result = apply_mode(&state, BackendMode::Byok, || Err(BYOK_KEY_MISSING.to_string()));
+        assert_eq!(result, Err(BYOK_KEY_MISSING.to_string()));
+        assert_eq!(*state.mode.lock().unwrap(), BackendMode::Ollama);
+    }
+
+    // --- after_key_change: a byok sidecar follows its key ---
+
+    fn key_change(mode: BackendMode, provider: &str, change: KeyChange) -> (u32, BackendMode) {
+        let state = make_state(mode, Some(11435));
+        let mut respawns = 0;
+        after_key_change(&state, provider, change, || {
+            respawns += 1;
+            Ok(())
+        })
+        .unwrap();
+        let mode = state.mode.lock().unwrap().clone();
+        (respawns, mode)
+    }
+
+    #[test]
+    fn storing_the_openai_key_in_byok_respawns_the_sidecar() {
+        assert_eq!(key_change(BackendMode::Byok, "openai", KeyChange::Stored), (1, BackendMode::Byok));
+    }
+
+    #[test]
+    fn deleting_the_openai_key_in_byok_drops_to_ollama_and_respawns() {
+        assert_eq!(key_change(BackendMode::Byok, "openai", KeyChange::Deleted), (1, BackendMode::Ollama));
+    }
+
+    #[test]
+    fn key_changes_outside_byok_or_for_other_providers_leave_the_sidecar_alone() {
+        for change in [KeyChange::Stored, KeyChange::Deleted] {
+            assert_eq!(key_change(BackendMode::Ollama, "openai", change), (0, BackendMode::Ollama));
+            assert_eq!(key_change(BackendMode::Byok, "anthropic", change), (0, BackendMode::Byok));
+        }
+    }
+
+    #[test]
+    fn a_failed_respawn_after_a_key_change_says_the_key_change_happened() {
+        for (change, done) in [(KeyChange::Stored, "Key saved"), (KeyChange::Deleted, "Key removed")] {
+            let state = make_state(BackendMode::Byok, Some(11435));
+            let result = after_key_change(&state, "openai", change, || Err("spawn failed".to_string()));
+            assert_eq!(
+                result,
+                Err(format!("{}, but the local AI service didn't restart: spawn failed", done))
+            );
+        }
+    }
+
+    // --- set_port_if_current: the generation guard ---
+
+    #[test]
+    fn the_current_generation_publishes_and_clears_the_port() {
+        let state = make_state(BackendMode::Ollama, None);
+        let generation = state.next_sidecar_generation();
+        assert!(state.set_port_if_current(generation, Some(9999)));
+        assert_eq!(state.sidecar_port(), Some(9999));
+        assert!(state.set_port_if_current(generation, None));
+        assert_eq!(state.sidecar_port(), None);
+    }
+
+    #[test]
+    fn a_replaced_sidecar_cannot_publish_or_clear_the_port() {
+        let state = make_state(BackendMode::Ollama, None);
+        let old = state.next_sidecar_generation();
+        let new = state.next_sidecar_generation();
+        assert!(state.set_port_if_current(new, Some(11435)));
+        assert!(!state.set_port_if_current(old, Some(9999)));
+        assert!(!state.set_port_if_current(old, None));
+        assert_eq!(state.sidecar_port(), Some(11435));
+    }
+
+    // --- the health checks send the shared secret (#69) ---
+
+    async fn health_server() -> MockServer {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .and(header(SECRET_HEADER, "test-secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok", "mode": "ollama"})))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    #[tokio::test]
+    async fn sidecar_status_reports_health_asked_with_the_secret() {
+        let server = health_server().await;
+        let port = server.address().port();
+        let status = sidecar_status_value(&Client::new(), Some(port), "test-secret").await;
+        assert_eq!(
+            status,
+            serde_json::json!({"running": true, "port": port, "health": {"status": "ok", "mode": "ollama"}})
         );
+    }
+
+    #[tokio::test]
+    async fn sidecar_status_without_a_port_reports_not_running() {
+        let status = sidecar_status_value(&Client::new(), None, "test-secret").await;
+        assert_eq!(status, serde_json::json!({"running": false, "port": null}));
+    }
+
+    #[tokio::test]
+    async fn the_spawn_health_poll_sends_the_secret() {
+        let server = health_server().await;
+        let result = poll_health(&Client::new(), server.address().port(), "test-secret").await;
+        assert_eq!(result, Ok(()));
     }
 
     // --- BackendMode serde ---
@@ -2067,6 +2566,277 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), SIDECAR_STOP_TIMEOUT_MESSAGE);
         assert_eq!(names_in(dir.path()).len(), 4);
+    }
+
+    // --- SseLines ---
+
+    #[test]
+    fn sse_lines_yields_data_payloads_from_crlf_lines() {
+        let mut lines = SseLines::default();
+        let payloads = lines.push(b"event: message\r\ndata: {\"a\":1}\r\n\r\n");
+        assert_eq!(payloads, vec!["{\"a\":1}".to_string()]);
+    }
+
+    #[test]
+    fn sse_lines_holds_a_partial_line_until_it_completes() {
+        let mut lines = SseLines::default();
+        assert!(lines.push(b"data: {\"type\":\"del").is_empty());
+        assert_eq!(lines.push(b"ta\"}\n"), vec!["{\"type\":\"delta\"}".to_string()]);
+    }
+
+    #[test]
+    fn sse_lines_keeps_a_utf8_character_split_across_chunks() {
+        let mut lines = SseLines::default();
+        let line = "data: 合同\n".as_bytes();
+        // Split inside the three-byte encoding of 合.
+        assert!(lines.push(&line[..7]).is_empty());
+        assert_eq!(lines.push(&line[7..]), vec!["合同".to_string()]);
+    }
+
+    // --- relay_sse (wiremock) ---
+
+    fn sse_body(events: &[serde_json::Value]) -> String {
+        events
+            .iter()
+            .map(|e| format!("event: message\r\ndata: {}\r\n\r\n", e))
+            .collect()
+    }
+
+    async fn relay_against(body: String, status: u16) -> (Result<String, String>, Vec<String>, MockServer) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chats/c/stream"))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(body),
+            )
+            .mount(&server)
+            .await;
+        let mut deltas = Vec::new();
+        let result = relay_sse(
+            &Client::new(),
+            &format!("{}/chats/c/stream", server.uri()),
+            "test-secret",
+            serde_json::json!({"text": "hi"}),
+            &STREAM_TIMEOUTS,
+            |d| {
+                deltas.push(d);
+                Ok(())
+            },
+        )
+        .await;
+        (result, deltas, server)
+    }
+
+    #[tokio::test]
+    async fn relay_forwards_deltas_in_order_and_returns_done_text() {
+        let body = sse_body(&[
+            serde_json::json!({"type": "status", "value": "generating"}),
+            serde_json::json!({"type": "delta", "value": "Hel"}),
+            serde_json::json!({"type": "delta", "value": "lo"}),
+            serde_json::json!({"type": "done", "value": "Hello"}),
+        ]);
+        let (result, deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(deltas, vec!["Hel".to_string(), "lo".to_string()]);
+        assert_eq!(result.unwrap(), "Hello");
+    }
+
+    #[tokio::test]
+    async fn relay_sends_secret_header_and_no_bearer_token() {
+        let body = sse_body(&[serde_json::json!({"type": "done", "value": ""})]);
+        let (_result, _deltas, server) = relay_against(body, 200).await;
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].headers.get(SECRET_HEADER).unwrap(), "test-secret");
+        assert!(requests[0].headers.get("authorization").is_none());
+    }
+
+    #[tokio::test]
+    async fn relay_error_event_becomes_err_with_its_message() {
+        let body = sse_body(&[
+            serde_json::json!({"type": "delta", "value": "par"}),
+            serde_json::json!({"type": "error", "value": "ollama unreachable"}),
+        ]);
+        let (result, _deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(result.unwrap_err(), "ollama unreachable");
+    }
+
+    #[tokio::test]
+    async fn relay_non_success_status_becomes_err_with_status() {
+        let (result, deltas, _server) =
+            relay_against("{\"detail\":\"chat not found\"}".to_string(), 404).await;
+        let err = result.unwrap_err();
+        assert!(err.contains("(404)"), "got: {}", err);
+        assert!(err.contains("chat not found"), "got: {}", err);
+        assert!(deltas.is_empty());
+    }
+
+    #[tokio::test]
+    async fn relay_stream_ending_without_terminal_event_is_err() {
+        let body = sse_body(&[serde_json::json!({"type": "delta", "value": "cut"})]);
+        let (result, _deltas, _server) = relay_against(body, 200).await;
+        assert_eq!(result.unwrap_err(), "stream ended before completion");
+    }
+
+    /// A channel that records every message it is sent, as the JSON the webview would receive.
+    fn recording_channel() -> (Channel<StreamEvent>, std::sync::Arc<Mutex<Vec<serde_json::Value>>>) {
+        let sent = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let sink = sent.clone();
+        let channel = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(json) = body {
+                sink.lock().unwrap().push(serde_json::from_str(&json).unwrap());
+            }
+            Ok(())
+        });
+        (channel, sent)
+    }
+
+    const CHAT_ID: &str = "78072e58-05d6-496b-820d-9e09d9e7d0cc";
+
+    #[tokio::test]
+    async fn stream_chat_sends_deltas_then_exactly_one_done() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/chats/{}/stream", CHAT_ID)))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body(&[
+                serde_json::json!({"type": "delta", "value": "Hel"}),
+                serde_json::json!({"type": "delta", "value": "lo"}),
+                serde_json::json!({"type": "done", "value": "Hello"}),
+            ])))
+            .mount(&server)
+            .await;
+        let state = make_state(BackendMode::Ollama, Some(server.address().port()));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![
+                serde_json::json!({"type": "delta", "value": "Hel"}),
+                serde_json::json!({"type": "delta", "value": "lo"}),
+                serde_json::json!({"type": "done", "value": "Hello"}),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_chat_rejects_a_non_uuid_chat_id_with_one_error_event() {
+        let state = make_state(BackendMode::Ollama, Some(1));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, "../health".into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "error", "value": "invalid chat id"})]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_chat_without_a_sidecar_sends_one_error_event() {
+        let state = make_state(BackendMode::Ollama, None);
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), None, &channel).await.unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "error", "value": "sidecar not running"})]
+        );
+    }
+
+    /// A one-shot SSE server that writes each (delay, event) chunk after its
+    /// delay, so a test can control the gaps between chunks.
+    fn slow_sse_server(chunks: Vec<(u64, serde_json::Value)>) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/chats/c/stream", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0u8; 8192];
+            let _ = socket.read(&mut request);
+            let _ = socket.write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n",
+            );
+            for (delay_ms, event) in chunks {
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                let data = format!("data: {}\r\n\r\n", event);
+                let _ = socket.write_all(format!("{:x}\r\n{}\r\n", data.len(), data).as_bytes());
+            }
+            let _ = socket.write_all(b"0\r\n\r\n");
+        });
+        url
+    }
+
+    const TEST_TIMEOUTS: StreamTimeouts = StreamTimeouts {
+        idle: Duration::from_millis(300),
+        total: Duration::from_secs(10),
+    };
+
+    #[tokio::test]
+    async fn relay_stream_that_keeps_sending_outlasts_the_idle_timeout() {
+        // Six gaps of 100ms: 600ms in all, twice the idle timeout, never idle.
+        let mut chunks: Vec<(u64, serde_json::Value)> = (0..5)
+            .map(|i| (100, serde_json::json!({"type": "delta", "value": i.to_string()})))
+            .collect();
+        chunks.push((100, serde_json::json!({"type": "done", "value": "01234"})));
+        let url = slow_sse_server(chunks);
+
+        let result =
+            relay_sse(&Client::new(), &url, "s", serde_json::json!({}), &TEST_TIMEOUTS, |_| Ok(())).await;
+
+        assert_eq!(result.unwrap(), "01234");
+    }
+
+    #[tokio::test]
+    async fn relay_stream_that_goes_silent_ends_with_the_idle_message() {
+        let url = slow_sse_server(vec![
+            (0, serde_json::json!({"type": "status", "value": "generating"})),
+            (1000, serde_json::json!({"type": "done", "value": "too late"})),
+        ]);
+
+        let result =
+            relay_sse(&Client::new(), &url, "s", serde_json::json!({}), &TEST_TIMEOUTS, |_| Ok(())).await;
+
+        assert_eq!(result.unwrap_err(), STREAM_IDLE_MESSAGE);
+    }
+
+    #[tokio::test]
+    async fn stream_chat_posts_the_text_and_model_to_the_sidecar() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/chats/{}/stream", CHAT_ID)))
+            .and(body_json(serde_json::json!({"text": "hi", "model": "llama3.2"})))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body(&[
+                serde_json::json!({"type": "done", "value": "ok"}),
+            ])))
+            .mount(&server)
+            .await;
+        let state = make_state(BackendMode::Ollama, Some(server.address().port()));
+        let (channel, sent) = recording_channel();
+
+        stream_chat(&state, CHAT_ID.into(), "hi".into(), Some("llama3.2".into()), &channel)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![serde_json::json!({"type": "done", "value": "ok"})]
+        );
+    }
+
+    #[test]
+    fn stream_event_serializes_as_type_and_value() {
+        assert_eq!(
+            serde_json::to_value(StreamEvent::Delta("x".into())).unwrap(),
+            serde_json::json!({"type": "delta", "value": "x"})
+        );
+        assert_eq!(
+            serde_json::to_value(StreamEvent::Error("e".into())).unwrap(),
+            serde_json::json!({"type": "error", "value": "e"})
+        );
     }
 
     // --- validate_user_path ---
