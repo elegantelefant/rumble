@@ -772,6 +772,55 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String>
     Ok(true)
 }
 
+// --- Settings ---
+
+/// Lives in app_local_data_dir, not app_data_dir: on Windows the latter is the
+/// roaming profile, and briefcase and resource names can be client-matter names.
+const SETTINGS_FILE_NAME: &str = "settings.json";
+
+type Settings = serde_json::Map<String, serde_json::Value>;
+
+/// A missing file is "nothing saved yet". An unreadable or corrupt one is an
+/// error, never a silent reset to defaults.
+fn read_settings(path: &Path) -> Result<Option<Settings>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("failed to read {}: {}", path.display(), e)),
+    };
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|e| format!("failed to parse {}: {}", path.display(), e))
+}
+
+fn write_settings(path: &Path, settings: &Settings) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("failed to create {}: {}", dir.display(), e))?;
+    }
+    write_atomically(path, |file| {
+        serde_json::to_writer_pretty(file, settings)
+            .map_err(|e| format!("failed to write settings: {}", e))
+    })
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_local_data_dir()
+        .map(|dir| dir.join(SETTINGS_FILE_NAME))
+        .map_err(|e| format!("failed to resolve app local data dir: {}", e))
+}
+
+#[tauri::command]
+fn load_settings(app: AppHandle) -> Result<Option<Settings>, String> {
+    read_settings(&settings_path(&app)?)
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    write_settings(&settings_path(&app)?, &settings)
+}
+
 // --- App entry ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -829,6 +878,9 @@ pub fn run() {
             sidecar_secret,
             // Document export
             export_draft_docx,
+            // Settings
+            load_settings,
+            save_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -1172,6 +1224,65 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(std::fs::read(&dest).unwrap(), b"original content");
+    }
+
+    // --- settings ---
+
+    fn sample_settings() -> Settings {
+        serde_json::json!({
+            "appearance": {"theme": "dark", "showChatSidebarByDefault": false},
+            "workspace": {"briefcases": ["Matter A"]},
+        })
+        .as_object()
+        .unwrap()
+        .clone()
+    }
+
+    #[test]
+    fn settings_survive_a_write_and_a_fresh_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE_NAME);
+
+        write_settings(&path, &sample_settings()).unwrap();
+
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
+    }
+
+    #[test]
+    fn settings_missing_file_reads_as_nothing_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_settings(&dir.path().join(SETTINGS_FILE_NAME)).unwrap(), None);
+    }
+
+    #[test]
+    fn settings_corrupt_file_is_an_error_not_a_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE_NAME);
+        std::fs::write(&path, b"{not json").unwrap();
+
+        let err = read_settings(&path).unwrap_err();
+
+        assert!(err.contains("failed to parse"), "got: {}", err);
+    }
+
+    #[test]
+    fn settings_write_leaves_only_the_settings_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE_NAME);
+
+        write_settings(&path, &sample_settings()).unwrap();
+
+        assert_eq!(entries(dir.path()), vec![path]);
+    }
+
+    #[test]
+    fn settings_write_creates_missing_parent_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("not-yet-created").join(SETTINGS_FILE_NAME);
+
+        write_settings(&path, &sample_settings()).unwrap();
+
+        assert_eq!(read_settings(&path).unwrap(), Some(sample_settings()));
     }
 
     // --- make_http_request (wiremock) ---
