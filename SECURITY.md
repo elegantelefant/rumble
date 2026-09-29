@@ -41,12 +41,35 @@ is "offline after setup", not "offline".
 
 ## Where data lives
 
-- **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri app data
+- **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
   directory for identifier `com.ielegante.rumble`: `~/Library/Application Support/com.ielegante.rumble/`
-  on macOS, `%APPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
-  on Linux. It holds chats, messages and jobs; a job row stores its full request and result,
-  which includes document text. (`src-tauri/src/lib.rs` `spawn_sidecar`,
-  `src-tauri/sidecar/services/db.py`.) Settings shows a hardcoded path that isn't this one ([#22]).
+  on macOS, `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
+  (or `$XDG_DATA_HOME/com.ielegante.rumble/`) on Linux. It holds chats, messages and jobs; a job row
+  stores its full request and result, which includes document text. (`src-tauri/src/lib.rs`
+  `sidecar_data_dir`, `src-tauri/sidecar/services/db.py`; paths per `app_local_data_dir` → the `dirs`
+  crate's `data_local_dir`.) Settings shows a hardcoded path that isn't this one ([#22]).
+  - **Windows roaming, resolved.** Earlier builds used `%APPDATA%\com.ielegante.rumble\` (Roaming),
+    which roaming profiles and folder redirection copy to domain servers. On startup rumble moves the
+    database from there to `%LOCALAPPDATA%` once, if the old one exists and the new one doesn't, and
+    logs it; if both exist it leaves both alone and uses the local one. On macOS and Linux the two
+    directories are the same, so nothing moves.
+  - **Retention.** Jobs older than 30 days are deleted each time the sidecar starts
+    (`DEFAULT_JOB_RETENTION_DAYS`; override with `RUMBLE_JOB_RETENTION_DAYS`, a whole number of days,
+    in the environment rumble is launched from — there is no Settings control yet). Chats and their
+    messages are kept until you delete them. Deletes run with SQLite's `secure_delete` on, so a
+    deleted row's content is overwritten in the database file; copies outside it — WAL frames not yet
+    checkpointed, SSD remapping, backups — are beyond what rumble can erase, which is what full-disk
+    encryption is for (below).
+  - **Delete all local data.** Settings → Templates & workspace storage, after a native confirmation:
+    stops the sidecar, deletes `rumble.db` and its `-wal`/`-shm` files (and any left in the old
+    Windows roaming directory), then restarts the sidecar with an empty database. It does not touch
+    keychain entries (remove those under Providers), exported `.docx` files, or Ollama's models.
+  - **Backups.** Time Machine, File History and similar tools copy the database like any other file.
+    Exclude the directory above if your policy requires it; a backup keeps whatever retention or
+    delete-all later removes.
+  - **Uninstalling** is not relied on to remove this directory or the keychain entries: moving the
+    app to the Trash on macOS leaves both, and what the Windows and Linux installers remove has not
+    been verified. Delete the directory, and the `elefant-rumble` keychain items, by hand.
 - **OS keychain** — service `elefant-rumble`: the premium `auth_token` and any `byok_<provider>`
   keys saved in Settings (`src-tauri/src/lib.rs`, keychain helpers).
 - **Ollama's models** — Ollama's own store (`~/.ollama/models`), managed by Ollama, not rumble.
@@ -69,9 +92,8 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
 - **Secret handed to webview JavaScript** — chat streaming fetches the sidecar directly from the
   webview and obtains the shared secret via the `sidecar_secret` command, so any script in the
   webview can read it ([#55]). The CSP's `script-src 'self'` limits which scripts that could be.
-- **Data retention** — jobs, and the document text inside them, are never deleted; there is no
-  "delete all local data"; on Windows the data directory is in the roaming profile, which can sync
-  client documents to domain servers ([#57]).
+- **Data retention** — only jobs expire; chats are kept until deleted, and the 30-day job retention
+  has no Settings control yet ([#57]).
 - **Health check without the secret** — the host's `sidecar_status` calls `/health` without the
   secret header, so a packaged build always reports health "unreachable". Cosmetic today; a false
   signal while debugging ([#69]).
