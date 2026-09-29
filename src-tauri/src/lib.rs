@@ -656,6 +656,8 @@ const SIDECAR_STOP_POLL: Duration = Duration::from_millis(100);
 const SIDECAR_STOP_TIMEOUT_MESSAGE: &str =
     "Rumble couldn't stop its local service. Quit and reopen Rumble, then try again.";
 const SIDECAR_STARTING_MESSAGE: &str = "Rumble's local service is still starting. Try again in a moment.";
+const SIDECAR_PIDFILE_MISSING_MESSAGE: &str = "Another Rumble instance may be using your local data. \
+     Close it, restart Rumble, then try again.";
 const SIDECAR_RESTART_FAILED_MESSAGE: &str =
     "Your local data was deleted, but Rumble's local service didn't restart. Quit and reopen Rumble.";
 
@@ -815,6 +817,21 @@ async fn wait_for_sidecar_exit(pidfile: &Path, timeout: Duration) -> bool {
     true
 }
 
+/// Whether delete-all may stop the sidecar: only once it is running (`port_known`: the
+/// host records the port after PORT:, which follows the pidfile write) and its pidfile
+/// is there to wait on. A missing pidfile beside a running sidecar means another
+/// instance on this data dir overwrote it and then removed it on exit, so its absence
+/// would no longer mean "database closed".
+fn check_ready_to_delete(port_known: bool, pidfile: &Path) -> Result<(), String> {
+    if !port_known {
+        return Err(SIDECAR_STARTING_MESSAGE.to_string());
+    }
+    if !pidfile.is_file() {
+        return Err(SIDECAR_PIDFILE_MISSING_MESSAGE.to_string());
+    }
+    Ok(())
+}
+
 /// Deletes the local data in `dirs` once the sidecar has let go of `pidfile`, and
 /// nothing at all if it doesn't within `timeout`: deleting under a live SQLite
 /// connection could let its close unlink the next sidecar's WAL by path.
@@ -855,14 +872,11 @@ async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
         return Ok(false);
     }
 
-    // The port is recorded only after the sidecar printed PORT, which it does after
-    // its lifespan wrote the pidfile; before that there is nothing to wait on.
     let state = app.state::<AppState>();
-    if state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
-        return Err(SIDECAR_STARTING_MESSAGE.to_string());
-    }
     let (old, new) = data_dirs(&app)?;
     let active = active_data_dir(&old, &new);
+    let port_known = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+    check_ready_to_delete(port_known, &active.join(SIDECAR_PIDFILE))?;
     kill_sidecar(&state);
     // The old dir too, so a database left there can't be migrated back in.
     let deleted = delete_after_sidecar_exit(&active.join(SIDECAR_PIDFILE), &[&new, &old], SIDECAR_STOP_TIMEOUT).await;
@@ -1997,6 +2011,29 @@ mod tests {
     fn delete_local_data_files_succeeds_when_nothing_is_there() {
         let dir = tempfile::tempdir().unwrap();
         assert!(delete_local_data_files(&dir.path().join("never-created")).is_ok());
+    }
+
+    #[test]
+    fn delete_is_refused_while_the_sidecar_is_starting() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+        assert_eq!(check_ready_to_delete(false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
+    }
+
+    #[test]
+    fn delete_is_refused_when_the_running_sidecar_has_no_pidfile() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        assert_eq!(check_ready_to_delete(true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
+    }
+
+    #[test]
+    fn delete_may_proceed_once_the_sidecar_runs_with_its_pidfile() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        std::fs::write(&pidfile, "123").unwrap();
+        assert!(check_ready_to_delete(true, &pidfile).is_ok());
     }
 
     #[tokio::test]
