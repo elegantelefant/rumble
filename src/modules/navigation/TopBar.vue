@@ -1,63 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { computed, onMounted } from "vue";
 import { currentUser } from "../../composables/user";
+import { backendMode, CONFIDENTIALITY, confidentialityOf, loadBackendMode } from "../../composables/backendMode";
 
 const emit = defineEmits<{
   (e: "toggle-sidebar"): void;
   (e: "toggle-palette"): void;
 }>();
 
-type BackendMode = "ollama" | "byok" | "premium";
-type ConfidentialityState = "local" | "byok" | "hybrid" | "unknown";
+// Reads the shared mode, so a switch in Settings updates the pill without a
+// remount. Starts unknown rather than local — until the mode is read,
+// claiming confidentiality would be a guess.
+const confidentiality = computed(() => CONFIDENTIALITY[confidentialityOf(backendMode.value)]);
+const confidentialityLabel = computed(() => confidentiality.value.label);
+const confidentialityMessage = computed(() => confidentiality.value.message);
 
-// Each backend mode gets its own state. Collapsing byok into "local" would
-// claim confidentiality for requests that go to a hosted provider.
-const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; message: string }> = {
-  local: {
-    label: "Local & Confidential",
-    message: "Chats and drafting stay on this device.",
-  },
-  byok: {
-    label: "Direct to Provider",
-    message:
-      "Requests go to your chosen provider using your API key. Chats are stored locally.",
-  },
-  hybrid: {
-    label: "Hybrid",
-    message: "Chats retained locally; remote agents may assist on request.",
-  },
-  unknown: {
-    label: "Mode unavailable",
-    message: "Could not determine where requests are sent.",
-  },
-};
-
-const MODE_TO_STATE: Record<BackendMode, ConfidentialityState> = {
-  ollama: "local",
-  byok: "byok",
-  premium: "hybrid",
-};
-
-// Starts unknown rather than local — until the mode is read, claiming
-// confidentiality would be a guess.
-const confidentialityState = ref<ConfidentialityState>("unknown");
-const confidentialityLabel = computed(
-  () => CONFIDENTIALITY[confidentialityState.value].label,
-);
-const confidentialityMessage = computed(
-  () => CONFIDENTIALITY[confidentialityState.value].message,
-);
-
-onMounted(async () => {
-  try {
-    const mode = await invoke<BackendMode>("get_backend_mode");
-    confidentialityState.value = MODE_TO_STATE[mode] ?? "unknown";
-  } catch (error) {
-    console.error("Failed to read backend mode:", error);
-    confidentialityState.value = "unknown";
-  }
-});
+onMounted(loadBackendMode);
 
 const initials = computed(() =>
   currentUser.value.name

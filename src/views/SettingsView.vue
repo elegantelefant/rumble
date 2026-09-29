@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
+import {
+  backendMode,
+  CONFIDENTIALITY,
+  loadBackendMode,
+  MODE_TO_STATE,
+  setBackendMode,
+  type BackendMode,
+} from "../composables/backendMode";
 
 const toast = useToast();
 
@@ -56,6 +64,58 @@ const providerOptions: ProviderOption[] = [
 ];
 
 const secrets = ref<SecretRecord[]>([]);
+
+// v1 ships Ollama-only: BYOK is selectable in dev builds, shown unavailable in
+// packaged ones. Flip this to offer BYOK in the packaged app.
+const BYOK_SELECTABLE = import.meta.env.DEV;
+const UNAVAILABLE = "Not available in this version.";
+
+type ModeOption = { id: BackendMode; label: string; description: string; available: boolean };
+
+const modeOptions: ModeOption[] = [
+  {
+    id: "ollama",
+    label: "Local (Ollama)",
+    description: CONFIDENTIALITY[MODE_TO_STATE.ollama].message,
+    available: true,
+  },
+  {
+    id: "byok",
+    label: "Your own key (OpenAI)",
+    description: `${CONFIDENTIALITY[MODE_TO_STATE.byok].message} Uses the OpenAI key saved below.`,
+    available: BYOK_SELECTABLE,
+  },
+  {
+    id: "premium",
+    label: "Elefant Premium",
+    description: CONFIDENTIALITY[MODE_TO_STATE.premium].message,
+    available: false,
+  },
+];
+
+const switchingMode = ref(false);
+// The radio group's own value, so a refused switch can put the selection back.
+const selectedMode = ref<BackendMode | null>(backendMode.value);
+watch(backendMode, (mode) => {
+  selectedMode.value = mode;
+});
+
+async function chooseMode(mode: BackendMode) {
+  if (mode === backendMode.value) return;
+  switchingMode.value = true;
+  try {
+    await setBackendMode(mode);
+    const label = modeOptions.find((option) => option.id === mode)?.label ?? mode;
+    toast.addToast(`Switched to ${label}. The local AI service restarted.`, "success");
+  } catch (error) {
+    toast.addToast(`Could not switch mode: ${error}`, "error");
+    selectedMode.value = backendMode.value;
+  } finally {
+    switchingMode.value = false;
+  }
+}
+
+onMounted(loadBackendMode);
 
 onMounted(async () => {
   const stored: SecretRecord[] = [];
@@ -253,6 +313,31 @@ const selectedProviderDetails = computed(() =>
     <form class="card space-y-6" @submit.prevent="saveSettings">
     <fieldset :disabled="isSaving">
       <section v-if="activeTab === 'providers'" class="space-y-5">
+        <fieldset class="space-y-2" :disabled="switchingMode">
+          <legend class="text-base font-semibold text-[var(--primary-800)]">Processing mode</legend>
+          <p class="text-xs text-[var(--primary-500)]">Where chat, drafting and review requests are processed.</p>
+          <label
+            v-for="option in modeOptions"
+            :key="option.id"
+            class="flex items-start gap-2 rounded-lg border border-[var(--primary-200)] p-3 text-sm"
+            :class="option.available ? 'bg-white text-[var(--primary-700)]' : 'bg-[var(--primary-50)] text-[var(--primary-400)]'"
+          >
+            <input
+              type="radio"
+              name="backend-mode"
+              class="mt-1"
+              v-model="selectedMode"
+              :value="option.id"
+              :disabled="!option.available"
+              @change="chooseMode(option.id)"
+            />
+            <span>
+              <span class="font-semibold">{{ option.label }}</span>
+              <span class="block text-xs">{{ option.available ? option.description : UNAVAILABLE }}</span>
+            </span>
+          </label>
+        </fieldset>
+
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
           <p class="text-xs text-[var(--primary-500)]">

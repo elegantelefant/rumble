@@ -4,6 +4,7 @@
 import { mount, flushPromises } from "@vue/test-utils"
 import TopBar from "../src/modules/navigation/TopBar.vue"
 import { invoke } from "@tauri-apps/api/core"
+import { backendMode, setBackendMode } from "../src/composables/backendMode"
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  backendMode.value = null
 })
 
 function mountTopBar() {
@@ -42,11 +44,14 @@ describe("TopBar confidentiality indicator", () => {
   })
 
   it("does not claim confidentiality when the mode cannot be read", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(invoke).mockRejectedValue("IPC error")
     const wrapper = mountTopBar()
     await flushPromises()
     expect(wrapper.text()).not.toContain("Local & Confidential")
     expect(wrapper.text()).toContain("Mode unavailable")
+    expect(consoleError).toHaveBeenCalledWith("Failed to read backend mode:", "IPC error")
+    consoleError.mockRestore()
   })
 
   it("does not claim confidentiality for an unrecognised mode", async () => {
@@ -68,5 +73,30 @@ describe("TopBar confidentiality indicator", () => {
     vi.mocked(invoke).mockResolvedValue("ollama")
     mountTopBar()
     expect(invoke).toHaveBeenCalledWith("get_backend_mode")
+  })
+
+  it("refreshes the pill when the mode is switched, without remounting", async () => {
+    vi.mocked(invoke).mockResolvedValue("ollama")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    vi.mocked(invoke).mockResolvedValue(undefined)
+    await setBackendMode("byok")
+    await flushPromises()
+    expect(wrapper.text()).toContain("Direct to Provider")
+  })
+
+  it("keeps the pill and surfaces the host's refusal as a string when a switch fails", async () => {
+    vi.mocked(invoke).mockResolvedValue("ollama")
+    const wrapper = mountTopBar()
+    await flushPromises()
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "set_backend_mode") throw "Add an OpenAI API key in Settings before switching to BYOK."
+      return "ollama"
+    })
+    await expect(setBackendMode("byok")).rejects.toBe(
+      "Add an OpenAI API key in Settings before switching to BYOK.",
+    )
+    await flushPromises()
+    expect(wrapper.text()).toContain("Local & Confidential")
   })
 })
