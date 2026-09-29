@@ -6,7 +6,10 @@ import re
 import threading
 from pathlib import Path
 
+import pytest
 from docx import Document
+
+from services.extract import UNREADABLE_PDF
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FRONTEND_CLIENT = Path(__file__).resolve().parents[3] / "src" / "api" / "sidecar.ts"
@@ -77,6 +80,29 @@ async def test_extract_truncated_pdf_returns_422_in_user_language(client):
     assert resp.json()["detail"] == (
         "This PDF could not be read. It may be damaged or not a real PDF."
     )
+
+
+# Single-byte flips of sample-text.pdf, each crashing pypdf with a different exception
+# after the reader opens: at reader.pages or inside extract_text().
+DAMAGED_PDF_FLIPS = {
+    "PdfReadError": (406, 91),
+    "PdfStreamError": (452, 59),
+    "KeyError": (3777, 61),
+    "AttributeError": (13845, 225),
+    "NotImplementedError": (53, 134),
+}
+
+
+@pytest.mark.parametrize("offset, value", DAMAGED_PDF_FLIPS.values(), ids=DAMAGED_PDF_FLIPS.keys())
+async def test_extract_damaged_pdf_returns_422_in_user_language(client, offset, value):
+    data = bytearray((FIXTURES / "sample-text.pdf").read_bytes())
+    data[offset] = value
+
+    resp = await client.post(
+        "/extract", files={"file": ("contract.pdf", bytes(data), "application/pdf")}
+    )
+
+    assert (resp.status_code, resp.json()["detail"]) == (422, UNREADABLE_PDF)
 
 
 async def test_health_answers_while_an_extraction_is_in_flight(client, monkeypatch):

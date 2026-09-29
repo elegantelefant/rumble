@@ -23,19 +23,28 @@ class ExtractionError(Exception):
     """Raised when a document cannot be turned into usable text."""
 
 
-def extract_pdf(data: bytes) -> str:
-    try:
-        reader = PdfReader(io.BytesIO(data))
-    except Exception as exc:
-        logger.warning("PDF parse failed: %s", exc)
-        raise ExtractionError(UNREADABLE_PDF) from exc
+def _pdf_pages(data: bytes) -> list[str]:
+    reader = PdfReader(io.BytesIO(data))
 
     # Print/copy-restricted PDFs carry only an owner password and open with an
     # empty user password; only a real user password blocks reading.
     if reader.is_encrypted and reader.decrypt("") == PasswordType.NOT_DECRYPTED:
         raise ExtractionError(PASSWORD_PROTECTED_PDF)
 
-    pages = [page.extract_text() or "" for page in reader.pages]
+    return [page.extract_text() or "" for page in reader.pages]
+
+
+def extract_pdf(data: bytes) -> str:
+    # pypdf parses lazily, so a damaged file can fail at open, at reader.pages or
+    # in extract_text(), with anything from PdfReadError to KeyError.
+    try:
+        pages = _pdf_pages(data)
+    except ExtractionError:
+        raise
+    except Exception as exc:
+        logger.warning("PDF parse failed: %s: %s", type(exc).__name__, exc)
+        raise ExtractionError(UNREADABLE_PDF) from exc
+
     text = "\n\n".join(p for p in pages if p.strip())
 
     if not text.strip():
