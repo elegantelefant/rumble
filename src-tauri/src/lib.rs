@@ -265,20 +265,27 @@ async fn api_call(
 }
 
 const EXTRACT_FILENAME_HEADER: &str = "X-Rumble-Filename";
+/// Parsing a large document can outlast the client's default 30s timeout while
+/// the sidecar is still working, so /extract gets its own, longer budget.
+const EXTRACT_TIMEOUT_SECS: u64 = 300;
+const EXTRACT_TIMEOUT_MESSAGE: &str =
+    "Extraction is taking too long. Try a smaller document, or split it into parts.";
 
 /// Posts a file's bytes to the sidecar's /extract endpoint as multipart form data.
 ///
-/// Maps a 422 (the sidecar's ExtractionError response) to its `detail` message —
-/// safe to show the user, since the sidecar only ever puts a human-readable
-/// explanation there. Any other failure (connection error, 5xx, unreadable body)
-/// collapses to a generic message; we never surface a raw response body from an
-/// unexpected failure mode.
+/// Maps a 422 (the sidecar's ExtractionError response) or 413 (over the upload
+/// limit) to its `detail` message — safe to show the user, since the sidecar only
+/// ever puts a human-readable explanation there. A timeout says so rather than
+/// claiming the sidecar is unreachable. Any other failure (connection error, 5xx,
+/// unreadable body) collapses to a generic message; we never surface a raw
+/// response body from an unexpected failure mode.
 async fn post_extract_multipart(
     http: &Client,
     sidecar_url: &str,
     secret: &str,
     filename: &str,
     data: Vec<u8>,
+    timeout: Duration,
 ) -> Result<String, String> {
     let part = reqwest::multipart::Part::bytes(data).file_name(filename.to_string());
     let form = reqwest::multipart::Form::new().part("file", part);
@@ -287,9 +294,16 @@ async fn post_extract_multipart(
         .post(format!("{}/extract", sidecar_url))
         .header(SECRET_HEADER, secret)
         .multipart(form)
+        .timeout(timeout)
         .send()
         .await
-        .map_err(|_| "could not reach the sidecar".to_string())?;
+        .map_err(|e| {
+            if e.is_timeout() {
+                EXTRACT_TIMEOUT_MESSAGE.to_string()
+            } else {
+                "could not reach the sidecar".to_string()
+            }
+        })?;
 
     let status = response.status();
 
@@ -305,7 +319,7 @@ async fn post_extract_multipart(
             .ok_or_else(|| "extraction failed".to_string());
     }
 
-    if status.as_u16() == 422 {
+    if matches!(status.as_u16(), 413 | 422) {
         let value: serde_json::Value = response
             .json()
             .await
@@ -347,7 +361,15 @@ async fn extract_document(
     };
 
     let sidecar_url = state.sidecar_url("")?;
-    post_extract_multipart(&state.http, &sidecar_url, &state.secret, &filename, data).await
+    post_extract_multipart(
+        &state.http,
+        &sidecar_url,
+        &state.secret,
+        &filename,
+        data,
+        Duration::from_secs(EXTRACT_TIMEOUT_SECS),
+    )
+    .await
 }
 
 // --- Keychain helpers ---
@@ -1348,6 +1370,8 @@ mod tests {
 
     // --- post_extract_multipart (wiremock) ---
 
+    const TEST_EXTRACT_TIMEOUT: Duration = Duration::from_secs(5);
+
     #[tokio::test]
     async fn extract_sends_file_part_and_secret_header() {
         let server = MockServer::start().await;
@@ -1369,6 +1393,7 @@ mod tests {
             "test-secret",
             "contract.pdf",
             b"Clause one.".to_vec(),
+            TEST_EXTRACT_TIMEOUT,
         )
         .await;
         assert_eq!(result.unwrap(), "Clause one.");
@@ -1392,6 +1417,7 @@ mod tests {
             "test-secret",
             "contract.doc",
             b"anything".to_vec(),
+            TEST_EXTRACT_TIMEOUT,
         )
         .await;
         assert_eq!(
@@ -1419,11 +1445,65 @@ mod tests {
             "test-secret",
             "contract.pdf",
             b"bytes".to_vec(),
+            TEST_EXTRACT_TIMEOUT,
         )
         .await;
         let err = result.unwrap_err();
         assert_eq!(err, "extraction failed");
         assert!(!err.contains("stack trace"), "must not leak raw body: {}", err);
+    }
+
+    #[tokio::test]
+    async fn extract_413_surfaces_upload_limit_message() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(ResponseTemplate::new(413).set_body_json(
+                serde_json::json!({"detail": "This file is larger than the 50 MB upload limit."}),
+            ))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "bundle.pdf",
+            b"bytes".to_vec(),
+            TEST_EXTRACT_TIMEOUT,
+        )
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "This file is larger than the 50 MB upload limit."
+        );
+    }
+
+    #[tokio::test]
+    async fn extract_timeout_says_extraction_is_slow_not_unreachable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"text": "late"}))
+                    .set_delay(Duration::from_millis(500)),
+            )
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "bundle.pdf",
+            b"bytes".to_vec(),
+            Duration::from_millis(50),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), EXTRACT_TIMEOUT_MESSAGE);
     }
 
     // --- validate_user_path ---
