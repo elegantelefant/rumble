@@ -6,6 +6,7 @@ import logging
 import zipfile
 
 from docx import Document
+from docx.table import _Cell
 from pypdf import PasswordType, PdfReader
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,13 @@ DOCX_TOO_LARGE = "This Word document is too large or complex to process."
 # and 69 s. Two bounds, both checked before python-docx runs:
 # - bytes: zipfile stops each member at its declared size, so the declared sizes
 #   bound what python-docx can inflate. A document of images totalling more is refused.
-# - tags: the tree costs ~350 bytes per element whatever the element's size, and
-#   every element needs a "<", so counting them bounds it. Worst case at this cap,
-#   one million empty paragraphs: ~8 s, ~400 MB. A heavily formatted page runs to
-#   well under a thousand, so this admits documents of over a thousand pages.
+# - nodes: the tree costs ~300-400 bytes per element or attribute whatever its
+#   size; every element needs a "<" and every attribute a "=", so counting both
+#   bounds it. Word-authored documents run to ~70 per paragraph, so this admits
+#   ~20,000 paragraphs, several hundred pages.
 MAX_DOCX_UNCOMPRESSED_MB = 32
 MAX_DOCX_UNCOMPRESSED_BYTES = MAX_DOCX_UNCOMPRESSED_MB * 1024 * 1024
-MAX_DOCX_XML_TAGS = 1_000_000
+MAX_DOCX_XML_NODES = 1_500_000
 _INFLATE_CHUNK_BYTES = 1024 * 1024
 
 
@@ -79,38 +80,45 @@ def _docx_over_limit(archive: zipfile.ZipFile) -> str | None:
     uncompressed = sum(member.file_size for member in members)
     if uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
         return f"{uncompressed} bytes uncompressed"
-    tags = 0
+    nodes = 0
     for member in members:
         with archive.open(member) as part:
             while chunk := part.read(_INFLATE_CHUNK_BYTES):
-                tags += chunk.count(b"<")
-    return f"{tags} XML tags" if tags > MAX_DOCX_XML_TAGS else None
+                nodes += chunk.count(b"<") + chunk.count(b"=")
+    return f"{nodes} XML elements and attributes" if nodes > MAX_DOCX_XML_NODES else None
 
 
-def extract_docx(data: bytes) -> str:
-    try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            over_limit = _docx_over_limit(archive)
-    except Exception as exc:
-        logger.warning("DOCX parse failed: %s", exc)
-        raise ExtractionError(UNREADABLE_DOCX) from exc
-    if over_limit:
-        logger.warning("DOCX refused: %s", over_limit)
-        raise ExtractionError(DOCX_TOO_LARGE)
-
-    try:
-        document = Document(io.BytesIO(data))
-    except Exception as exc:
-        logger.warning("DOCX parse failed: %s", exc)
-        raise ExtractionError(UNREADABLE_DOCX) from exc
-
+def _docx_parts(data: bytes) -> list[str]:
+    document = Document(io.BytesIO(data))
     parts = [p.text for p in document.paragraphs if p.text.strip()]
 
     for table in document.tables:
         for row in table.rows:
-            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            # The row's own <w:tc> cells, not row.cells: that repeats a cell once
+            # per grid column it spans and walks up the table for each vertically
+            # merged one, so a crafted gridSpan ran past the host timeout (and
+            # merged text came out repeated).
+            cells = [text for tc in row._tr.tc_lst if (text := _Cell(tc, table).text.strip())]
             if cells:
                 parts.append(" | ".join(cells))
+    return parts
+
+
+def extract_docx(data: bytes) -> str:
+    # python-docx builds its proxies lazily, so as for PDFs the whole
+    # extraction sits inside the guard, not just the open.
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            over_limit = _docx_over_limit(archive)
+        if over_limit:
+            logger.warning("DOCX refused: %s", over_limit)
+            raise ExtractionError(DOCX_TOO_LARGE)
+        parts = _docx_parts(data)
+    except ExtractionError:
+        raise
+    except Exception as exc:
+        logger.warning("DOCX parse failed: %s: %s", type(exc).__name__, exc)
+        raise ExtractionError(UNREADABLE_DOCX) from exc
 
     text = "\n\n".join(parts)
 

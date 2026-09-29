@@ -41,6 +41,37 @@ def test_extracts_docx_tables():
     assert "Acme | Pay" in text
 
 
+def test_merged_docx_cell_text_appears_once():
+    doc = Document()
+    table = doc.add_table(rows=3, cols=2)
+    table.cell(0, 0).merge(table.cell(0, 1)).text = "Merged"
+    table.cell(1, 0).merge(table.cell(2, 0)).text = "Party"
+    table.cell(1, 1).text = "A"
+    table.cell(2, 1).text = "B"
+    buf = io.BytesIO()
+    doc.save(buf)
+    assert extract_docx(buf.getvalue()) == "Merged\n\nParty | A\n\nB"
+
+
+# Each made row.cells raise a ValueError, which escaped as a 500.
+@pytest.mark.parametrize(
+    "table",
+    [
+        b'<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="abc"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>',
+        b"<w:tbl><w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>",
+    ],
+    ids=["non-numeric-gridSpan", "vMerge-with-no-row-above"],
+)
+def test_docx_with_malformed_table_markup_still_extracts(table):
+    assert extract_docx(_padded_docx_bytes(table)) == "Clause."
+
+
+def test_docx_with_a_huge_gridspan_extracts_the_cell_once():
+    # row.cells repeated the cell once per spanned column: 50 of these ran past the host timeout.
+    cell = b'<w:tc><w:tcPr><w:gridSpan w:val="2000000000"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc>'
+    assert extract_docx(_padded_docx_bytes(b"<w:tbl><w:tr>" + cell + b"</w:tr></w:tbl>")) == "Clause.\n\nx"
+
+
 def test_empty_docx_raises():
     with pytest.raises(ExtractionError, match="No text found"):
         extract_docx(_docx_bytes([]))
@@ -78,17 +109,28 @@ def test_docx_over_the_uncompressed_limit_is_refused(monkeypatch):
         extract_docx(data)
 
 
-def test_docx_over_the_tag_limit_is_refused(monkeypatch):
-    # python-docx's template alone has ~25,000 tags
-    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_TAGS", 50_000)
-    data = _padded_docx_bytes(b"<w:p/>" * 40_000)  # 240 KB of XML, well under the byte limit
+# python-docx's template alone has ~53,000 elements and attributes.
+TEMPLATE_NODE_LIMIT = 100_000
+
+
+@pytest.mark.parametrize(
+    "filler",
+    [
+        b"<w:p/>" * 60_000,  # elements
+        b"<w:p " + b" ".join(b'a%d=""' % i for i in range(60_000)) + b"/>",  # attributes
+    ],
+    ids=["elements", "attributes"],
+)
+def test_docx_over_the_node_limit_is_refused(monkeypatch, filler):
+    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_NODES", TEMPLATE_NODE_LIMIT)
+    data = _padded_docx_bytes(filler)  # well under the byte limit
     with pytest.raises(ExtractionError, match=DOCX_TOO_LARGE):
         extract_docx(data)
 
 
 def test_docx_under_both_limits_is_extracted(monkeypatch):
     monkeypatch.setattr(extract_service, "MAX_DOCX_UNCOMPRESSED_BYTES", 4 * 1024 * 1024)
-    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_TAGS", 100_000)
+    monkeypatch.setattr(extract_service, "MAX_DOCX_XML_NODES", TEMPLATE_NODE_LIMIT)
     data = _padded_docx_bytes(b"<!--" + b" " * 2 * 1024 * 1024 + b"-->" + b"<w:p/>" * 40_000)
     assert extract_docx(data) == "Clause."
 
