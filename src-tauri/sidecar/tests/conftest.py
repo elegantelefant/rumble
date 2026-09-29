@@ -147,11 +147,8 @@ CHAT_COMPLETION = {
 @pytest.fixture
 def fake_ollama(monkeypatch):
     """A real loopback Ollama stand-in: `.set_tags(...)` what it serves, read `.requests` for what it received."""
-    from services import llm
-
     server = RecordingServer({"/api/tags": {"models": []}, "/v1/chat/completions": CHAT_COMPLETION})
     monkeypatch.setenv("OLLAMA_BASE_URL", server.url)
-    monkeypatch.setattr(llm, "_resolved_ollama_model", None)
     yield server
     server.close()
 

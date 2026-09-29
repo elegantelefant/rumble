@@ -161,6 +161,28 @@ async def test_build_agent_refuses_requested_model_ollama_marks_remote(monkeypat
         await llm._build_agent(model_name="mymodel")
 
 
+@pytest.mark.parametrize(
+    ("default", "refusal"),
+    [
+        ("llama3.2", "remote"),  # the configured default
+        ("not-pulled", "no local Ollama model"),  # the first-pulled fallback
+    ],
+)
+async def test_build_agent_refuses_model_ollama_marks_remote_after_an_earlier_local_resolution(
+    monkeypatch, fake_ollama, default, refusal
+):
+    # e.g. `ollama cp gpt-oss:120b-cloud llama3.2` while the sidecar runs
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    monkeypatch.setenv("OLLAMA_DEFAULT_MODEL", default)
+    fake_ollama.set_tags("llama3.2:latest")
+    _mock_provider(monkeypatch)
+    await llm._build_agent()
+    fake_ollama.set_tags("llama3.2:latest", remote=("llama3.2:latest",))
+
+    with pytest.raises(ValueError, match=refusal):
+        await llm._build_agent()
+
+
 @pytest.mark.parametrize("name", ["gpt-oss:120b-CLOUD", "qwen3.5:cloud ", " gemma3-Cloud"])
 async def test_build_agent_refuses_cloud_suffix_regardless_of_case_or_whitespace(monkeypatch, fake_ollama, name):
     monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)

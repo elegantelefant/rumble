@@ -27,9 +27,6 @@ LLM_CONNECT_TIMEOUT_S = 5
 # Drops the headers the openai SDK would otherwise fill from OPENAI_ORG_ID / OPENAI_PROJECT_ID.
 _NO_ENV_HEADERS = {"OpenAI-Organization": omit, "OpenAI-Project": omit}
 
-_resolved_ollama_model: str | None = None
-
-
 async def _resolve_ollama_model(model_name: str | None = None) -> str:
     """Return the /api/tags name of a local model: the requested one, else OLLAMA_DEFAULT_MODEL, else the first pulled.
 
@@ -37,18 +34,17 @@ async def _resolve_ollama_model(model_name: str | None = None) -> str:
     Ollama's own metadata (services.mode.local_model). A requested name that
     isn't a pulled local model is refused rather than passed through: what an
     unlisted name resolves to is Ollama's decision, so it can't be verified local.
+
+    Resolved on every call, never cached: `ollama cp <cloud-model> llama3.2`
+    can turn a name that was local into a cloud one while the sidecar runs.
     """
+    tags = await mode.ollama_tags()
     if model_name:
-        resolved = mode.local_model(model_name, await mode.ollama_tags())
+        resolved = mode.local_model(model_name, tags)
         if resolved is None:
             raise ValueError(f"model {model_name!r} is not a pulled local Ollama model")
         return resolved
 
-    global _resolved_ollama_model
-    if _resolved_ollama_model:
-        return _resolved_ollama_model
-
-    tags = await mode.ollama_tags()
     resolved = mode.default_model(tags)
     if resolved is None:
         local = mode.local_model_names(tags)
@@ -56,7 +52,6 @@ async def _resolve_ollama_model(model_name: str | None = None) -> str:
             raise ValueError("no local Ollama model is pulled")
         resolved = local[0]
         logger.info("Default model not pulled; using %s", resolved)
-    _resolved_ollama_model = resolved
     return resolved
 
 
