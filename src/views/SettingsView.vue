@@ -190,12 +190,52 @@ async function removeSecret(id: string) {
   secrets.value = secrets.value.filter((s) => s.id !== id);
 }
 
+// The groups the host persists to settings.json. API keys are never among
+// them: those go to the OS keychain via addSecret/removeSecret.
+type SavedSettings = {
+  appearance?: Partial<typeof appearanceSettings>;
+  workspace?: Partial<typeof workspaceStorage>;
+  sync?: Partial<typeof syncSettings>;
+  localConfig?: Partial<typeof localConfig>;
+};
+
+function errorMessage(error: unknown): string {
+  return typeof error === "string" ? error : String(error);
+}
+
+onMounted(async () => {
+  let saved: SavedSettings | null | undefined;
+  try {
+    saved = await invoke<SavedSettings | null>("load_settings");
+  } catch (error) {
+    toast.addToast(`Couldn't load saved settings: ${errorMessage(error)}`, "error");
+    return;
+  }
+  if (!saved) return;
+  Object.assign(appearanceSettings, saved.appearance);
+  Object.assign(workspaceStorage, saved.workspace);
+  Object.assign(syncSettings, saved.sync);
+  Object.assign(localConfig, saved.localConfig);
+});
+
 async function saveSettings() {
   isSaving.value = true;
   try {
-    // API keys are stored individually via addSecret/removeSecret.
-    // General preferences (appearance, workspace) are local reactive state.
-    toast.addToast("Settings stored securely on this device.", "success");
+    await invoke("save_settings", {
+      settings: {
+        appearance: { ...appearanceSettings },
+        workspace: {
+          ...workspaceStorage,
+          briefcases: [...workspaceStorage.briefcases],
+          attachableResources: [...workspaceStorage.attachableResources],
+        },
+        sync: { ...syncSettings },
+        localConfig: { ...localConfig },
+      },
+    });
+    toast.addToast("Settings saved on this device.", "success");
+  } catch (error) {
+    toast.addToast(`Couldn't save settings: ${errorMessage(error)}`, "error");
   } finally {
     isSaving.value = false;
   }

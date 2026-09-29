@@ -1,5 +1,5 @@
 // ABOUTME: Tests for SettingsView.vue component.
-// ABOUTME: Covers tab switching, secret management, form interactions, sync settings.
+// ABOUTME: Covers tab switching, secret management, settings persistence, form interactions, sync settings.
 
 import { mount } from "@vue/test-utils"
 import { invoke } from "@tauri-apps/api/core"
@@ -159,14 +159,90 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Save settings")
   })
 
-  it("shows toast on form submit", async () => {
-    const wrapper = mountSettings()
-    await wrapper.find("form").trigger("submit")
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mockAddToast).toHaveBeenCalledWith(
-      "Settings stored securely on this device.",
-      "success",
-    )
+  describe("persistence", () => {
+    const saved = {
+      appearance: { theme: "dark", navigationSidebar: "right" },
+      workspace: { templatesPath: "/firm/templates", briefcases: ["Matter A"] },
+      sync: { teamCode: "TEAM-42" },
+      localConfig: { model: "llama3.2" },
+    }
+
+    function mockCommands(handlers: Record<string, (args?: any) => unknown>) {
+      vi.mocked(invoke).mockImplementation(async (cmd: string, args?: any) => handlers[cmd]?.(args))
+    }
+
+    function saveCalls() {
+      return vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "save_settings")
+    }
+
+    async function openTab(wrapper: ReturnType<typeof mountSettings>, label: string) {
+      await wrapper.findAll("button").find((b) => b.text().includes(label))!.trigger("click")
+    }
+
+    it("fills the form from saved settings on mount", async () => {
+      mockCommands({ load_settings: () => saved })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      await openTab(wrapper, "Appearance")
+      const theme = wrapper.findAll("select").find((s) => s.text().includes("Match system"))!
+      expect((theme.element as HTMLSelectElement).value).toBe("dark")
+    })
+
+    it("shows saved briefcases instead of the defaults", async () => {
+      mockCommands({ load_settings: () => saved })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      await openTab(wrapper, "Templates")
+      expect(wrapper.text()).toContain("Matter A")
+      expect(wrapper.text()).not.toContain("Litigation")
+    })
+
+    it("keeps defaults and reports the error when saved settings can't be loaded", async () => {
+      mockCommands({ load_settings: () => Promise.reject("failed to parse settings.json") })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockAddToast).toHaveBeenCalledWith(
+        "Couldn't load saved settings: failed to parse settings.json",
+        "error",
+      )
+      await openTab(wrapper, "Templates")
+      expect(wrapper.text()).toContain("Litigation")
+    })
+
+    it("saves all four groups, including unsaved edits", async () => {
+      mockCommands({ load_settings: () => saved, save_settings: () => undefined })
+      const wrapper = mountSettings()
+      await vi.advanceTimersByTimeAsync(0)
+      await openTab(wrapper, "Templates")
+      await wrapper.find('input[placeholder="New briefcase name"]').setValue("Matter B")
+      await wrapper.findAll("button").find((b) => b.text() === "Add briefcase")!.trigger("click")
+      await wrapper.find("form").trigger("submit")
+      await vi.advanceTimersByTimeAsync(0)
+      const settings = (saveCalls()[0][1] as any).settings
+      expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "sync", "workspace"])
+      expect(settings.workspace.briefcases).toEqual(["Matter A", "Matter B"])
+      expect(settings.appearance.theme).toBe("dark")
+    })
+
+    it("confirms the save only once the host has stored it", async () => {
+      mockCommands({ save_settings: () => undefined })
+      const wrapper = mountSettings()
+      await wrapper.find("form").trigger("submit")
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockAddToast).toHaveBeenCalledWith("Settings saved on this device.", "success")
+    })
+
+    it("reports a failed save and never claims success", async () => {
+      mockCommands({ save_settings: () => Promise.reject("failed to create settings dir") })
+      const wrapper = mountSettings()
+      await wrapper.find("form").trigger("submit")
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockAddToast).toHaveBeenCalledWith(
+        "Couldn't save settings: failed to create settings dir",
+        "error",
+      )
+      expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "success")
+    })
   })
 
   it("sync tab shows test connection button", async () => {
