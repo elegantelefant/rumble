@@ -26,7 +26,7 @@ async def tmp_data_dir(tmp_path):
 @pytest_asyncio.fixture
 async def app(tmp_data_dir):
     """Create a fresh FastAPI app with an ephemeral database."""
-    application = create_app(data_dir=tmp_data_dir)
+    application = create_app(data_dir=tmp_data_dir, dev=True)
 
     # Manually trigger lifespan since httpx doesn't do it
     await db.init_db(tmp_data_dir)

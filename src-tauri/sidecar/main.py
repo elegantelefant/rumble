@@ -26,14 +26,28 @@ def resolve_secret(flag_value: str | None) -> str | None:
     return os.environ.get("RUMBLE_SIDECAR_SECRET") or flag_value
 
 
-def cli():
+def cli(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Rumble sidecar server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--data-dir", type=str, default=None, help="Directory for SQLite DB")
     parser.add_argument("--secret", type=str, default=None, help="Shared secret required on all requests (supplied by Tauri host)")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Run without a shared secret, unauthenticated. Development only — never use outside local development.",
+    )
+    args = parser.parse_args(argv)
 
-    app = create_app(data_dir=args.data_dir, secret=resolve_secret(args.secret))
+    secret = resolve_secret(args.secret)
+    if not secret and not args.dev:
+        print(
+            "error: no shared secret configured (set RUMBLE_SIDECAR_SECRET, pass --secret, "
+            "or pass --dev for local development)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    app = create_app(data_dir=args.data_dir, secret=secret, dev=args.dev)
 
     config = uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
     server = uvicorn.Server(config)
