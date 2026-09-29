@@ -2488,6 +2488,13 @@ class BodyExtractDocumentExtractPost(BaseModel):
     file: bytes = Field(..., title='File')
 
 
+class ExtractDocumentResponse(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    text: str = Field(..., title='Text')
+
+
 class BriefcaseItemBatchRequest(BaseModel):
     model_config = ConfigDict(
         extra='forbid',

@@ -4,6 +4,7 @@
 import anyio
 from fastapi import APIRouter, HTTPException, UploadFile
 
+from models.generated import ErrorResponse, ExtractDocumentResponse
 from services.extract import ExtractionError, extract
 
 router = APIRouter(tags=["extract"])
@@ -14,8 +15,12 @@ MAX_UPLOAD_MB = 50
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 
-@router.post("/extract")
-async def extract_document(file: UploadFile) -> dict:
+@router.post(
+    "/extract",
+    response_model=ExtractDocumentResponse,
+    responses={413: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+async def extract_document(file: UploadFile) -> ExtractDocumentResponse:
     # Starlette spools uploads over 1 MB to disk, so checking the size here
     # keeps an oversize file out of memory.
     if file.size > MAX_UPLOAD_BYTES:
@@ -30,4 +35,4 @@ async def extract_document(file: UploadFile) -> dict:
         text = await anyio.to_thread.run_sync(extract, file.filename or "", data)
     except ExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"text": text}
+    return ExtractDocumentResponse(text=text)

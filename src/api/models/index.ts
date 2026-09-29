@@ -248,6 +248,7 @@ export * from './errorResponse';
 export * from './exportBriefcaseParams.ts';
 export * from './exportBriefcaseParams';
 export * from './extractDocumentExtractPost200.ts';
+export * from './extractDocumentResponse.ts';
 export * from './extractRequest.ts';
 export * from './extractRequest';
 export * from './extractRequestMetadata.ts';
