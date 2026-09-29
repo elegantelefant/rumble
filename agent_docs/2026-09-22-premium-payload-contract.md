@@ -2,9 +2,10 @@
 
 The privacy wedge — questions of law go to the cloud, documents stay local — is a
 routing-level guarantee, not marketing copy. This contract binds every premium call
-site, present and future. It exists because today's `resolve_url` sends *everything*
-(including /review and /draft bodies) to DEFAULT_CLOUD_URL in premium mode, which
-contradicts the wedge outright.
+site, present and future. It exists because `resolve_url` used to send *everything*
+(including /review and /draft bodies) to the cloud in premium mode, which contradicts
+the wedge outright. Since #41, `resolve_url` refuses every premium path ("requires
+Elefant Premium") until premium routing is built against this contract.
 
 ## The rule
 

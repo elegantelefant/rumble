@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
+import {
+  backendMode,
+  CONFIDENTIALITY,
+  loadBackendMode,
+  MODE_TO_STATE,
+  setBackendMode,
+  type BackendMode,
+} from "../composables/backendMode";
 
 const toast = useToast();
 
@@ -56,6 +64,63 @@ const providerOptions: ProviderOption[] = [
 ];
 
 const secrets = ref<SecretRecord[]>([]);
+
+// v1 ships Ollama-only: BYOK is selectable in dev builds, shown unavailable in
+// packaged ones. Flip this to offer BYOK in the packaged app.
+const BYOK_SELECTABLE = import.meta.env.DEV;
+const UNAVAILABLE = "Not available in this version.";
+
+type ModeOption = { id: BackendMode; label: string; description: string; available: boolean };
+
+const modeOptions: ModeOption[] = [
+  {
+    id: "ollama",
+    label: "Local (Ollama)",
+    description: CONFIDENTIALITY[MODE_TO_STATE.ollama].message,
+    available: true,
+  },
+  {
+    id: "byok",
+    label: "Your own key (OpenAI)",
+    description: `${CONFIDENTIALITY[MODE_TO_STATE.byok].message} Uses the OpenAI key saved below.`,
+    available: BYOK_SELECTABLE,
+  },
+  {
+    id: "premium",
+    label: "Elefant Premium",
+    description: CONFIDENTIALITY[MODE_TO_STATE.premium].message,
+    available: false,
+  },
+];
+
+const switchingMode = ref(false);
+// The radio group's own value, so a refused switch can put the selection back.
+const selectedMode = ref<BackendMode | null>(backendMode.value);
+watch(backendMode, (mode) => {
+  selectedMode.value = mode;
+});
+
+async function chooseMode(mode: BackendMode) {
+  // Unknown after a failed read: ask the host before treating this as a switch.
+  if (backendMode.value === null) await loadBackendMode();
+  if (mode === backendMode.value) {
+    selectedMode.value = mode;
+    return;
+  }
+  switchingMode.value = true;
+  try {
+    const changed = await setBackendMode(mode);
+    const label = modeOptions.find((option) => option.id === mode)?.label ?? mode;
+    if (changed) toast.addToast(`Switched to ${label}. The local AI service is restarting.`, "success");
+  } catch (error) {
+    toast.addToast(`Could not switch mode: ${error}`, "error");
+    selectedMode.value = backendMode.value;
+  } finally {
+    switchingMode.value = false;
+  }
+}
+
+onMounted(loadBackendMode);
 
 onMounted(async () => {
   const stored: SecretRecord[] = [];
@@ -152,12 +217,18 @@ async function addSecret() {
     toast.addToast("Enter the provider key before saving.", "error");
     return;
   }
+  let failure: string | null = null;
   if (provider?.requiresKey) {
     try {
       await invoke("store_api_key", { provider: newSecret.provider, key: newSecret.key });
     } catch (error) {
-      toast.addToast(`Failed to store API key: ${error}`, "error");
-      return;
+      failure = String(error);
+      // The host can save the key and then fail to restart the local service;
+      // the keychain, not the error, says whether the key is there.
+      if ((await storedKey(newSecret.provider)) !== newSecret.key) {
+        toast.addToast(`Failed to store API key: ${failure}`, "error");
+        return;
+      }
     }
   }
   secrets.value.unshift({
@@ -173,7 +244,20 @@ async function addSecret() {
   newSecret.key = "";
   newSecret.scope = "global";
   newSecret.notes = "";
-  toast.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
+  if (failure) {
+    toast.addToast(failure, "error");
+  } else {
+    toast.addToast("Secret saved locally. Remember: hosted providers process data off-device.", "success");
+  }
+}
+
+/** The keychain's key for a provider; undefined when it can't be read. */
+async function storedKey(provider: string): Promise<string | null | undefined> {
+  try {
+    return await invoke<string | null>("get_api_key", { provider });
+  } catch {
+    return undefined;
+  }
 }
 
 async function removeSecret(id: string) {
@@ -182,9 +266,17 @@ async function removeSecret(id: string) {
     try {
       await invoke("delete_api_key", { provider: secret.provider });
     } catch (e) {
-      console.error("Failed to delete keychain entry:", e);
-      toast.addToast("Could not remove credential from system keychain.", "error");
-      return;
+      // Removed but the local service didn't restart: the keychain says so.
+      if ((await storedKey(secret.provider)) === null) {
+        toast.addToast(String(e), "error");
+      } else {
+        console.error("Failed to delete keychain entry:", e);
+        toast.addToast("Could not remove credential from system keychain.", "error");
+        return;
+      }
+    } finally {
+      // Deleting the OpenAI key in BYOK mode drops the host back to local mode.
+      await loadBackendMode();
     }
   }
   secrets.value = secrets.value.filter((s) => s.id !== id);
@@ -253,6 +345,31 @@ const selectedProviderDetails = computed(() =>
     <form class="card space-y-6" @submit.prevent="saveSettings">
     <fieldset :disabled="isSaving">
       <section v-if="activeTab === 'providers'" class="space-y-5">
+        <fieldset class="space-y-2" :disabled="switchingMode">
+          <legend class="text-base font-semibold text-[var(--primary-800)]">Processing mode</legend>
+          <p class="text-xs text-[var(--primary-500)]">Where chat, drafting and review requests are processed.</p>
+          <label
+            v-for="option in modeOptions"
+            :key="option.id"
+            class="flex items-start gap-2 rounded-lg border border-[var(--primary-200)] p-3 text-sm"
+            :class="option.available ? 'bg-white text-[var(--primary-700)]' : 'bg-[var(--primary-50)] text-[var(--primary-400)]'"
+          >
+            <input
+              type="radio"
+              name="backend-mode"
+              class="mt-1"
+              v-model="selectedMode"
+              :value="option.id"
+              :disabled="!option.available"
+              @change="chooseMode(option.id)"
+            />
+            <span>
+              <span class="font-semibold">{{ option.label }}</span>
+              <span class="block text-xs">{{ option.available ? option.description : UNAVAILABLE }}</span>
+            </span>
+          </label>
+        </fieldset>
+
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
           <p class="text-xs text-[var(--primary-500)]">

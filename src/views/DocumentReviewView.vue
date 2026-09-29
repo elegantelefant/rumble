@@ -1,10 +1,10 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
 import { computed, onMounted, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
+import { backendMode, loadBackendMode } from "../composables/backendMode";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
 
@@ -13,12 +13,10 @@ const toasts = useToast();
 // Only local (Ollama) mode keeps a document on this device; BYOK and Premium
 // send its text to a provider for review. Read the same mode as TopBar's pill
 // and make no claim until it is known — including when reading it fails.
-const isLocalMode = ref(false);
-onMounted(async () => {
-  isLocalMode.value = await invoke<string>("get_backend_mode")
-    .then((mode) => mode === "ollama")
-    .catch(() => false);
-});
+// Shared rather than read on mount: this view is kept alive, so a mount-time
+// read would go stale after a switch in Settings.
+const isLocalMode = computed(() => backendMode.value === "ollama");
+onMounted(loadBackendMode);
 
 type ReviewStatus = "idle" | "running" | "ready";
 

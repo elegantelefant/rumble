@@ -12,6 +12,11 @@ import {
   waitForJob,
 } from "../src/api/sidecar"
 
+// The view reads the backend mode on mount; the host answers local.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => "ollama"),
+}))
+
 vi.mock("../src/api/sidecar", () => ({
   createChat: vi.fn(),
   createReviewJob: vi.fn(),

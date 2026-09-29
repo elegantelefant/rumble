@@ -1,14 +1,19 @@
 # ABOUTME: Tests for the stdin-EOF watcher and pidfile reaping in app.py's lifespan.
-# ABOUTME: Covers the watch_stdin gate, EOF-driven shutdown (incl. a real sidecar process), and stray reaping.
+# ABOUTME: Covers the watch_stdin gate, EOF-driven shutdown (incl. real sidecar processes, bounded with a request in flight), and stray reaping.
 import asyncio
+import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 import app as app_module
@@ -21,6 +26,7 @@ from app import (
     create_app,
     lifespan,
 )
+from main import GRACEFUL_SHUTDOWN_TIMEOUT_S
 
 
 class _EOFStdin:
@@ -339,6 +345,92 @@ def test_real_sidecar_exits_and_removes_pidfile_when_host_closes_stdin(tmp_path)
         proc.wait()
         proc.stdout.close()
         proc.stderr.close()
+
+
+class _HangingOllama(BaseHTTPRequestHandler):
+    """A loopback Ollama that lists one local model and never finishes a completion."""
+
+    completion_started = threading.Event()
+    release = threading.Event()
+
+    def do_GET(self):
+        body = json.dumps({"models": [{"name": "llama3.2:latest"}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        self.completion_started.set()
+        self.release.wait(HANGING_COMPLETION_SECONDS)
+
+    def log_message(self, *_args):
+        pass
+
+
+HANGING_COMPLETION_SECONDS = 60
+# Shutdown's fixed costs beyond the graceful wait: the stdin poll, cancelling
+# the request, and the lifespan teardown (jobs, DB, pidfile).
+SHUTDOWN_OVERHEAD_SECONDS = 4
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def test_real_sidecar_exits_within_the_graceful_bound_despite_an_in_flight_request(tmp_path):
+    ollama = ThreadingHTTPServer(("127.0.0.1", 0), _HangingOllama)
+    threading.Thread(target=ollama.serve_forever, daemon=True).start()
+    port = _free_port()
+    secret = "graceful-bound-test"
+    env = {
+        **os.environ,
+        "RUMBLE_SIDECAR_SECRET": secret,
+        "RUMBLE_SIDECAR_WATCH_STDIN": "1",
+        "RUMBLE_BACKEND_MODE": "ollama",
+        "OLLAMA_BASE_URL": f"http://127.0.0.1:{ollama.server_address[1]}",
+    }
+    proc = subprocess.Popen(
+        [sys.executable, "main.py", "--port", str(port), "--data-dir", str(tmp_path)],
+        cwd=SIDECAR_DIR,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    base = f"http://127.0.0.1:{port}"
+    headers = {"x-rumble-secret": secret}
+    try:
+        assert proc.stdout.readline().startswith(b"PORT:")
+        chat_id = httpx.post(f"{base}/chats", json={}, headers=headers, trust_env=False).json()["id"]
+        in_flight = threading.Thread(
+            target=lambda: httpx.post(
+                f"{base}/chats/{chat_id}/message",
+                json={"text": "hello"},
+                headers=headers,
+                timeout=HANGING_COMPLETION_SECONDS,
+                trust_env=False,
+            ),
+            daemon=True,
+        )
+        in_flight.start()
+        assert _HangingOllama.completion_started.wait(15)
+
+        started = time.monotonic()
+        proc.stdin.close()
+        proc.wait(timeout=GRACEFUL_SHUTDOWN_TIMEOUT_S + SHUTDOWN_OVERHEAD_SECONDS)
+        assert time.monotonic() - started < GRACEFUL_SHUTDOWN_TIMEOUT_S + SHUTDOWN_OVERHEAD_SECONDS
+    finally:
+        _HangingOllama.release.set()
+        proc.kill()
+        proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+        ollama.shutdown()
+        ollama.server_close()
 
 
 def test_watch_stdin_none_logs_and_returns(monkeypatch, caplog):

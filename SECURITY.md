@@ -70,10 +70,13 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
 - **Data retention** — jobs, and the document text inside them, are never deleted; there is no
   "delete all local data"; on Windows the data directory is in the roaming profile, which can sync
   client documents to domain servers ([#57]).
-- **Health check without the secret** — the host's `sidecar_status` calls `/health` without the
-  secret header, so a packaged build always reports health "unreachable". Cosmetic today; a false
-  signal while debugging ([#69]).
-- **Mode is not enforced where egress happens** — see [NETWORK.md](NETWORK.md) ([#41], [#52], [#53]).
+- **Mode switches restart the sidecar** — the sidecar reads its mode only at spawn, so a switch in
+  Settings respawns it; requests fail with "sidecar not running" for the seconds that takes. The
+  replaced sidecar gets at most `GRACEFUL_SHUTDOWN_TIMEOUT_S` (3 s, `src-tauri/sidecar/main.py`)
+  to finish in-flight requests, then they are cancelled — so a draft or review job running across a
+  switch is lost (it ends "cancelled during shutdown" and must be rerun). The mode is not
+  persisted: every launch starts in local mode. Routing and egress per mode: see
+  [NETWORK.md](NETWORK.md) ([#41], [#52], [#53]).
 - **Unconditional privacy copy** — some screens and the README say data never leaves the device
   regardless of mode ([#56]).
 
@@ -101,4 +104,3 @@ Report them privately to dpo@elefant.legal.
 [#55]: https://github.com/elegantelefant/rumble/issues/55
 [#56]: https://github.com/elegantelefant/rumble/issues/56
 [#57]: https://github.com/elegantelefant/rumble/issues/57
-[#69]: https://github.com/elegantelefant/rumble/issues/69
