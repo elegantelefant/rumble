@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
@@ -8,6 +9,16 @@ import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
 
 const toasts = useToast();
+
+// Only local (Ollama) mode keeps a document on this device; BYOK and Premium
+// send its text to a provider for review. Read the same mode as TopBar's pill
+// and make no claim until it is known — including when reading it fails.
+const isLocalMode = ref(false);
+onMounted(async () => {
+  isLocalMode.value = await invoke<string>("get_backend_mode")
+    .then((mode) => mode === "ollama")
+    .catch(() => false);
+});
 
 type ReviewStatus = "idle" | "running" | "ready";
 
@@ -340,7 +351,9 @@ const workflowSteps = [
             @drop="handleDrop"
           >
             <div class="text-base font-medium">Drop files here or browse</div>
-            <p class="text-xs text-[var(--primary-600)]">PDF, DOCX, TXT supported. Files never leave this device.</p>
+            <p class="text-xs text-[var(--primary-600)]">
+              PDF, DOCX, TXT supported.<template v-if="isLocalMode"> Files never leave this device.</template>
+            </p>
             <div class="flex flex-wrap items-center justify-center gap-3">
               <button class="btn-primary" type="button" @click="triggerFilePicker">Browse Files</button>
               <input
