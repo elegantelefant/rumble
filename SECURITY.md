@@ -54,26 +54,34 @@ is "offline after setup", not "offline".
     once the copy is complete removes the roaming files; until then the roaming copy is untouched and
     the sidecar keeps using it if anything fails. If the roaming files can't be removed (or both
     directories already hold a database) rumble uses the local copy and **the roaming copy stays**,
-    still subject to roaming — delete it by hand. Rumble reports this on stderr, which release Windows
+    still subject to roaming — delete it by hand. A crash partway through removing the roaming files
+    can also leave its `-wal`/`-shm` files or `sidecar.pid` there; only *Delete all local data* clears
+    them. Rumble reports this on stderr, which release Windows
     builds discard (`windows_subsystem = "windows"` in `src-tauri/src/main.rs`), so there it is silent.
     On macOS and Linux the two directories are the same, so nothing moves.
-  - **Retention.** Jobs older than 30 days are deleted each time the sidecar starts
+  - **Retention.** Jobs older than 30 days are deleted each time the sidecar starts, so a job goes at
+    the first start after it turns 30 days old
     (`DEFAULT_JOB_RETENTION_DAYS`; override with `RUMBLE_JOB_RETENTION_DAYS`, a whole number of days
     from 1 to 36500, in the environment rumble is launched from — there is no Settings control yet).
     Chats and their messages have no retention and no per-chat delete in the UI; *Delete all local
     data* removes them. After a purge that deleted anything, rumble checkpoints and truncates the WAL,
     and `secure_delete` is on, so the purged text is no longer in `rumble.db` or `rumble.db-wal`
-    (a test greps both files for it). A database from an earlier build is `VACUUM`ed once on first
+    (a test greps both files for it). The truncation can't complete while another connection holds a
+    read transaction on the database — a second Rumble instance on the same directory — so this, too,
+    assumes one instance. A database from an earlier build is `VACUUM`ed once on first
     start, erasing content those builds deleted without `secure_delete`. What rumble can't reach:
     filesystem and SSD remnants of overwritten blocks, backups and snapshots — full-disk encryption
     (below) is the answer to those.
   - **Delete all local data.** Settings → Templates & workspace storage, after a native confirmation.
-    Refused while the local service is still starting. Otherwise it stops the sidecar, waits for it
+    Refused while the local service is still starting, and when the running service's `sidecar.pid` is
+    missing (another instance on the same directory overwrote it, then removed it on exit, so its
+    absence no longer means the database is closed). Otherwise it stops the sidecar, waits for it
     to close the database, deletes `rumble.db`, its `-wal`/`-shm` files and any migration leftovers
     (in the local directory and the old Windows roaming one), then restarts the sidecar with an empty
     database. If the sidecar doesn't close in time, nothing is deleted. It assumes one Rumble instance
     per data directory — a second one (a dev build beside the packaged app) keeps its own connection
-    open, so the dialog asks you to close other Rumble windows first. Not touched: keychain entries
+    open, and the checks above catch some but not every such arrangement, so the dialog asks you to
+    close other Rumble windows first. Not touched: keychain entries
     (BYOK keys can be removed under Providers; the premium `auth_token` has no UI to remove it — delete
     the `elefant-rumble` keychain item), exported `.docx` files, and Ollama's models.
   - **Backups.** Time Machine, File History and similar tools copy the database like any other file.
