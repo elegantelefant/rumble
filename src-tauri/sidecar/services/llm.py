@@ -1,51 +1,65 @@
 # ABOUTME: LLM service wrapping PydanticAI for Ollama and BYOK providers.
 # ABOUTME: Provides send_message, stream_message for chat, and run_single_turn for stateless endpoints.
 
+import functools
 import logging
 import os
 from collections.abc import AsyncIterator
 
 import httpx
+from openai import AsyncOpenAI, omit
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models import DEFAULT_HTTP_TIMEOUT, cached_async_http_client
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from services import prompts
+from services import mode, prompts
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-OLLAMA_API_BASE = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "llama3.2")
+# The openai SDK's own default, pinned so an inherited OPENAI_BASE_URL can't redirect BYOK traffic (#74).
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 
-_resolved_ollama_model: str | None = None
+# Connect timeout for the Ollama client, matching pydantic-ai's default.
+LLM_CONNECT_TIMEOUT_S = 5
+
+# Drops the headers the openai SDK would otherwise fill from OPENAI_ORG_ID / OPENAI_PROJECT_ID.
+_NO_ENV_HEADERS = {"OpenAI-Organization": omit, "OpenAI-Project": omit}
+
+async def _resolve_ollama_model(model_name: str | None = None) -> str:
+    """Return the /api/tags name of a local model: the requested one, else OLLAMA_DEFAULT_MODEL, else the first pulled.
+
+    Every candidate, the configured default included, is checked against
+    Ollama's own metadata (services.mode.local_model). A requested name that
+    isn't a pulled local model is refused rather than passed through: what an
+    unlisted name resolves to is Ollama's decision, so it can't be verified local.
+
+    Resolved on every call, never cached: `ollama cp <cloud-model> llama3.2`
+    can turn a name that was local into a cloud one while the sidecar runs.
+    """
+    tags = await mode.ollama_tags()
+    if model_name:
+        resolved = mode.local_model(model_name, tags)
+        if resolved is None:
+            raise ValueError(f"model {model_name!r} is not a pulled local Ollama model")
+        return resolved
+    return mode.resolve_default(tags)
 
 
-async def _resolve_ollama_model() -> str:
-    """Return the configured default model if available, else the first pulled model."""
-    global _resolved_ollama_model
-    if _resolved_ollama_model:
-        return _resolved_ollama_model
+@functools.cache
+def _loopback_http_client() -> httpx.AsyncClient:
+    """Ollama's pooled client. trust_env=False: no proxy, from env or macOS system settings, sees loopback traffic (#73)."""
+    return httpx.AsyncClient(timeout=httpx.Timeout(DEFAULT_HTTP_TIMEOUT, connect=LLM_CONNECT_TIMEOUT_S), trust_env=False)
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_API_BASE}/api/tags")
-            resp.raise_for_status()
-            models = [m["name"] for m in resp.json().get("models", [])]
-    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
-        logger.warning("Cannot reach Ollama to resolve model — using default %s", OLLAMA_DEFAULT_MODEL)
-        return OLLAMA_DEFAULT_MODEL
 
-    if OLLAMA_DEFAULT_MODEL in models:
-        _resolved_ollama_model = OLLAMA_DEFAULT_MODEL
-    elif models:
-        _resolved_ollama_model = models[0]
-        logger.info("Default model %s not found; using %s", OLLAMA_DEFAULT_MODEL, _resolved_ollama_model)
-    else:
-        _resolved_ollama_model = OLLAMA_DEFAULT_MODEL
-
-    return _resolved_ollama_model
+def _provider(base_url: str, api_key: str, http_client: httpx.AsyncClient) -> OpenAIProvider:
+    """An OpenAI-compatible provider whose destination, key and headers come from its arguments, never OPENAI_* env."""
+    return OpenAIProvider(
+        openai_client=AsyncOpenAI(
+            base_url=base_url, api_key=api_key, http_client=http_client, default_headers=_NO_ENV_HEADERS
+        )
+    )
 
 
 async def _build_agent(
@@ -55,16 +69,25 @@ async def _build_agent(
 ) -> Agent:
     """Build a PydanticAI agent for the given provider config.
 
-    Falls back to the BYOK_API_KEY env var if no api_key is passed
-    explicitly, matching how routes/health.py detects BYOK mode.
+    Branches on services.mode.current_mode(), never on whether a key happens
+    to be present: a stray BYOK_API_KEY must not route an ollama-mode request
+    to OpenAI, and a byok-mode request must not silently fall back to Ollama
+    when no key is configured.
     """
-    resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
-    if resolved_api_key:
-        provider = OpenAIProvider(api_key=resolved_api_key)
+    if mode.current_mode() == "byok":
+        resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
+        if not resolved_api_key:
+            raise ValueError("byok mode requires an API key")
+        # Only ever the public OpenAI host, so the default client may honour a corporate proxy: being httpx's
+        # trust_env default, it follows HTTP(S)_PROXY/ALL_PROXY/NO_PROXY and trusts SSL_CERT_FILE/SSL_CERT_DIR.
+        provider = _provider(OPENAI_API_BASE_URL, resolved_api_key, cached_async_http_client(provider="openai"))
         model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
-        resolved = model_name or await _resolve_ollama_model()
-        provider = OpenAIProvider(base_url=OLLAMA_BASE_URL, api_key="ollama")
+        if model_name and mode.is_cloud_model(model_name):
+            raise ValueError(f"refusing cloud model {model_name!r} in ollama mode")
+        base_url = mode.ollama_openai_base_url()
+        resolved = await _resolve_ollama_model(model_name)
+        provider = _provider(base_url, "ollama", _loopback_http_client())
         model = OpenAIModel(resolved, provider=provider)
     return Agent(model=model, system_prompt=system_prompt)
 

@@ -1,8 +1,10 @@
 # ABOUTME: Shared fixtures for sidecar tests.
-# ABOUTME: Provides ephemeral DB, FastAPI test client, and LLM mock.
+# ABOUTME: Provides ephemeral DB, FastAPI test client, LLM mock, and a real loopback fake Ollama server.
 
 import json
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -83,6 +85,99 @@ def _fake_run_single_turn(user_text, system_prompt, model_name=None, api_key=Non
     if "research" in system_prompt.lower():
         return json.dumps({"result": f"Research: {user_text}", "sources": []})
     return json.dumps({"text": user_text})
+
+
+# serve_forever's shutdown poll; its 0.5s default would add half a second to every test's teardown.
+_SERVER_POLL_S = 0.01
+
+
+class RecordingServer:
+    """A real HTTP server on 127.0.0.1 that records each request and answers from `responses` (path -> JSON)."""
+
+    def __init__(self, responses: dict[str, dict]):
+        self.responses = responses
+        self.requests: list[dict] = []
+        server = self
+
+        class _Handler(BaseHTTPRequestHandler):
+            def _answer(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                self.rfile.read(length)
+                server.requests.append({"method": self.command, "path": self.path, "headers": dict(self.headers)})
+                body = server.responses.get(self.path)
+                payload = json.dumps(body if body is not None else {"error": "not found"}).encode()
+                self.send_response(200 if body is not None else 404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            do_GET = do_POST = _answer
+
+            def log_message(self, *_args):
+                pass
+
+        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self.url = f"http://127.0.0.1:{self._httpd.server_address[1]}"
+        threading.Thread(target=self._httpd.serve_forever, args=(_SERVER_POLL_S,), daemon=True).start()
+
+    def set_tags(self, *names: str, remote: tuple[str, ...] = ()):
+        """Serve these /api/tags items; names in `remote` carry the remote_host/remote_model Ollama sets on cloud models."""
+        self.responses["/api/tags"] = {
+            "models": [
+                {"name": n, **({"remote_host": "https://ollama.com:443", "remote_model": n} if n in remote else {})}
+                for n in names
+            ]
+        }
+
+    def close(self):
+        self._httpd.shutdown()
+        self._httpd.server_close()
+
+
+CHAT_COMPLETION = {
+    "id": "chatcmpl-test",
+    "object": "chat.completion",
+    "created": 0,
+    "model": "llama3.2:latest",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": "local reply"}, "finish_reason": "stop"}],
+}
+
+
+@pytest.fixture
+def fake_ollama(monkeypatch):
+    """A real loopback Ollama stand-in: `.set_tags(...)` what it serves, read `.requests` for what it received."""
+    server = RecordingServer({"/api/tags": {"models": []}, "/v1/chat/completions": CHAT_COMPLETION})
+    monkeypatch.setenv("OLLAMA_BASE_URL", server.url)
+    yield server
+    server.close()
+
+
+_ROUTING_ENVS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "OPENAI_BASE_URL")
+
+
+@pytest.fixture
+def hostile_env(monkeypatch):
+    """Every inherited env that could re-route or re-key sidecar traffic; routing ones point at this recording decoy.
+
+    httpx reads proxy envs when a client is built, so llm's cached Ollama client is dropped on both sides:
+    one built by an earlier test, before these envs existed, would pass whatever its trust_env.
+    """
+    from services import llm
+
+    llm._loopback_http_client.cache_clear()
+    decoy = RecordingServer({})
+    for name in _ROUTING_ENVS:
+        monkeypatch.setenv(name, decoy.url)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "env-openai-key")
+    monkeypatch.setenv("OPENAI_ORG_ID", "env-org")
+    monkeypatch.setenv("OPENAI_PROJECT_ID", "env-project")
+    monkeypatch.setenv("BYOK_API_KEY", "byok-key")
+    yield decoy
+    llm._loopback_http_client.cache_clear()
+    decoy.close()
 
 
 @pytest.fixture(autouse=True)

@@ -1416,6 +1416,11 @@ class ModelListResponse(BaseModel):
         extra='forbid',
     )
     models: list[ModelInfo] | None = Field(None, title='Models')
+    error: str | None = Field(
+        None,
+        description='Why no models can be listed, e.g. Ollama unreachable, a refused OLLAMA_BASE_URL or default model, or no local model pulled',
+        title='Error',
+    )
 
 
 class ModelPerformanceResultsResponse(BaseModel):
@@ -2482,6 +2487,17 @@ class ChatStreamError(BaseModel):
     )
     type: Literal['error'] = Field(..., title='Type')
     value: str = Field(..., title='Value')
+
+
+class BodyExtractDocumentExtractPost(BaseModel):
+    file: bytes = Field(..., title='File')
+
+
+class ExtractDocumentResponse(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    text: str = Field(..., title='Text')
 
 
 class BriefcaseItemBatchRequest(BaseModel):

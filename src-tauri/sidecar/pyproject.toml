@@ -13,6 +13,9 @@ dependencies = [
     "aiosqlite>=0.21",
     "httpx>=0.28",
     "sse-starlette>=2.2",
+    "pypdf[crypto]>=6.18.1",
+    "python-docx>=1.2.0",
+    "python-multipart>=0.0.22",
 ]
 
 [project.scripts]

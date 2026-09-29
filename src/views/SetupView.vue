@@ -29,8 +29,12 @@ async function checkStatus() {
   try {
     const readyRes = await ready();
     if (readyRes.status !== "ready") {
-      state.value = "no-ollama";
-      errorDetail.value = "Ollama is not responding. Make sure it is running.";
+      // Ollama answered but has no usable local model: ask for a pull, not an install.
+      state.value = readyRes.checks?.models === "none" ? "no-models" : "no-ollama";
+      // The sidecar's reason, e.g. a refused non-loopback OLLAMA_BASE_URL, not a guess that Ollama is down.
+      errorDetail.value = readyRes.error
+        ? `Ollama is not ready: ${readyRes.error}`
+        : "Ollama is not responding. Make sure it is running.";
       return;
     }
   } catch {
@@ -161,6 +165,10 @@ onMounted(checkStatus);
               This downloads ~2 GB. It only needs to happen once.
             </p>
           </div>
+
+          <p v-if="errorDetail" class="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+            {{ errorDetail }}
+          </p>
 
           <button
             class="w-full rounded-lg bg-[var(--accent-500)] px-4 py-3 font-medium text-white transition hover:bg-[var(--accent-600)]"

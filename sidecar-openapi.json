@@ -12211,6 +12211,57 @@
         }
       }
     },
+    "/extract": {
+      "post": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "Extract Document",
+        "operationId": "extract_document_extract_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_document_extract_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractDocumentResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/citations/check": {
       "post": {
         "tags": [
@@ -19919,6 +19970,18 @@
             },
             "type": "array",
             "title": "Models"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Why no models can be listed, e.g. Ollama unreachable, a refused OLLAMA_BASE_URL or default model, or no local model pulled"
           }
         },
         "additionalProperties": false,
@@ -23071,6 +23134,34 @@
         ],
         "title": "ChatStreamError",
         "type": "object"
+      },
+      "Body_extract_document_extract_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_extract_document_extract_post"
+      },
+      "ExtractDocumentResponse": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "ExtractDocumentResponse"
       }
     },
     "securitySchemes": {

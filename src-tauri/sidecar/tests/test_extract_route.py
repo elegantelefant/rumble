@@ -1,0 +1,162 @@
+# ABOUTME: HTTP-level tests for POST /extract.
+# ABOUTME: Exercises the real fixtures through the route, not just the service function.
+
+import asyncio
+import re
+import threading
+from pathlib import Path
+
+import pytest
+from docx import Document
+
+from services.extract import UNREADABLE_PDF
+
+FIXTURES = Path(__file__).parent / "fixtures"
+FRONTEND_CLIENT = Path(__file__).resolve().parents[3] / "src" / "api" / "sidecar.ts"
+HOST_LIB = Path(__file__).resolve().parents[2] / "src" / "lib.rs"
+# How long the stand-in extraction would hold the event loop if it ran on it.
+SLOW_EXTRACT_SECONDS = 2
+
+
+def _docx_bytes(paragraphs: list[str]) -> bytes:
+    import io
+
+    doc = Document()
+    for p in paragraphs:
+        doc.add_paragraph(p)
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+async def test_extract_text_pdf_returns_200_with_text(client):
+    data = (FIXTURES / "sample-text.pdf").read_bytes()
+    resp = await client.post(
+        "/extract", files={"file": ("sample-text.pdf", data, "application/pdf")}
+    )
+    assert resp.status_code == 200
+    assert "Lorem ipsum dolor sit amet" in resp.json()["text"]
+
+
+async def test_extract_docx_returns_200(client):
+    data = _docx_bytes(["First clause.", "Second clause."])
+    resp = await client.post(
+        "/extract",
+        files={
+            "file": (
+                "contract.docx",
+                data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert resp.status_code == 200
+    assert "First clause." in resp.json()["text"]
+
+
+async def test_extract_scanned_pdf_returns_422_with_message(client):
+    data = (FIXTURES / "sample-scanned.pdf").read_bytes()
+    resp = await client.post(
+        "/extract", files={"file": ("sample-scanned.pdf", data, "application/pdf")}
+    )
+    assert resp.status_code == 422
+    assert "scan or image-only" in resp.json()["detail"]
+
+
+async def test_extract_unsupported_extension_returns_422(client):
+    resp = await client.post(
+        "/extract",
+        files={"file": ("contract.doc", b"anything", "application/msword")},
+    )
+    assert resp.status_code == 422
+    assert "Unsupported file type" in resp.json()["detail"]
+
+
+async def test_extract_truncated_pdf_returns_422_in_user_language(client):
+    data = (FIXTURES / "sample-text.pdf").read_bytes()[:200]
+    resp = await client.post(
+        "/extract", files={"file": ("contract.pdf", data, "application/pdf")}
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == (
+        "This PDF could not be read. It may be damaged or not a real PDF."
+    )
+
+
+# Single-byte flips of sample-text.pdf, each crashing pypdf with a different exception
+# after the reader opens: at reader.pages or inside extract_text().
+DAMAGED_PDF_FLIPS = {
+    "PdfReadError": (406, 91),
+    "PdfStreamError": (452, 59),
+    "KeyError": (3777, 61),
+    "AttributeError": (13845, 225),
+    "NotImplementedError": (53, 134),
+}
+
+
+@pytest.mark.parametrize("offset, value", DAMAGED_PDF_FLIPS.values(), ids=DAMAGED_PDF_FLIPS.keys())
+async def test_extract_damaged_pdf_returns_422_in_user_language(client, offset, value):
+    data = bytearray((FIXTURES / "sample-text.pdf").read_bytes())
+    data[offset] = value
+
+    resp = await client.post(
+        "/extract", files={"file": ("contract.pdf", bytes(data), "application/pdf")}
+    )
+
+    assert (resp.status_code, resp.json()["detail"]) == (422, UNREADABLE_PDF)
+
+
+async def test_health_answers_while_an_extraction_is_in_flight(client, monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_extract(filename: str, data: bytes) -> str:
+        started.set()
+        release.wait(timeout=SLOW_EXTRACT_SECONDS)
+        return "done"
+
+    monkeypatch.setattr("routes.extract.extract", slow_extract)
+    upload = asyncio.create_task(
+        client.post("/extract", files={"file": ("notes.txt", b"x", "text/plain")})
+    )
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+
+    health = await client.get("/health")
+    extraction_still_running = not upload.done()
+    release.set()
+    await upload
+
+    assert health.status_code == 200
+    assert extraction_still_running
+
+
+async def test_extract_oversize_upload_returns_413_with_limit(client, monkeypatch):
+    monkeypatch.setattr("routes.extract.MAX_UPLOAD_BYTES", 4)
+    resp = await client.post(
+        "/extract", files={"file": ("notes.txt", b"12345", "text/plain")}
+    )
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == "This file is larger than the 50 MB upload limit."
+
+
+async def test_extract_upload_at_the_limit_is_accepted(client, monkeypatch):
+    monkeypatch.setattr("routes.extract.MAX_UPLOAD_BYTES", 5)
+    resp = await client.post(
+        "/extract", files={"file": ("notes.txt", b"12345", "text/plain")}
+    )
+    assert resp.status_code == 200
+
+
+def test_upload_limit_matches_the_frontend():
+    from routes.extract import MAX_UPLOAD_MB
+
+    match = re.search(r"MAX_UPLOAD_MB = (\d+);", FRONTEND_CLIENT.read_text())
+    assert match and int(match.group(1)) == MAX_UPLOAD_MB
+
+
+def test_upload_limit_matches_the_host():
+    from routes.extract import MAX_UPLOAD_MB
+
+    match = re.search(r"const MAX_UPLOAD_MB: usize = (\d+);", HOST_LIB.read_text())
+    assert match and int(match.group(1)) == MAX_UPLOAD_MB
