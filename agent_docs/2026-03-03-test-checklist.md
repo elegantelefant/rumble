@@ -399,14 +399,14 @@
 | Layer | Total | Tested | Missing | Coverage |
 |-------|-------|--------|---------|----------|
 | Python Sidecar (HTTP endpoints) | 65 | 48 | 17 | 74% |
-| Python Sidecar (DB service) | 24 | 17 | 7 | 71% |
-| Python Sidecar (other services) | 8 | 7 | 1 | 88% |
+| Python Sidecar (DB service) | 24 | 16 | 8 | 67% |
+| Python Sidecar (other services) | 8 | 6 | 2 | 75% |
 | TypeScript Utilities | 13 | 13 | 0 | 100% |
 | TypeScript API Client | 13 | 10 | 3 | 77% |
-| TypeScript Components (tested) | 46 | 44 | 2 | 96% |
-| TypeScript Components (untested) | 40 | 0 | 40 | 0% |
+| TypeScript Components (tested) | 41 | 38 | 3 | 93% |
+| TypeScript Components (untested) | 43 | 0 | 43 | 0% |
 | TypeScript Backend Client | 9 | 0 | 9 | 0% |
 | TypeScript Router | 4 | 0 | 4 | 0% |
 | Rust (resolve_url) | 8 | 8 | 0 | 100% |
-| Rust (other functions) | 16 | 0 | 16 | 0% |
-| **TOTAL** | **246** | **147** | **99** | **60%** |
+| Rust (other functions) | 18 | 0 | 18 | 0% |
+| **TOTAL** | **246** | **139** | **107** | **57%** |

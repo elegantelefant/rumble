@@ -78,7 +78,8 @@ async def _build_agent(
         resolved_api_key = api_key or os.environ.get("BYOK_API_KEY")
         if not resolved_api_key:
             raise ValueError("byok mode requires an API key")
-        # Only ever the public OpenAI host, so the default client may honour a corporate proxy.
+        # Only ever the public OpenAI host, so the default client may honour a corporate proxy: being httpx's
+        # trust_env default, it follows HTTP(S)_PROXY/ALL_PROXY/NO_PROXY and trusts SSL_CERT_FILE/SSL_CERT_DIR.
         provider = _provider(OPENAI_API_BASE_URL, resolved_api_key, cached_async_http_client(provider="openai"))
         model = OpenAIModel(model_name or "gpt-4o-mini", provider=provider)
     else:
