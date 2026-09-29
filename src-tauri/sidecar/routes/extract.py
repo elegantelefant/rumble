@@ -9,8 +9,8 @@ from services.extract import ExtractionError, extract
 
 router = APIRouter(tags=["extract"])
 
-# Must equal MAX_UPLOAD_MB in src/api/sidecar.ts, which refuses larger files
-# before reading them; test_upload_limit_matches_the_frontend holds the two in step.
+# Must equal MAX_UPLOAD_MB in src/api/sidecar.ts and src-tauri/src/lib.rs, which refuse larger files
+# before reading or sending them; test_upload_limit_matches_the_{frontend,host} hold the three in step.
 MAX_UPLOAD_MB = 50
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 

@@ -13,6 +13,7 @@ from services.extract import UNREADABLE_PDF
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FRONTEND_CLIENT = Path(__file__).resolve().parents[3] / "src" / "api" / "sidecar.ts"
+HOST_LIB = Path(__file__).resolve().parents[2] / "src" / "lib.rs"
 # How long the stand-in extraction would hold the event loop if it ran on it.
 SLOW_EXTRACT_SECONDS = 2
 
@@ -151,4 +152,11 @@ def test_upload_limit_matches_the_frontend():
     from routes.extract import MAX_UPLOAD_MB
 
     match = re.search(r"MAX_UPLOAD_MB = (\d+);", FRONTEND_CLIENT.read_text())
+    assert match and int(match.group(1)) == MAX_UPLOAD_MB
+
+
+def test_upload_limit_matches_the_host():
+    from routes.extract import MAX_UPLOAD_MB
+
+    match = re.search(r"const MAX_UPLOAD_MB: usize = (\d+);", HOST_LIB.read_text())
     assert match and int(match.group(1)) == MAX_UPLOAD_MB

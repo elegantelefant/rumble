@@ -281,6 +281,10 @@ const EXTRACT_FILENAME_HEADER: &str = "X-Rumble-Filename";
 const EXTRACT_TIMEOUT_SECS: u64 = 300;
 const EXTRACT_TIMEOUT_MESSAGE: &str =
     "Extraction is taking too long. Try a smaller document, or split it into parts.";
+/// Must equal MAX_UPLOAD_MB in sidecar/routes/extract.py and src/api/sidecar.ts;
+/// a sidecar test holds the three in step.
+const MAX_UPLOAD_MB: usize = 50;
+const MAX_UPLOAD_BYTES: usize = MAX_UPLOAD_MB * 1024 * 1024;
 
 /// Posts a file's bytes to the sidecar's /extract endpoint as multipart form data.
 ///
@@ -298,6 +302,12 @@ async fn post_extract_multipart(
     data: Vec<u8>,
     timeout: Duration,
 ) -> Result<String, String> {
+    // The sidecar would answer 413; refusing here spares building and sending the form.
+    if data.len() > MAX_UPLOAD_BYTES {
+        return Err(format!(
+            "This file is larger than the {MAX_UPLOAD_MB} MB upload limit."
+        ));
+    }
     let part = reqwest::multipart::Part::bytes(data).file_name(filename.to_string());
     let form = reqwest::multipart::Form::new().part("file", part);
 
@@ -1490,6 +1500,59 @@ mod tests {
             result.unwrap_err(),
             "This file is larger than the 50 MB upload limit."
         );
+    }
+
+    #[tokio::test]
+    async fn extract_over_upload_limit_is_refused_before_sending() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"text": "sent"})),
+            )
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "bundle.pdf",
+            vec![0; MAX_UPLOAD_BYTES + 1],
+            TEST_EXTRACT_TIMEOUT,
+        )
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "This file is larger than the 50 MB upload limit."
+        );
+    }
+
+    #[tokio::test]
+    async fn extract_at_upload_limit_is_sent() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/extract"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"text": "sent"})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let result = post_extract_multipart(
+            &http,
+            &server.uri(),
+            "test-secret",
+            "bundle.pdf",
+            vec![0; MAX_UPLOAD_BYTES],
+            TEST_EXTRACT_TIMEOUT,
+        )
+        .await;
+        assert_eq!(result.unwrap(), "sent");
     }
 
     #[tokio::test]
