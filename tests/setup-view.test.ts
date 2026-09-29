@@ -1,5 +1,5 @@
 // ABOUTME: Tests for SetupView.vue's readiness messaging.
-// ABOUTME: Covers showing the sidecar's /ready reason instead of a generic "not responding".
+// ABOUTME: Covers showing the sidecar's /ready reason instead of a generic "not responding", and the no-model path.
 
 import { flushPromises, mount } from "@vue/test-utils"
 import { vi } from "vitest"
@@ -37,6 +37,23 @@ describe("SetupView", () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain("OLLAMA_BASE_URL must be loopback")
+  })
+
+  it("asks for a model pull when Ollama has no usable local model", async () => {
+    vi.mocked(ready).mockResolvedValue({
+      status: "not_ready",
+      mode: "ollama",
+      error: "no local Ollama model is pulled; cloud models are not used in local mode",
+      checks: { models: "none" },
+    })
+
+    const wrapper = mount(SetupView)
+    await flushPromises()
+
+    expect([wrapper.text().includes("Pull a model"), wrapper.text().includes("cloud models are not used")]).toEqual([
+      true,
+      true,
+    ])
   })
 
   it("falls back to 'not responding' when not ready without a reason", async () => {

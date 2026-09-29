@@ -119,6 +119,23 @@ def default_model(tags: list[dict]) -> str | None:
         raise ValueError(f"OLLAMA_DEFAULT_MODEL: {exc}") from exc
 
 
+class NoLocalModel(ValueError):
+    """Ollama answered, but lists no usable local model: none pulled, or only cloud ones."""
+
+
+def resolve_default(tags: list[dict]) -> str:
+    """The model a request without one gets: OLLAMA_DEFAULT_MODEL if pulled, else the first pulled local model."""
+    resolved = default_model(tags)
+    if resolved is not None:
+        return resolved
+    local = local_model_names(tags)
+    if not local:
+        hidden = "; cloud models are not used in local mode" if tags else ""
+        raise NoLocalModel(f"no local Ollama model is pulled{hidden}")
+    logger.info("Default model not pulled; using %s", local[0])
+    return local[0]
+
+
 async def ollama_tags() -> list[dict]:
     """Fetch Ollama's /api/tags items from the validated loopback base URL, never through a proxy (#73)."""
     async with httpx.AsyncClient(timeout=OLLAMA_TAGS_TIMEOUT_S, trust_env=False) as client:

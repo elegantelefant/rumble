@@ -44,15 +44,7 @@ async def _resolve_ollama_model(model_name: str | None = None) -> str:
         if resolved is None:
             raise ValueError(f"model {model_name!r} is not a pulled local Ollama model")
         return resolved
-
-    resolved = mode.default_model(tags)
-    if resolved is None:
-        local = mode.local_model_names(tags)
-        if not local:
-            raise ValueError("no local Ollama model is pulled")
-        resolved = local[0]
-        logger.info("Default model not pulled; using %s", resolved)
-    return resolved
+    return mode.resolve_default(tags)
 
 
 @functools.cache

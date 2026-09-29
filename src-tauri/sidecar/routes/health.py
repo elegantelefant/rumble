@@ -25,11 +25,14 @@ async def ready() -> dict:
         # BYOK mode: just check key is present
         return {"status": "ready", "mode": "byok"}
 
-    # Ollama mode: check Ollama is reachable and the configured default isn't refused
+    # Ollama mode: ready only if a request without a model would get a usable local one
     try:
-        mode_service.default_model(await mode_service.ollama_tags())
+        mode_service.resolve_default(await mode_service.ollama_tags())
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"status": "not_ready", "mode": "ollama", "error": "ollama unreachable"}
+    except mode_service.NoLocalModel as exc:
+        # Ollama itself is fine; checks.models lets setup ask for a pull instead of an install.
+        return {"status": "not_ready", "mode": "ollama", "error": str(exc), "checks": {"models": "none"}}
     except ValueError as exc:
         return {"status": "not_ready", "mode": "ollama", "error": str(exc)}
     return {"status": "ready", "mode": "ollama"}
@@ -52,7 +55,7 @@ async def list_models() -> dict:
     # Ollama mode: query local models, filtering out cloud models
     try:
         tags = await mode_service.ollama_tags()
-        mode_service.default_model(tags)
+        mode_service.resolve_default(tags)
     except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException):
         return {"models": [], "error": "ollama unreachable"}
     except ValueError as exc:

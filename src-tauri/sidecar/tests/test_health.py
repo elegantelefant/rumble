@@ -87,6 +87,41 @@ async def test_ready_ollama_ready_when_reachable(client, monkeypatch, fake_ollam
     assert resp.json()["status"] == "ready"
 
 
+async def test_ready_not_ready_when_every_pulled_model_is_cloud(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("qwen3.5:cloud", "mymodel:latest", remote=("mymodel:latest",))
+
+    data = (await client.get("/ready")).json()
+
+    assert (data["status"], data["checks"], "cloud models are not used" in data["error"]) == (
+        "not_ready",
+        {"models": "none"},
+        True,
+    )
+
+
+async def test_ready_not_ready_when_no_model_is_pulled(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags()
+
+    data = (await client.get("/ready")).json()
+
+    assert (data["status"], data["checks"], data["error"]) == (
+        "not_ready",
+        {"models": "none"},
+        "no local Ollama model is pulled",
+    )
+
+
+async def test_models_surfaces_error_when_every_pulled_model_is_cloud(client, monkeypatch, fake_ollama):
+    monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
+    fake_ollama.set_tags("qwen3.5:cloud", "mymodel:latest", remote=("mymodel:latest",))
+
+    data = (await client.get("/models")).json()
+
+    assert (data["models"], "cloud models are not used" in data["error"]) == ([], True)
+
+
 async def test_ready_surfaces_refused_non_loopback_base_url(client, monkeypatch):
     monkeypatch.delenv("RUMBLE_BACKEND_MODE", raising=False)
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://evil.example.com:11434")
