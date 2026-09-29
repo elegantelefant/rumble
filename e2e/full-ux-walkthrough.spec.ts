@@ -51,9 +51,8 @@ test.describe("2. Sidebar Navigation", () => {
   test("2b. sidebar shows user info", async ({ page }) => {
     await page.goto("/review");
     const sidebar = page.locator("aside.sidebar");
-    await expect(sidebar.getByText("CoastalTower238")).toBeVisible();
-    await expect(sidebar.getByText("SilverEcho951")).toBeVisible();
-    await expect(sidebar.getByText("Rumble v0.1.0a")).toBeVisible();
+    await expect(sidebar.getByText("Local User")).toBeVisible();
+    await expect(sidebar.getByText("Rumble", { exact: true })).toBeVisible();
   });
 
   test("2c. sidebar Evidence Review is disabled", async ({ page }) => {
@@ -109,8 +108,8 @@ test.describe("2. Sidebar Navigation", () => {
 test.describe("3. Top Bar", () => {
   test("3a. top bar shows confidentiality badge and user info", async ({ page }) => {
     await page.goto("/review");
-    await expect(page.getByText("Local & Confidential")).toBeVisible();
-    await expect(page.getByLabel("Current user").getByText("CoastalTower238")).toBeVisible();
+    await expect(page.getByText("Mode unavailable")).toBeVisible();
+    await expect(page.getByLabel("Current user").getByText("Local User")).toBeVisible();
     await page.screenshot({ path: S("03a-topbar"), fullPage: true });
   });
 

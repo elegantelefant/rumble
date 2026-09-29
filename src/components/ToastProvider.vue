@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, provide, reactive } from "vue";
+import { onBeforeUnmount, provide, reactive, watch } from "vue";
 import { TOAST_KEY } from "../composables/toast";
+import { navigationError } from "../router";
 
 type Toast = {
   id: number;
@@ -32,6 +33,13 @@ function removeToast(id: number) {
 onBeforeUnmount(() => {
   for (const timer of timers.values()) clearTimeout(timer);
   timers.clear();
+});
+
+watch(navigationError, (message) => {
+  if (message) {
+    addToast(message, "error");
+    navigationError.value = null;
+  }
 });
 
 provide(TOAST_KEY, { addToast });

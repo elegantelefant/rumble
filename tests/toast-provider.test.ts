@@ -1,10 +1,15 @@
 // ABOUTME: Tests for ToastProvider.vue component.
 // ABOUTME: Covers toast addition, auto-dismiss via fake timers, and toast rendering.
 
-import { mount } from "@vue/test-utils"
+import { enableAutoUnmount, mount, flushPromises } from "@vue/test-utils"
 import { defineComponent } from "vue"
 import ToastProvider from "../src/components/ToastProvider.vue"
 import { useToast } from "../src/composables/toast"
+import { navigationError } from "../src/router"
+
+// Each test's wrapper watches the shared navigationError ref, so a wrapper left
+// mounted from a prior test would race the current test's own reset of it to null.
+enableAutoUnmount(afterEach)
 
 beforeAll(() => {
   vi.useFakeTimers()
@@ -16,6 +21,7 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  navigationError.value = null
 })
 
 // Child component that exposes the injected toast API for testing
@@ -110,6 +116,17 @@ describe("ToastProvider", () => {
     const region = wrapper.find('[role="status"]')
     expect(region.exists()).toBe(true)
     expect(region.attributes("aria-live")).toBe("polite")
+  })
+
+  it("surfaces navigationError as an error toast and resets it to null", async () => {
+    const wrapper = mountProvider()
+    navigationError.value = "Something went wrong reaching the local backend."
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Something went wrong reaching the local backend.")
+    const toastEl = wrapper.find(".pointer-events-auto")
+    expect(toastEl.classes()).toContain("bg-[var(--error)]")
+    expect(navigationError.value).toBeNull()
   })
 
   it("applies correct CSS class for error type", async () => {

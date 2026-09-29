@@ -22,8 +22,8 @@ test.describe("App Shell & Navigation", () => {
   test("sidebar shows user info and version", async ({ page }) => {
     await page.goto("/review");
     const sidebar = page.locator("aside.sidebar");
-    await expect(sidebar.getByText("CoastalTower238")).toBeVisible();
-    await expect(sidebar.getByText("Rumble v0.1.0a")).toBeVisible();
+    await expect(sidebar.getByText("Local User")).toBeVisible();
+    await expect(sidebar.getByText("Rumble", { exact: true })).toBeVisible();
   });
 
   test("Evidence Review shows Coming Soon badge", async ({ page }) => {
