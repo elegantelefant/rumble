@@ -19919,6 +19919,18 @@
             },
             "type": "array",
             "title": "Models"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Why no models can be listed, e.g. Ollama unreachable, a refused OLLAMA_BASE_URL or default model, or no local model pulled"
           }
         },
         "additionalProperties": false,

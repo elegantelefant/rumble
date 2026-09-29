@@ -257,6 +257,7 @@ export type ReadyResponse = {
 };
 export type ModelsResponse = {
   models: { id: string; provider: string; name: string; default: boolean }[];
+  error?: string | null;
 };
 
 export async function health(): Promise<HealthResponse> {
