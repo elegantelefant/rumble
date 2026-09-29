@@ -1,14 +1,22 @@
 # ABOUTME: Async SQLite database layer for chat persistence.
-# ABOUTME: Manages schema creation, chat CRUD, and message storage via aiosqlite.
+# ABOUTME: Manages schema creation, chat CRUD, message and job storage, and job retention via aiosqlite.
 
+import logging
+import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
 import aiosqlite
 
+logger = logging.getLogger(__name__)
+
 _db: aiosqlite.Connection | None = None
+
+# Jobs hold full document text in request/result, so they are not kept forever (#57).
+DEFAULT_JOB_RETENTION_DAYS = 30
+JOB_RETENTION_ENV = "RUMBLE_JOB_RETENTION_DAYS"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -65,6 +73,8 @@ async def init_db(data_dir: str | None = None) -> None:
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")
     await _db.execute("PRAGMA foreign_keys=ON")
+    # Overwrite deleted rows' content in the file rather than leaving it in free pages.
+    await _db.execute("PRAGMA secure_delete=ON")
     await _db.executescript(SCHEMA)
     await _db.commit()
 
@@ -215,3 +225,36 @@ async def set_job_result(job_id: str, result: str | None = None, error: str | No
         (status, result, error, now, job_id),
     )
     await db.commit()
+
+
+# --- Retention ---
+
+def job_retention_days() -> int:
+    """RUMBLE_JOB_RETENTION_DAYS as a whole number of days (at least 1), else the default."""
+    raw = os.environ.get(JOB_RETENTION_ENV)
+    if raw is None:
+        return DEFAULT_JOB_RETENTION_DAYS
+    try:
+        days = int(raw)
+    except ValueError:
+        days = 0
+    if days < 1:
+        logger.warning(
+            "Ignoring %s=%r (need a whole number of days, at least 1); keeping jobs %d days",
+            JOB_RETENTION_ENV,
+            raw,
+            DEFAULT_JOB_RETENTION_DAYS,
+        )
+        return DEFAULT_JOB_RETENTION_DAYS
+    return days
+
+
+async def purge_jobs_older_than(days: int, now: datetime | None = None) -> int:
+    """Delete jobs created more than `days` before `now`; return how many. Chats and messages are kept."""
+    cutoff = ((now or datetime.now(UTC)) - timedelta(days=days)).isoformat()
+    db = _get_db()
+    # _now()'s UTC isoformat() strings sort chronologically: fixed width through the seconds, and
+    # where isoformat() omits zero microseconds, "+" sorts before ".".
+    cursor = await db.execute("DELETE FROM jobs WHERE created_at < ?", (cutoff,))
+    await db.commit()
+    return cursor.rowcount

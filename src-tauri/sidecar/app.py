@@ -1,5 +1,5 @@
 # ABOUTME: FastAPI application factory for the rumble sidecar.
-# ABOUTME: Wires up lifespan (DB init/close, pidfile, stdin watcher), shared-secret auth, and route modules.
+# ABOUTME: Wires up lifespan (DB init/close, job retention purge, pidfile, stdin watcher), shared-secret auth, and route modules.
 import asyncio
 import logging
 import os
@@ -17,7 +17,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from services.db import close_db, init_db
+from services.db import close_db, init_db, job_retention_days, purge_jobs_older_than
 from services.jobs import shutdown as shutdown_jobs
 
 logger = logging.getLogger(__name__)
@@ -219,6 +219,11 @@ async def lifespan(app: FastAPI):
         _reap_strays(app.state.data_dir, pidfile)
 
     await init_db(app.state.data_dir)
+    retention_days = job_retention_days()
+    purged = await purge_jobs_older_than(retention_days)
+    if purged:
+        # WARNING, not INFO: nothing configures logging, so only WARNING and above reach the host's stderr log.
+        logger.warning("retention: deleted %d job(s) older than %d days", purged, retention_days)
 
     if pidfile is not None:
         _write_pidfile(pidfile)
