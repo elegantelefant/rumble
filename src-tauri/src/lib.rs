@@ -21,41 +21,15 @@ use uuid::Uuid;
 
 const SERVICE_NAME: &str = "elefant-rumble";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
-const DEFAULT_CLOUD_URL: &str = "https://api.elefant.com";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
-/// Paths that only the cloud API can handle (billing, auth, search, etc.).
-const CLOUD_ONLY_PREFIXES: &[&str] = &[
-    "/billing",
-    "/auth",
-    "/users",
-    "/organizations",
-    "/notifications",
-    "/webhooks",
-    "/whoami",
-    "/me",
-    "/search",
-    "/briefcase",
-    "/documents",
-    "/files",
-    "/corpus",
-    "/graph",
-    "/playbooks",
-    "/clause-databases",
-    "/legal-requests",
-    "/pipelines",
-    "/entitlements",
-    "/usage",
-    "/commencement",
-    "/reading-list",
-    "/model-performance",
-    "/memories",
-    "/memory",
-    "/orchestrate",
-    "/citations",
-    "/internal",
-];
+/// The vendored cloud contract (`openapi.json`) serves everything under this prefix.
+const CLOUD_API_PREFIX: &str = "/api/v1";
+const PREMIUM_REQUIRED: &str = "This feature requires Elefant Premium.";
+/// BYOK is OpenAI-only for now (#35): the sidecar only constructs an OpenAI provider.
+const BYOK_KEY_PROVIDER: &str = "openai";
+const BYOK_KEY_MISSING: &str = "Add an OpenAI API key in Settings before switching to BYOK.";
 
 // --- App state ---
 
@@ -81,25 +55,36 @@ fn is_sidecar_url(url: &str) -> bool {
     url.starts_with("http://127.0.0.1:")
 }
 
+fn is_cloud_api_path(path: &str) -> bool {
+    path == CLOUD_API_PREFIX || path.starts_with(&format!("{}/", CLOUD_API_PREFIX))
+}
+
 impl AppState {
-    /// Route a request path to the correct backend URL.
-    /// Premium mode: always cloud. Ollama/BYOK: cloud-only paths go to cloud,
-    /// everything else goes to the local sidecar.
+    /// Route a request path to a backend URL. Ollama/BYOK: the local sidecar,
+    /// and a loud refusal for the cloud contract. Premium: refused until its
+    /// routing is built against the L0 payload contract
+    /// (agent_docs/2026-09-22-premium-payload-contract.md). Never returns a
+    /// non-loopback URL.
     fn resolve_url(&self, path: &str) -> Result<String, String> {
-        let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner());
-        if *mode == BackendMode::Premium {
-            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+        let mode = self.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match mode {
+            BackendMode::Ollama | BackendMode::Byok if !is_cloud_api_path(path) => {
+                self.sidecar_url(path)
+            }
+            _ => Err(PREMIUM_REQUIRED.to_string()),
         }
+    }
 
-        let is_cloud_only = CLOUD_ONLY_PREFIXES
-            .iter()
-            .any(|prefix| path == *prefix || path.starts_with(&format!("{}/", prefix)));
-
-        if is_cloud_only {
-            return Ok(format!("{}{}", DEFAULT_CLOUD_URL, path));
+    /// Publishes or clears the sidecar port only while `pid` is the current
+    /// sidecar. After a respawn, the replaced sidecar's reader must neither
+    /// clear the new port (its late Terminated) nor publish its own dead one.
+    fn set_port_if_current(&self, pid: u32, port: Option<u16>) -> bool {
+        let child = self.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
+        if child.as_ref().map(|c| c.pid()) != Some(pid) {
+            return false;
         }
-
-        self.sidecar_url(path)
+        *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = port;
+        true
     }
 
     /// Build a URL against the local sidecar only, ignoring backend mode —
@@ -258,21 +243,27 @@ async fn api_call(
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let url = state.resolve_url(&path)?;
-    let token = match auth_get_token_inner() {
-        Ok(t) => Some(t),
-        Err(e) => {
-            eprintln!("[keychain] failed to read auth token: {}", e);
-            None
-        }
-    };
-    // Only attach the shared secret when talking to our own local sidecar —
-    // never send it to the cloud API.
-    let secret = if is_sidecar_url(&url) {
-        Some(state.secret.as_str())
-    } else {
-        None
-    };
+    let (token, secret) = request_credentials(&url, &state.secret, || {
+        auth_get_token_inner()
+            .map_err(|e| eprintln!("[keychain] failed to read auth token: {}", e))
+            .ok()
+    });
     make_http_request(&state.http, &url, &method, body, params, token.as_deref(), secret).await
+}
+
+/// The credentials a request carries: the shared secret for our own sidecar,
+/// the premium bearer token for anything else — never both, and the keychain
+/// is not read at all for a sidecar-bound request (#72).
+fn request_credentials<'a>(
+    url: &str,
+    secret: &'a str,
+    read_token: impl FnOnce() -> Option<String>,
+) -> (Option<String>, Option<&'a str>) {
+    if is_sidecar_url(url) {
+        (None, Some(secret))
+    } else {
+        (read_token(), None)
+    }
 }
 
 const EXTRACT_FILENAME_HEADER: &str = "X-Rumble-Filename";
@@ -480,17 +471,62 @@ fn get_backend_mode(state: State<'_, AppState>) -> BackendMode {
     mode.clone()
 }
 
+/// Sync, not async: spawn_sidecar uses block_on, which must not run inside
+/// the async runtime.
 #[tauri::command]
-fn set_backend_mode(state: State<'_, AppState>, mode: String) -> Result<(), String> {
+fn set_backend_mode(app: AppHandle, state: State<'_, AppState>, mode: String) -> Result<(), String> {
     let parsed = match mode.as_str() {
         "ollama" => BackendMode::Ollama,
         "byok" => BackendMode::Byok,
         "premium" => BackendMode::Premium,
         other => return Err(format!("unknown backend mode: {}", other)),
     };
-    let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
-    *current = parsed;
-    Ok(())
+    apply_mode(&state, parsed, || spawn_sidecar(&app))
+}
+
+/// Switches the host's mode and respawns the sidecar, which reads its mode
+/// only from its spawn environment (decision on PR #66). A failed respawn
+/// restores the previous mode: spawn_sidecar fails before it kills the running
+/// sidecar, so host and sidecar still agree.
+fn apply_mode(
+    state: &AppState,
+    requested: BackendMode,
+    respawn: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let previous = {
+        let mut current = state.mode.lock().unwrap_or_else(|e| e.into_inner());
+        if *current == requested {
+            return Ok(());
+        }
+        std::mem::replace(&mut *current, requested)
+    };
+    respawn().map_err(|e| {
+        *state.mode.lock().unwrap_or_else(|e| e.into_inner()) = previous;
+        e
+    })
+}
+
+/// The sidecar's mode env. "premium" never reaches the sidecar; the BYOK key
+/// is present only in byok mode. BYOK_API_KEY is always set, to "" outside
+/// byok, because the shell Command inherits the host's environment and has no
+/// env_remove: a key in the launching shell must not reach an ollama sidecar.
+fn sidecar_mode_env(
+    mode: &BackendMode,
+    byok_key: Option<String>,
+) -> Result<Vec<(&'static str, String)>, String> {
+    match mode {
+        BackendMode::Byok => {
+            let key = byok_key.filter(|k| !k.is_empty()).ok_or(BYOK_KEY_MISSING)?;
+            Ok(vec![
+                ("RUMBLE_BACKEND_MODE", "byok".to_string()),
+                ("BYOK_API_KEY", key),
+            ])
+        }
+        BackendMode::Ollama | BackendMode::Premium => Ok(vec![
+            ("RUMBLE_BACKEND_MODE", "ollama".to_string()),
+            ("BYOK_API_KEY", String::new()),
+        ]),
+    }
 }
 
 // --- Sidecar lifecycle ---
@@ -534,6 +570,13 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
 fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
 
+    let mode = state.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let byok_key = match mode {
+        BackendMode::Byok => get_api_key(BYOK_KEY_PROVIDER.to_string())?,
+        _ => None,
+    };
+    let mode_env = sidecar_mode_env(&mode, byok_key)?;
+
     // Find a free port synchronously via tauri's async runtime
     let port = tauri::async_runtime::block_on(find_available_port())?;
 
@@ -562,7 +605,8 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
         // do, so a closed/redirected stdin there can't be mistaken for the host
         // dying.
-        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1");
+        .env("RUMBLE_SIDECAR_WATCH_STDIN", "1")
+        .envs(mode_env);
 
     let (mut rx, child) = sidecar_cmd
         .spawn()
@@ -572,6 +616,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     kill_sidecar(&state);
 
     // Store the child process handle for cleanup
+    let pid = child.pid();
     {
         let mut sidecar_child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
         *sidecar_child = Some(child);
@@ -596,10 +641,10 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                                 match poll_health(&http_clone, p, &secret_clone).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();
-                                        let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
-                                        *sp = Some(p);
+                                        if st.set_port_if_current(pid, Some(p)) {
+                                            println!("[sidecar] ready on port {}", p);
+                                        }
                                         port_confirmed = true;
-                                        println!("[sidecar] ready on port {}", p);
                                     }
                                     Err(e) => {
                                         eprintln!("[sidecar] health check failed: {}", e);
@@ -618,9 +663,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         "[sidecar] terminated with code {:?}",
                         payload.code
                     );
-                    let st = state_handle.state::<AppState>();
-                    let mut sp = st.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
-                    *sp = None;
+                    state_handle.state::<AppState>().set_port_if_current(pid, None);
                     break;
                 }
                 _ => {}
@@ -663,19 +706,21 @@ async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value,
 
     if let Some(p) = port {
         let url = format!("http://127.0.0.1:{}/health", p);
-        match state.http.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                if let Ok(body) = resp.json::<serde_json::Value>().await {
-                    result["health"] = body;
-                }
-            }
-            _ => {
-                result["health"] = serde_json::json!({"status": "unreachable"});
-            }
+        if let Some(health) = fetch_health(&state.http, &url, &state.secret).await {
+            result["health"] = health;
         }
     }
 
     Ok(result)
+}
+
+/// The sidecar's /health body; None when it answered with a body that isn't JSON.
+/// Sends the shared secret, without which the sidecar answers 401 (#69).
+async fn fetch_health(http: &Client, url: &str, secret: &str) -> Option<serde_json::Value> {
+    match http.get(url).header(SECRET_HEADER, secret).send().await {
+        Ok(resp) if resp.status().is_success() => resp.json::<serde_json::Value>().await.ok(),
+        _ => Some(serde_json::json!({"status": "unreachable"})),
+    }
 }
 
 // --- Tray icon ---
@@ -857,164 +902,188 @@ mod tests {
         }
     }
 
-    // --- resolve_url ---
+    // --- resolve_url: the per-mode routing table ---
+
+    const LOCAL_MODES: [BackendMode; 2] = [BackendMode::Ollama, BackendMode::Byok];
 
     #[test]
-    fn premium_always_routes_to_cloud() {
-        let state = make_state(BackendMode::Premium, None);
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "https://api.elefant.com/chats"
-        );
-        assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
-        );
-    }
-
-    #[test]
-    fn ollama_routes_cloud_only_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-        assert_eq!(
-            state.resolve_url("/billing/subscription").unwrap(),
-            "https://api.elefant.com/billing/subscription"
-        );
-        assert_eq!(
-            state.resolve_url("/search").unwrap(),
-            "https://api.elefant.com/search"
-        );
-        assert_eq!(
-            state.resolve_url("/auth/login").unwrap(),
-            "https://api.elefant.com/auth/login"
-        );
-        assert_eq!(
-            state.resolve_url("/users").unwrap(),
-            "https://api.elefant.com/users"
-        );
-    }
-
-    #[test]
-    fn ollama_routes_sidecar_paths_to_sidecar() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/health").unwrap(),
-            "http://127.0.0.1:11435/health"
-        );
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "http://127.0.0.1:11435/chats"
-        );
-        assert_eq!(
-            state.resolve_url("/chats/abc-123/message").unwrap(),
-            "http://127.0.0.1:11435/chats/abc-123/message"
-        );
-        assert_eq!(
-            state.resolve_url("/clarify").unwrap(),
-            "http://127.0.0.1:11435/clarify"
-        );
-        assert_eq!(
-            state.resolve_url("/translate").unwrap(),
-            "http://127.0.0.1:11435/translate"
-        );
-        assert_eq!(
-            state.resolve_url("/draft").unwrap(),
-            "http://127.0.0.1:11435/draft"
-        );
-    }
-
-    #[test]
-    fn byok_routes_same_as_ollama() {
-        let state = make_state(BackendMode::Byok, Some(8080));
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-        assert_eq!(
-            state.resolve_url("/chats").unwrap(),
-            "http://127.0.0.1:8080/chats"
-        );
-    }
-
-    #[test]
-    fn ollama_unknown_path_routes_to_sidecar() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/some-future-endpoint").unwrap(),
-            "http://127.0.0.1:11435/some-future-endpoint"
-        );
-    }
-
-    #[test]
-    fn ollama_no_sidecar_errors_for_sidecar_path() {
-        let state = make_state(BackendMode::Ollama, None);
-        assert!(state.resolve_url("/chats").is_err());
-    }
-
-    #[test]
-    fn ollama_no_sidecar_still_routes_cloud_only() {
-        let state = make_state(BackendMode::Ollama, None);
-        assert_eq!(
-            state.resolve_url("/billing").unwrap(),
-            "https://api.elefant.com/billing"
-        );
-    }
-
-    #[test]
-    fn cloud_only_prefix_no_false_positive() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        assert_eq!(
-            state.resolve_url("/me").unwrap(),
-            "https://api.elefant.com/me"
-        );
-        assert_eq!(
-            state.resolve_url("/models").unwrap(),
-            "http://127.0.0.1:11435/models"
-        );
-    }
-
-    #[test]
-    fn every_cloud_only_prefix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let result = state.resolve_url(prefix).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                prefix,
-                result
-            );
+    fn local_modes_route_sidecar_paths_to_the_sidecar() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode.clone(), Some(11435));
+            for path in ["/health", "/chats", "/chats/abc-123/message", "/draft", "/billing", "/search", "/some-future-endpoint"] {
+                assert_eq!(
+                    state.resolve_url(path).unwrap(),
+                    format!("http://127.0.0.1:11435{}", path),
+                    "{:?} {}",
+                    mode,
+                    path
+                );
+            }
         }
     }
 
     #[test]
-    fn every_cloud_only_prefix_with_suffix_routes_to_cloud() {
-        let state = make_state(BackendMode::Ollama, Some(11435));
-        for prefix in CLOUD_ONLY_PREFIXES {
-            let path = format!("{}/sub-path", prefix);
-            let result = state.resolve_url(&path).unwrap();
-            assert!(
-                result.starts_with(DEFAULT_CLOUD_URL),
-                "{} should route to cloud, got: {}",
-                path,
-                result
-            );
+    fn local_modes_refuse_the_cloud_contract() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode.clone(), Some(11435));
+            for path in ["/api/v1", "/api/v1/", "/api/v1/search/keyword", "/api/v1/billing/subscription"] {
+                assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{:?} {}", mode, path);
+            }
         }
     }
 
     #[test]
-    fn partial_prefix_does_not_falsely_match() {
+    fn local_modes_do_not_treat_lookalike_prefixes_as_cloud() {
         let state = make_state(BackendMode::Ollama, Some(11435));
-        // "/billing_extra" contains "/billing" as a substring but should NOT match
-        let result = state.resolve_url("/billing_extra").unwrap();
-        assert!(
-            result.starts_with("http://127.0.0.1:11435"),
-            "/billing_extra should NOT route to cloud, got: {}",
-            result
-        );
+        for path in ["/api/v10/x", "/api/v1x", "/api"] {
+            assert_eq!(state.resolve_url(path).unwrap(), format!("http://127.0.0.1:11435{}", path));
+        }
+    }
+
+    #[test]
+    fn local_modes_error_when_the_sidecar_is_not_running() {
+        for mode in LOCAL_MODES {
+            let state = make_state(mode, None);
+            assert_eq!(state.resolve_url("/chats"), Err("sidecar not running".to_string()));
+        }
+    }
+
+    #[test]
+    fn premium_refuses_every_path_until_the_payload_contract_lands() {
+        let state = make_state(BackendMode::Premium, Some(11435));
+        for path in ["/chats", "/health", "/api/v1/search/keyword"] {
+            assert_eq!(state.resolve_url(path), Err(PREMIUM_REQUIRED.to_string()), "{}", path);
+        }
+    }
+
+    #[test]
+    fn resolve_url_never_returns_a_non_loopback_url() {
+        let paths = ["/chats", "/billing", "/api/v1/me", "/api/v1", "https://api.elefant.com/x", "/me"];
+        for mode in [BackendMode::Ollama, BackendMode::Byok, BackendMode::Premium] {
+            let state = make_state(mode, Some(11435));
+            for path in paths {
+                if let Ok(url) = state.resolve_url(path) {
+                    assert!(url.starts_with("http://127.0.0.1:11435"), "{}", url);
+                }
+            }
+        }
+    }
+
+    // --- request_credentials (#72) ---
+
+    #[test]
+    fn sidecar_requests_carry_the_secret_and_never_the_bearer() {
+        let mut read = false;
+        let (token, secret) = request_credentials("http://127.0.0.1:11435/chats", "s3cret", || {
+            read = true;
+            Some("bearer".to_string())
+        });
+        assert_eq!((token, secret), (None, Some("s3cret")));
+        assert!(!read, "the keychain must not be read for a sidecar request");
+    }
+
+    #[test]
+    fn cloud_requests_carry_the_bearer_and_never_the_secret() {
+        let (token, secret) =
+            request_credentials("https://api.elefant.com/api/v1/me", "s3cret", || Some("bearer".to_string()));
+        assert_eq!((token, secret), (Some("bearer".to_string()), None));
+    }
+
+    // --- sidecar_mode_env: the BYOK key reaches the sidecar only in byok mode ---
+
+    fn env_value(env: &[(&'static str, String)], key: &str) -> Option<String> {
+        env.iter().find(|(k, _)| *k == key).map(|(_, v)| v.clone())
+    }
+
+    #[test]
+    fn byok_env_carries_the_mode_and_the_key() {
+        let env = sidecar_mode_env(&BackendMode::Byok, Some("sk-test".to_string())).unwrap();
+        assert_eq!(env_value(&env, "RUMBLE_BACKEND_MODE").as_deref(), Some("byok"));
+        assert_eq!(env_value(&env, "BYOK_API_KEY").as_deref(), Some("sk-test"));
+    }
+
+    #[test]
+    fn byok_without_a_key_is_refused() {
+        for key in [None, Some(String::new())] {
+            assert_eq!(sidecar_mode_env(&BackendMode::Byok, key), Err(BYOK_KEY_MISSING.to_string()));
+        }
+    }
+
+    #[test]
+    fn ollama_and_premium_envs_run_the_sidecar_in_ollama_mode_with_the_key_blanked() {
+        for mode in [BackendMode::Ollama, BackendMode::Premium] {
+            let env = sidecar_mode_env(&mode, Some("sk-leak".to_string())).unwrap();
+            assert_eq!(env_value(&env, "RUMBLE_BACKEND_MODE").as_deref(), Some("ollama"), "{:?}", mode);
+            assert_eq!(env_value(&env, "BYOK_API_KEY").as_deref(), Some(""), "{:?}", mode);
+            assert!(env.iter().all(|(_, v)| !v.contains("sk-leak")), "{:?}", mode);
+        }
+    }
+
+    // --- apply_mode: respawn on change ---
+
+    #[test]
+    fn same_mode_does_not_respawn() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let mut respawns = 0;
+        apply_mode(&state, BackendMode::Ollama, || {
+            respawns += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(respawns, 0);
+    }
+
+    #[test]
+    fn a_mode_change_respawns_once_with_the_new_mode_already_set() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let mut seen = Vec::new();
+        apply_mode(&state, BackendMode::Byok, || {
+            seen.push(state.mode.lock().unwrap().clone());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(seen, vec![BackendMode::Byok]);
+        assert_eq!(*state.mode.lock().unwrap(), BackendMode::Byok);
+    }
+
+    #[test]
+    fn a_failed_respawn_restores_the_previous_mode() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        let result = apply_mode(&state, BackendMode::Byok, || Err(BYOK_KEY_MISSING.to_string()));
+        assert_eq!(result, Err(BYOK_KEY_MISSING.to_string()));
+        assert_eq!(*state.mode.lock().unwrap(), BackendMode::Ollama);
+    }
+
+    // --- set_port_if_current ---
+
+    #[test]
+    fn a_replaced_sidecar_cannot_publish_or_clear_the_port() {
+        let state = make_state(BackendMode::Ollama, Some(11435));
+        assert!(!state.set_port_if_current(4242, Some(9999)));
+        assert!(!state.set_port_if_current(4242, None));
+        assert_eq!(*state.sidecar_port.lock().unwrap(), Some(11435));
+    }
+
+    // --- fetch_health (#69) ---
+
+    #[tokio::test]
+    async fn health_check_sends_the_shared_secret() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .and(header(SECRET_HEADER, "test-secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok", "mode": "ollama"})))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let url = format!("{}/health", server.uri());
+        let health = fetch_health(&Client::new(), &url, "test-secret").await;
+        assert_eq!(health, Some(serde_json::json!({"status": "ok", "mode": "ollama"})));
     }
 
     // --- BackendMode serde ---

@@ -384,13 +384,13 @@
 | 242 | BackendMode deserializes from lowercase | [ ] |
 | 243 | FileInfo serializes to JSON | [ ] |
 
-### 3.6 Cloud-Only Prefix Coverage (Unit — partial)
+### 3.6 Per-Mode Routing (Unit — `CLOUD_ONLY_PREFIXES` retired by the two-branch rule, #41)
 
 | # | Test | Status |
 |---|------|--------|
-| 244 | Every prefix in CLOUD_ONLY_PREFIXES routes to cloud | [ ] |
-| 245 | Every prefix with `/suffix` routes to cloud | [ ] |
-| 246 | Partial prefix match doesn't route to cloud (e.g. `/billing_extra` should NOT match `/billing`) | [ ] |
+| 244 | Ollama/BYOK route every non-`/api/v1` path to the sidecar | [x] |
+| 245 | Ollama/BYOK refuse `/api/v1` and `/api/v1/…` with "requires Elefant Premium" | [x] |
+| 246 | Lookalikes (`/api/v10/x`, `/api/v1x`) route to the sidecar; Premium refuses every path | [x] |
 
 ---
 
