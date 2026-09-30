@@ -133,8 +133,8 @@ async function runTranslation() {
 }
 
 const dashboardNotes = [
-  "History keeps translations per matter. Attach jobs to briefcases from the job menu.",
-  "Hosted models require API keys saved in Settings. Local models run entirely on-device.",
+  "History keeps translations per matter.",
+  "Hosted models require API keys saved in Settings.",
   "Download bilingual outputs for external counsel review or certified translation requests.",
 ];
 </script>

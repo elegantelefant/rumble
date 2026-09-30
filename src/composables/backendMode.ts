@@ -8,23 +8,32 @@ export type ConfidentialityState = "local" | "byok" | "hybrid" | "unknown";
 
 // Each backend mode gets its own state. Collapsing byok into "local" would
 // claim confidentiality for requests that go to a hosted provider.
-export const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; message: string }> = {
+//
+// `notice` is the short, standalone sentence views use for inline privacy
+// captions (file upload areas, form footers, the sidebar tagline) — kept
+// separate from `message` (the pill tooltip / Settings dropdown wording,
+// which names what's stored where) so each reads naturally in its own spot.
+export const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; message: string; notice: string }> = {
   local: {
     label: "Local & Confidential",
     message: "Chats and drafting stay on this device.",
+    notice: "Your data stays on this device.",
   },
   byok: {
     label: "Direct to Provider",
     message:
       "Requests go to your chosen provider using your API key. Chats are stored locally.",
+    notice: "Your data goes to your chosen provider using your API key.",
   },
   hybrid: {
     label: "Hybrid",
     message: "Chats retained locally; remote agents may assist on request.",
+    notice: "Chats stay local; remote agents may assist on request.",
   },
   unknown: {
     label: "Mode unavailable",
     message: "Could not determine where requests are sent.",
+    notice: "Could not determine where your data goes.",
   },
 };
 
