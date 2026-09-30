@@ -10,7 +10,7 @@ import { generateId, formatTimestamp } from "../utils/ids";
 
 const toasts = useToast();
 
-// Only local (Ollama) mode keeps a document on this device; BYOK and Premium
+// Only local (Ollama) mode keeps a document local; BYOK and Premium
 // send its text to a provider for review. Read the same mode as TopBar's pill
 // and make no claim until it is known — including when reading it fails.
 // Shared rather than read on mount: this view is kept alive, so a mount-time
