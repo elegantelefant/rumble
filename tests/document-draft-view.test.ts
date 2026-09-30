@@ -235,7 +235,11 @@ describe("DocumentDraftView confidentiality notice", () => {
     vi.mocked(invoke).mockImplementation(() => new Promise(() => {}))
     const wrapper = mountDraft()
     await flushPromises()
+    // Checking only the local-mode text would still pass if the gate were
+    // removed: the unknown-state text would render in its place. Asserting
+    // both are absent actually proves the element itself is gone.
     expect(wrapper.text()).not.toContain("stays on this device")
+    expect(wrapper.text()).not.toContain("Could not determine where your data goes.")
   })
 
   it("shows the local-mode notice once ollama resolves", async () => {
