@@ -177,7 +177,7 @@ const appearanceSettings = reactive({
 });
 
 const syncSettings = reactive({
-  enabled: true,
+  enabled: false,
   teamCode: "",
   server: "",
   useCustom: false,
@@ -649,13 +649,10 @@ const selectedProviderDetails = computed(() =>
       <section v-else class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
-          <p class="text-xs text-[var(--primary-500)]">
-            Use the Elefant sync service or supply your own server built from our open-source reference implementation.
-          </p>
         </div>
         <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
           <input type="checkbox" v-model="syncSettings.enabled" />
-          Enable secure sync
+          Enable sync
         </label>
         <div class="grid gap-4 md:grid-cols-2">
           <label class="text-sm font-medium text-[var(--primary-700)]">
