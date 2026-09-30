@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
-import { backendMode, loadBackendMode } from "../composables/backendMode";
+import { backendMode, CONFIDENTIALITY, confidentialityOf, loadBackendMode } from "../composables/backendMode";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
 
@@ -15,7 +15,8 @@ const toasts = useToast();
 // and make no claim until it is known — including when reading it fails.
 // Shared rather than read on mount: this view is kept alive, so a mount-time
 // read would go stale after a switch in Settings.
-const isLocalMode = computed(() => backendMode.value === "ollama");
+const confidentiality = computed(() => CONFIDENTIALITY[confidentialityOf(backendMode.value)]);
+const isLocalMode = computed(() => confidentialityOf(backendMode.value) === "local");
 onMounted(loadBackendMode);
 
 type ReviewStatus = "idle" | "running" | "ready";
@@ -309,7 +310,7 @@ const workflowSteps = [
         <p class="body-muted">Review and chat with your documents.</p>
       </div>
       <div class="flex items-start gap-3 md:items-center">
-        <span class="badge-trust">Local-only • Encrypted</span>
+        <span class="badge-trust">{{ confidentiality.label }}</span>
         <button
           class="btn-secondary flex items-center gap-2 text-xs"
           type="button"
@@ -352,7 +353,7 @@ const workflowSteps = [
           >
             <div class="text-base font-medium">Drop files here or browse</div>
             <p class="text-xs text-[var(--primary-600)]">
-              PDF, DOCX, TXT supported.<template v-if="isLocalMode"> Files never leave this device.</template>
+              PDF, DOCX, TXT supported.<template v-if="isLocalMode"> {{ confidentiality.notice }}</template>
             </p>
             <div class="flex flex-wrap items-center justify-center gap-3">
               <button class="btn-primary" type="button" @click="triggerFilePicker">Browse Files</button>

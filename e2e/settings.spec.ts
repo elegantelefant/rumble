@@ -9,7 +9,7 @@ test.describe("Settings", () => {
 
   test("renders page heading", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByText("Secrets stay encrypted on-device")).toBeVisible();
+    await expect(page.getByText("API keys are stored in your system keychain.")).toBeVisible();
   });
 
   test("shows all setting tabs", async ({ page }) => {

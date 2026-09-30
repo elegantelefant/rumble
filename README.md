@@ -1,6 +1,6 @@
 # Elefant Rumble
 
-A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine.
+A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine — see [NETWORK.md](NETWORK.md) for exactly what that means and how to verify it.
 
 Runs on **macOS** (Apple Silicon + Intel), **Windows**, and **Linux**.
 

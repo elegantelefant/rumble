@@ -405,7 +405,7 @@ const selectedProviderDetails = computed(() =>
     <header>
       <h1 class="h1">Settings</h1>
       <p class="body-muted">
-        Manage provider credentials, local storage, appearance, and sync endpoints. Secrets stay encrypted on-device.
+        Manage provider credentials, local storage, appearance, and sync endpoints. API keys are stored in your system keychain.
       </p>
     </header>
 
@@ -453,7 +453,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Local storage uses SQLCipher for encryption. Hosted providers transmit prompts and outputs to their APIs.
+            Hosted providers transmit prompts and outputs to their APIs.
           </p>
         </div>
 
@@ -668,7 +668,7 @@ const selectedProviderDetails = computed(() =>
             Default Elefant server
             <input v-model="syncSettings.server" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">
-              Hosted by Elefant. Data is encrypted in transit and at rest.
+              Default server for workspace sync.
             </span>
           </label>
         </div>
@@ -679,9 +679,6 @@ const selectedProviderDetails = computed(() =>
         <label class="text-sm font-medium text-[var(--primary-700)]" :class="{ 'opacity-50': !syncSettings.useCustom }">
           Custom server URL
           <input v-model="syncSettings.customServer" :disabled="!syncSettings.useCustom" class="input mt-1" placeholder="https://sync.myfirm.com" />
-          <span class="text-xs text-[var(--primary-500)]">
-            Build your own server using our reference repo: github.com/ielegante/rumble-sync
-          </span>
         </label>
         <div class="flex justify-end">
           <button class="btn-secondary" type="button" @click="testSync">Test connection</button>

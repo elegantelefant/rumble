@@ -78,7 +78,7 @@ export const backendRegistry = ref<ApiSurfaceDocumentation[]>([
       secrets: [
         {
           provider: "string",
-          encryptedKey: "string | null",
+          apiKey: "string | null",
           scope: "global | drafting | research",
           notes: "string",
         },
@@ -89,8 +89,7 @@ export const backendRegistry = ref<ApiSurfaceDocumentation[]>([
         model: "string",
       },
     },
-    notes:
-      "Backend stores secrets using SQLCipher or OS keychain. Provide validation errors if provider requires key but missing.",
+    notes: "Provide validation errors if provider requires key but missing.",
   },
   {
     command: "sync/test",

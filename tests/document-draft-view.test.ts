@@ -6,6 +6,7 @@ import DocumentDraftView from "../src/views/DocumentDraftView.vue"
 import { TOAST_KEY } from "../src/composables/toast"
 import { invoke } from "@tauri-apps/api/core"
 import { createDraftJob, waitForJob } from "../src/api/sidecar"
+import { backendMode } from "../src/composables/backendMode"
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("../src/api/sidecar", () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(invoke).mockResolvedValue(true)
+  backendMode.value = null
 })
 
 async function fillAndGenerate(wrapper: ReturnType<typeof mountDraft>) {
@@ -120,6 +122,10 @@ describe("DocumentDraftView", () => {
 describe("DocumentDraftView export", () => {
   it("shows info toast when exporting with no draft generated", async () => {
     const wrapper = mountDraft()
+    await flushPromises()
+    // Mount reads the backend mode for the confidentiality notice; isolate
+    // the export click's own effect on invoke from that unrelated read.
+    vi.mocked(invoke).mockClear()
     const buttons = wrapper.findAll("button")
     const exportWordButton = buttons.find((b) => b.text() === "Export to Word")!
     await exportWordButton.trigger("click")
@@ -139,6 +145,9 @@ describe("DocumentDraftView export", () => {
 
     const wrapper = mountDraft()
     await fillAndGenerate(wrapper)
+    // Mount reads the backend mode for the confidentiality notice; isolate
+    // the export click's own effect on invoke from that unrelated read.
+    vi.mocked(invoke).mockClear()
 
     const buttons = wrapper.findAll("button")
     const exportPdfButton = buttons.find((b) => b.text() === "Export to PDF")!
@@ -196,8 +205,14 @@ describe("DocumentDraftView export", () => {
       status: "completed",
       result: { draft: "Sample draft text.", warnings: [] },
     } as never)
-    // Tauri rejects with the raw string payload, not an Error object.
-    vi.mocked(invoke).mockRejectedValue("failed to create file: permission denied")
+    // Tauri rejects with the raw string payload, not an Error object. Scoped
+    // to the export command so the mount-time backend-mode read still
+    // resolves cleanly rather than logging an unrelated failure.
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      cmd === "get_backend_mode"
+        ? Promise.resolve("ollama")
+        : Promise.reject("failed to create file: permission denied"),
+    )
 
     const wrapper = mountDraft()
     await fillAndGenerate(wrapper)
@@ -212,5 +227,28 @@ describe("DocumentDraftView export", () => {
       "failed to create file: permission denied",
       "error",
     )
+  })
+})
+
+describe("DocumentDraftView confidentiality notice", () => {
+  it("stays hidden while the mode is still loading", async () => {
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}))
+    const wrapper = mountDraft()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain("stays on this device")
+  })
+
+  it("shows the local-mode notice once ollama resolves", async () => {
+    vi.mocked(invoke).mockResolvedValue("ollama")
+    const wrapper = mountDraft()
+    await flushPromises()
+    expect(wrapper.text()).toContain("Your data stays on this device.")
+  })
+
+  it("shows the byok-mode notice once byok resolves", async () => {
+    vi.mocked(invoke).mockResolvedValue("byok")
+    const wrapper = mountDraft()
+    await flushPromises()
+    expect(wrapper.text()).toContain("Your data goes to your chosen provider using your API key.")
   })
 })

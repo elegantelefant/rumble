@@ -108,7 +108,9 @@ test.describe("2. Sidebar Navigation", () => {
 test.describe("3. Top Bar", () => {
   test("3a. top bar shows confidentiality badge and user info", async ({ page }) => {
     await page.goto("/review");
-    await expect(page.getByText("Mode unavailable")).toBeVisible();
+    // Scoped by title (unique to the TopBar pill): Document Review's own
+    // trust badge can show the same label text with no title attribute.
+    await expect(page.getByTitle("Could not determine where requests are sent.")).toBeVisible();
     await expect(page.getByLabel("Current user").getByText("Local User")).toBeVisible();
     await page.screenshot({ path: S("03a-topbar"), fullPage: true });
   });
@@ -167,7 +169,8 @@ test.describe("4. Document Review", () => {
 
   test("4a. page heading and trust badge", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Document Review" })).toBeVisible();
-    await expect(page.getByText("Local-only")).toBeVisible();
+    // Text varies with the backend mode (honest per #56); the badge itself is what's asserted.
+    await expect(page.locator(".badge-trust")).toBeVisible();
     await page.screenshot({ path: S("04a-review-heading"), fullPage: true });
   });
 
@@ -307,8 +310,13 @@ test.describe("5. Document Draft", () => {
     await page.screenshot({ path: S("05i-draft-export-word"), fullPage: true });
   });
 
-  test("5j. privacy notice visible", async ({ page }) => {
-    await expect(page.getByText("Sensitive data stays local")).toBeVisible();
+  test("5j. privacy notice stays hidden until the mode is known", async ({ page }) => {
+    // Only renders once the backend mode is known (honest per #56). e2e has
+    // no real Tauri host, so the read rejects — loadBackendMode's catch resets
+    // the mode to null (same as before any read), so the notice stays hidden
+    // rather than showing unknown-state text. vitest's document-draft-view.test.ts
+    // covers the actual per-mode text once a read succeeds.
+    await expect(page.getByText("Your data stays on this device.")).not.toBeVisible();
   });
 
   test("5k. browse templates button shows toast", async ({ page }) => {

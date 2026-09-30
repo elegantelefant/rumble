@@ -1,4 +1,4 @@
-// ABOUTME: Tests for DocumentReviewView.vue's "Files never leave this device" copy.
+// ABOUTME: Tests for DocumentReviewView.vue's device-confidentiality notice, read from the mode map.
 // ABOUTME: The claim shows only in local (Ollama) mode, read from get_backend_mode.
 
 import { mount, flushPromises } from "@vue/test-utils"
@@ -20,7 +20,7 @@ vi.mock("../src/api/sidecar", () => ({
   waitForJob: vi.fn(),
 }))
 
-const DEVICE_CLAIM = "Files never leave this device."
+const DEVICE_CLAIM = "Your data stays on this device."
 
 async function mountInMode(mode: string) {
   vi.mocked(invoke).mockResolvedValue(mode)
@@ -37,7 +37,7 @@ beforeEach(() => {
 })
 
 describe("DocumentReviewView device claim", () => {
-  it("says files never leave this device in local mode", async () => {
+  it("shows the confidentiality notice in local mode", async () => {
     const wrapper = await mountInMode("ollama")
     expect(wrapper.text()).toContain(DEVICE_CLAIM)
   })
