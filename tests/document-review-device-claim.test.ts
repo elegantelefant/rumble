@@ -21,6 +21,10 @@ vi.mock("../src/api/sidecar", () => ({
 }))
 
 const DEVICE_CLAIM = "Your data stays on this device."
+// Includes the boundary with the preceding sentence: Vue can drop a
+// whitespace-only text node at a v-if boundary, which toContain(DEVICE_CLAIM)
+// alone wouldn't catch since the notice text itself is unaffected either way.
+const FULL_UPLOAD_CAPTION = "PDF, DOCX, TXT supported. Your data stays on this device."
 
 async function mountInMode(mode: string) {
   vi.mocked(invoke).mockResolvedValue(mode)
@@ -39,7 +43,7 @@ beforeEach(() => {
 describe("DocumentReviewView device claim", () => {
   it("shows the confidentiality notice in local mode", async () => {
     const wrapper = await mountInMode("ollama")
-    expect(wrapper.text()).toContain(DEVICE_CLAIM)
+    expect(wrapper.text()).toContain(FULL_UPLOAD_CAPTION)
   })
 
   it("makes no device claim in BYOK mode", async () => {
