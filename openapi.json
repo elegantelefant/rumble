@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.314.0"
+    "version": "0.315.0"
   },
   "paths": {
     "/health": {
@@ -15894,7 +15894,7 @@
           "external-counsel"
         ],
         "summary": "Invite External Counsel",
-        "description": "Invite an external counsel to the org rolodex.\n\nAuthorized to counsel, admin, and owner roles only.\n\nBehaviour:\n- If user exists AND already has an external org_members row: 409.\n- If user exists but has no membership here: add org_members + write meta, then email\n  them a notice that they've been added (best-effort).\n- Otherwise: create an org_invitations row with role='external' and email an invite that\n  links to the accept screen (best-effort). Meta is written on accept.",
+        "description": "Invite an external counsel to the org rolodex.\n\nAuthorized to counsel, admin, and owner roles only.\n\nBehaviour:\n- If user exists AND already has any org_members row: 409.\n- If user exists but has no membership here: add org_members + write meta, then email\n  them a notice that they've been added (best-effort).\n- Otherwise: create an org_invitations row with role='external' and email an invite that\n  links to the accept screen (best-effort). Meta is written on accept.",
         "operationId": "invite_external_counsel",
         "requestBody": {
           "content": {
