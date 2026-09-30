@@ -37,6 +37,19 @@ export const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; mess
   },
 };
 
+// Where local data lives (settings, chats, job history) doesn't depend on
+// the backend mode — every mode still stores its records here — so these
+// belong beside the map rather than duplicated across CONFIDENTIALITY's
+// per-mode entries. Whole sentences, like CONFIDENTIALITY's: a view renders
+// one of these as-is rather than composing a claim around a bare noun.
+export const STORAGE_NOTICES = {
+  savedToast: "Settings saved on this device.",
+  providersHint:
+    "Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.",
+  workspaceData:
+    "Chats, messages and document review, draft and research jobs, including the document text, are kept in a database in this device's local app data folder, not in the workspace path below. Jobs are deleted the next time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.",
+};
+
 export const MODE_TO_STATE: Record<BackendMode, ConfidentialityState> = {
   ollama: "local",
   byok: "byok",

@@ -18,6 +18,8 @@ const CLAIM_PHRASES = [
   "sqlcipher",
   "zero-knowledge",
   "end-to-end",
+  "this device",
+  "this machine",
 ];
 
 function listSourceFiles(dir: string): string[] {

@@ -10,6 +10,7 @@ import {
   loadBackendMode,
   MODE_TO_STATE,
   setBackendMode,
+  STORAGE_NOTICES,
   type BackendMode,
 } from "../composables/backendMode";
 
@@ -347,8 +348,8 @@ async function saveSettings() {
     });
     toast.addToast(
       aside
-        ? `Settings saved on this device. The unreadable settings file was kept as ${aside}.`
-        : "Settings saved on this device.",
+        ? `${STORAGE_NOTICES.savedToast} The unreadable settings file was kept as ${aside}.`
+        : STORAGE_NOTICES.savedToast,
       "success",
     );
   } catch (error) {
@@ -521,7 +522,7 @@ const selectedProviderDetails = computed(() =>
             </label>
           </div>
           <p class="text-xs text-[var(--primary-500)]">
-            Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.
+            {{ STORAGE_NOTICES.providersHint }}
           </p>
           <div class="flex justify-end">
             <button class="btn-primary" type="button" @click="addSecret">Save secret</button>
@@ -546,9 +547,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h3 class="text-base font-semibold text-[var(--primary-800)]">Workspace data</h3>
           <p class="text-xs text-[var(--primary-500)]">
-            Chats, messages and document review, draft and research jobs, including the document text, are kept in a
-            database in this device's local app data folder, not in the workspace path below. Jobs are deleted the next
-            time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.
+            {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">
