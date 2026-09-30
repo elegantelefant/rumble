@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.313.0"
+    "version": "0.314.0"
   },
   "paths": {
     "/health": {
@@ -46573,6 +46573,18 @@
               }
             ],
             "title": "Legisstatus"
+          },
+          "editionCurrent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editioncurrent",
+            "description": "Whether this is the current published edition. False takes precedence over legisStatus when displaying legislation status (gh#4632)."
           },
           "mpNames": {
             "anyOf": [
