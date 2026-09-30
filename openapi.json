@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.315.0"
+    "version": "0.316.0"
   },
   "paths": {
     "/health": {
@@ -18162,7 +18162,7 @@
           "elf"
         ],
         "summary": "Get Elf Capabilities",
-        "description": "Deployment-static, user-facing Elf capability catalogue.",
+        "description": "User-facing Elf capability catalogue with the caller's access verdicts.",
         "operationId": "get_elf_capabilities",
         "responses": {
           "200": {
