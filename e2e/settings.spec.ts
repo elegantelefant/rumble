@@ -45,7 +45,7 @@ test.describe("Settings", () => {
   test("switching to sync tab shows sync config", async ({ page }) => {
     await page.getByRole("button", { name: "Sync" }).click();
     await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable secure sync")).toBeVisible();
+    await expect(page.getByText("Enable sync")).toBeVisible();
     await expect(page.getByRole("button", { name: "Test connection" })).toBeVisible();
   });
 

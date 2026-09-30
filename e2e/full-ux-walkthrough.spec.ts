@@ -529,7 +529,7 @@ test.describe("8. Settings", () => {
   test("8l. sync tab", async ({ page }) => {
     await page.getByRole("button", { name: "Sync" }).click();
     await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable secure sync")).toBeVisible();
+    await expect(page.getByText("Enable sync")).toBeVisible();
     await page.screenshot({ path: S("08l-settings-sync"), fullPage: true });
   });
 
