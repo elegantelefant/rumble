@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.312.0"
+    "version": "0.313.0"
   },
   "paths": {
     "/health": {
@@ -30243,6 +30243,12 @@
             "title": "Currencystatus",
             "description": "Status of this turn's legislation-currency assessment: 'unchecked' means the check did not run, which an empty currency_verdicts list alone does not distinguish from a clean result. None on turns persisted before the status was recorded."
           },
+          "retrievalUnavailable": {
+            "type": "boolean",
+            "title": "Retrievalunavailable",
+            "description": "Whether corpus retrieval was unavailable during this answer, which may be incomplete.",
+            "default": false
+          },
           "tokenCount": {
             "anyOf": [
               {
@@ -49782,6 +49788,7 @@
             "message_saved": "#/components/schemas/StreamMessageSavedEvent",
             "phase": "#/components/schemas/StreamPhaseEvent",
             "question": "#/components/schemas/StreamQuestionEvent",
+            "retrieval_status": "#/components/schemas/StreamRetrievalStatusEvent",
             "risk_alert": "#/components/schemas/StreamRiskAlertEvent",
             "status": "#/components/schemas/StreamStatusEvent",
             "thinking": "#/components/schemas/StreamThinkingEvent",
@@ -49819,6 +49826,9 @@
           },
           {
             "$ref": "#/components/schemas/StreamCurrencyStatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamRetrievalStatusEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -50729,6 +50739,28 @@
           "value"
         ],
         "title": "StreamQuestionEvent",
+        "type": "object"
+      },
+      "StreamRetrievalStatusEvent": {
+        "additionalProperties": false,
+        "description": "A retrieval limitation the reader needs beside the answer (#4392).",
+        "properties": {
+          "type": {
+            "const": "retrieval_status",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "const": "unavailable",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamRetrievalStatusEvent",
         "type": "object"
       },
       "StreamRiskAlertEvent": {
