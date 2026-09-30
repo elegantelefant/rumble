@@ -353,7 +353,7 @@ const workflowSteps = [
           >
             <div class="text-base font-medium">Drop files here or browse</div>
             <p class="text-xs text-[var(--primary-600)]">
-              PDF, DOCX, TXT supported.<template v-if="isLocalMode"> {{ confidentiality.notice }}</template>
+              PDF, DOCX, TXT supported. <template v-if="isLocalMode">{{ confidentiality.notice }}</template>
             </p>
             <div class="flex flex-wrap items-center justify-center gap-3">
               <button class="btn-primary" type="button" @click="triggerFilePicker">Browse Files</button>
