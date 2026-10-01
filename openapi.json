@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.322.0"
+    "version": "0.323.0"
   },
   "paths": {
     "/health": {
@@ -3292,7 +3292,7 @@
           "files"
         ],
         "summary": "Delete File",
-        "description": "Delete a file (metadata and GCS object).\n\nDesign \u00a78.4 delete-guard: `file_usages.file_id` has a plain (RESTRICT)\nFK to `files.id`, so the DELETE itself fails at the DB layer once a file\nhas any recorded usage \u2014 surfaced here as 409 instead of a 500, and\ninstead of silently orphaning `document.source_file_id` /\n`legal_request_attachments.file_id` the way the pre-guard DELETE could.",
+        "description": "Delete a file (metadata and GCS object).\n\nUsage rows are provenance history, not live attachments, and cascade with\nthe file. Other live references still surface as a 409 rather than a 500.",
         "operationId": "delete_file",
         "parameters": [
           {
