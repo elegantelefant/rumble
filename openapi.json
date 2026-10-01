@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.319.0"
+    "version": "0.321.0"
   },
   "paths": {
     "/health": {
@@ -25212,6 +25212,36 @@
         "title": "AnalysisResultPayload",
         "description": "Result of an `analysis` legal request."
       },
+      "AnswerParagraphProvenance": {
+        "properties": {
+          "paragraph": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Paragraph"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AnswerProvenanceKind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paragraph",
+          "kind"
+        ],
+        "title": "AnswerParagraphProvenance",
+        "description": "One provenance value for one non-empty answer paragraph."
+      },
+      "AnswerProvenanceKind": {
+        "type": "string",
+        "enum": [
+          "corpus",
+          "official_source",
+          "model_reasoning",
+          "not_verified"
+        ],
+        "title": "AnswerProvenanceKind"
+      },
       "AskTrackedResult": {
         "properties": {
           "jobType": {
@@ -25226,6 +25256,13 @@
           "stepsRecorded": {
             "type": "integer",
             "title": "Stepsrecorded"
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance"
           },
           "error": {
             "anyOf": [
@@ -30276,6 +30313,14 @@
             ],
             "title": "Quoteunverifiedcount",
             "description": "Number of long quoted passages the quote channel could not verify for this answer."
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance",
+            "description": "Paragraph-level source class displayed beside answer prose, never embedded in it."
           },
           "tokenCount": {
             "anyOf": [
@@ -35541,6 +35586,18 @@
               }
             ],
             "title": "Contenttype"
+          },
+          "briefcaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefcaseid",
+            "description": "Optional owned briefcase which will receive this upload. Its save capacity is checked before a pending file row or upload URL is created."
           }
         },
         "additionalProperties": false,
@@ -39238,6 +39295,13 @@
           "stepsRecorded": {
             "type": "integer",
             "title": "Stepsrecorded"
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance"
           },
           "error": {
             "anyOf": [
@@ -49827,6 +49891,7 @@
         "discriminator": {
           "mapping": {
             "answer": "#/components/schemas/StreamAnswerEvent",
+            "answer_provenance": "#/components/schemas/StreamAnswerProvenanceEvent",
             "context": "#/components/schemas/StreamContextEvent",
             "currency_status": "#/components/schemas/StreamCurrencyStatusEvent",
             "currency_verdicts": "#/components/schemas/StreamCurrencyVerdictsEvent",
@@ -49887,6 +49952,9 @@
           },
           {
             "$ref": "#/components/schemas/StreamQuoteVerificationEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamAnswerProvenanceEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -49950,6 +50018,30 @@
           "value"
         ],
         "title": "StreamAnswerEvent",
+        "type": "object"
+      },
+      "StreamAnswerProvenanceEvent": {
+        "additionalProperties": false,
+        "description": "Paragraph provenance rendered beside, never inside, answer text.",
+        "properties": {
+          "type": {
+            "const": "answer_provenance",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamAnswerProvenanceEvent",
         "type": "object"
       },
       "StreamCitationSource": {
