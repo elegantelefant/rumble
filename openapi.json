@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.317.0"
+    "version": "0.319.0"
   },
   "paths": {
     "/health": {
@@ -29447,7 +29447,8 @@
                 "defined_terms_extraction",
                 "correspondence_extraction",
                 "last_round_comparison",
-                "ocr_batch"
+                "ocr_batch",
+                "document_compaction"
               ]
             },
             "type": "array",
@@ -30249,6 +30250,32 @@
             "title": "Retrievalunavailable",
             "description": "Whether corpus retrieval was unavailable during this answer, which may be incomplete.",
             "default": false
+          },
+          "quoteVerifiedCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoteverifiedcount",
+            "description": "Number of long quoted passages the quote channel verified for this answer."
+          },
+          "quoteUnverifiedCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoteunverifiedcount",
+            "description": "Number of long quoted passages the quote channel could not verify for this answer."
           },
           "tokenCount": {
             "anyOf": [
@@ -37982,6 +38009,13 @@
             "type": "array",
             "title": "Degradedparts"
           },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          },
           "content": {
             "anyOf": [
               {
@@ -38129,6 +38163,13 @@
             },
             "type": "array",
             "title": "Degradedparts"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
           }
         },
         "additionalProperties": false,
@@ -49801,6 +49842,7 @@
             "message_saved": "#/components/schemas/StreamMessageSavedEvent",
             "phase": "#/components/schemas/StreamPhaseEvent",
             "question": "#/components/schemas/StreamQuestionEvent",
+            "quote_verification": "#/components/schemas/StreamQuoteVerificationEvent",
             "retrieval_status": "#/components/schemas/StreamRetrievalStatusEvent",
             "risk_alert": "#/components/schemas/StreamRiskAlertEvent",
             "status": "#/components/schemas/StreamStatusEvent",
@@ -49842,6 +49884,9 @@
           },
           {
             "$ref": "#/components/schemas/StreamRetrievalStatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamQuoteVerificationEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -50752,6 +50797,46 @@
           "value"
         ],
         "title": "StreamQuestionEvent",
+        "type": "object"
+      },
+      "StreamQuoteVerificationEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "quote_verification",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StreamQuoteVerificationValue"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamQuoteVerificationEvent",
+        "type": "object"
+      },
+      "StreamQuoteVerificationValue": {
+        "additionalProperties": false,
+        "properties": {
+          "verified_count": {
+            "minimum": 0,
+            "title": "Verified Count",
+            "type": "integer"
+          },
+          "unverified_count": {
+            "minimum": 0,
+            "title": "Unverified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "verified_count",
+          "unverified_count"
+        ],
+        "title": "StreamQuoteVerificationValue",
         "type": "object"
       },
       "StreamRetrievalStatusEvent": {
