@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.326.0"
+    "version": "0.327.0"
   },
   "paths": {
     "/health": {
@@ -31508,6 +31508,11 @@
             "type": "integer",
             "title": "Verified"
           },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
+            "default": 0
+          },
           "uncertain": {
             "type": "integer",
             "title": "Uncertain"
@@ -31616,6 +31621,11 @@
             "type": "integer",
             "title": "Verified"
           },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
+            "default": 0
+          },
           "hallucinated": {
             "type": "integer",
             "title": "Hallucinated"
@@ -31666,6 +31676,11 @@
           "verified": {
             "type": "integer",
             "title": "Verified",
+            "default": 0
+          },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
             "default": 0
           },
           "hallucinated": {
@@ -31837,7 +31852,7 @@
           "verdict": {
             "type": "string",
             "title": "Verdict",
-            "description": "Terse real-or-fake verdict for the citation report: 'Verified (corpus)', 'Found online, unverified: <source>', 'Not found in corpus \u2014 unverified', or 'Not found \u2014 likely hallucinated' (reserved for a positive fabrication signal).",
+            "description": "Terse verdict for the citation report: 'Verified (corpus)', 'Mismatch: citation belongs to a different case', 'Found online, unverified: <source>', 'Not found in corpus \u2014 unverified', or 'Not found \u2014 likely hallucinated' (reserved for a positive fabrication signal).",
             "default": ""
           },
           "formatNote": {
@@ -31915,6 +31930,7 @@
         "type": "string",
         "enum": [
           "verified",
+          "mismatch",
           "hallucinated",
           "uncertain"
         ],
