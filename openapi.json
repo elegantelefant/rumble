@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.323.0"
+    "version": "0.326.0"
   },
   "paths": {
     "/health": {
@@ -6421,6 +6421,71 @@
           },
           "400": {
             "description": "Business-logic precondition failed (e.g. invalid state transition). Distinct from 422 which indicates body-validation failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/chats/{id}/answer-log": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Get Answer Log",
+        "description": "Return this tenant's completed assistant-turn audit entries.",
+        "operationId": "get_answer_log",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -25277,6 +25342,269 @@
         "title": "AnalysisResultPayload",
         "description": "Result of an `analysis` legal request."
       },
+      "AnswerLogCheck": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "currency",
+              "quotes",
+              "citations"
+            ],
+            "title": "Check"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "findings",
+              "not_run",
+              "not_recorded"
+            ],
+            "title": "Outcome"
+          },
+          "findings": {
+            "type": "integer",
+            "title": "Findings",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "check",
+          "outcome"
+        ],
+        "title": "AnswerLogCheck"
+      },
+      "AnswerLogResponse": {
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "title": "Chatid"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogTurn"
+            },
+            "type": "array",
+            "title": "Turns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chatId"
+        ],
+        "title": "AnswerLogResponse"
+      },
+      "AnswerLogSearch": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "error",
+              "queued"
+            ],
+            "title": "Status"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "indexFamilies": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Indexfamilies"
+          },
+          "hits": {
+            "type": "integer",
+            "title": "Hits"
+          },
+          "elapsedMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsedms"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "label",
+          "status",
+          "hits"
+        ],
+        "title": "AnswerLogSearch"
+      },
+      "AnswerLogSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "judgment",
+              "provision",
+              "document"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "citation": {
+            "type": "string",
+            "title": "Citation"
+          },
+          "provision": {
+            "type": "string",
+            "title": "Provision",
+            "default": ""
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "cited",
+                  "retrieved_not_cited"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "citation"
+        ],
+        "title": "AnswerLogSource"
+      },
+      "AnswerLogTurn": {
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "title": "Messageid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "searches": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSearch"
+            },
+            "type": "array",
+            "title": "Searches"
+          },
+          "sourcesReliedOn": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcesreliedon"
+          },
+          "sourcesSetAside": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcessetaside"
+          },
+          "sourcesUsed": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcesused"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "creditsCharged": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditscharged"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "messageId",
+          "createdAt"
+        ],
+        "title": "AnswerLogTurn"
+      },
       "AnswerParagraphProvenance": {
         "properties": {
           "paragraph": {
@@ -28363,6 +28691,17 @@
           "createdAt": {
             "type": "string",
             "title": "Createdat"
+          },
+          "shareeEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shareeemail"
           }
         },
         "additionalProperties": false,
@@ -30790,6 +31129,30 @@
             ],
             "title": "Documentid",
             "description": "Document row created by an enqueueing tool, when present."
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query",
+            "description": "Display-safe query summary recorded for this call."
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Display-safe model name used for this call."
           }
         },
         "additionalProperties": false,
@@ -48863,6 +49226,18 @@
             "type": "boolean",
             "title": "Indiasearchall",
             "description": "India 'Search all Indian judgments' toggle. False (default) queries the vectorised full-text judgments index; True switches the cases tier to the complete metadata catalog. Honoured only when region=IN and SEARCH_INDIA_ENABLED; legislation/regulatory selections are unaffected.",
+            "default": false
+          },
+          "includeEarlierEditions": {
+            "type": "boolean",
+            "title": "Includeearliereditions",
+            "description": "Include earlier editions of legislation. Default search returns only the newest edition.",
+            "default": false
+          },
+          "includeRevokedRepealed": {
+            "type": "boolean",
+            "title": "Includerevokedrepealed",
+            "description": "Include revoked, repealed, spent, and partially repealed legislation. Default search hides these lifecycle states.",
             "default": false
           },
           "preferredLanguage": {
