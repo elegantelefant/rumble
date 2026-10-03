@@ -651,17 +651,17 @@ const selectedProviderDetails = computed(() =>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
           <p class="text-xs text-[var(--primary-500)]">{{ UNAVAILABLE }}</p>
         </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
+        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
           <input type="checkbox" v-model="syncSettings.enabled" disabled />
           Enable sync
         </label>
         <div class="grid gap-4 md:grid-cols-2">
-          <label class="text-sm font-medium text-[var(--primary-700)]">
+          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
             Team code
             <input v-model="syncSettings.teamCode" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">Share this with colleagues to join your workspace.</span>
           </label>
-          <label class="text-sm font-medium text-[var(--primary-700)]">
+          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
             Default Elefant server
             <input v-model="syncSettings.server" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">
@@ -669,16 +669,16 @@ const selectedProviderDetails = computed(() =>
             </span>
           </label>
         </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
+        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
           <input type="checkbox" v-model="syncSettings.useCustom" disabled />
           Use custom sync server
         </label>
-        <label class="text-sm font-medium text-[var(--primary-700)]" :class="{ 'opacity-50': !syncSettings.useCustom }">
+        <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
           Custom server URL
           <input v-model="syncSettings.customServer" disabled class="input mt-1" placeholder="https://sync.myfirm.com" />
         </label>
         <div class="flex justify-end">
-          <button class="btn-secondary" type="button" @click="testSync" disabled>Test connection</button>
+          <button class="btn-secondary opacity-50" type="button" @click="testSync" disabled>Test connection</button>
         </div>
       </section>
 
