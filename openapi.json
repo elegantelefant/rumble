@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.332.0"
+    "version": "0.333.0"
   },
   "paths": {
     "/health": {
@@ -27198,6 +27198,17 @@
             "type": "array",
             "title": "Tags"
           },
+          "provNo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provno"
+          },
           "timestamp": {
             "anyOf": [
               {
@@ -27261,17 +27272,6 @@
               }
             ],
             "title": "Decisiondate"
-          },
-          "provNo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provno"
           },
           "instTitle": {
             "anyOf": [
@@ -27403,6 +27403,17 @@
             "type": "array",
             "title": "Tags"
           },
+          "provNo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provno"
+          },
           "timestamp": {
             "anyOf": [
               {
@@ -27466,17 +27477,6 @@
               }
             ],
             "title": "Decisiondate"
-          },
-          "provNo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provno"
           },
           "instTitle": {
             "anyOf": [
@@ -47163,6 +47163,11 @@
             "title": "Title",
             "default": ""
           },
+          "provNo": {
+            "type": "string",
+            "title": "Provno",
+            "default": ""
+          },
           "date": {
             "type": "string",
             "title": "Date",
@@ -50471,6 +50476,7 @@
             "quote_verification": "#/components/schemas/StreamQuoteVerificationEvent",
             "retrieval_status": "#/components/schemas/StreamRetrievalStatusEvent",
             "risk_alert": "#/components/schemas/StreamRiskAlertEvent",
+            "served_model": "#/components/schemas/StreamServedModelEvent",
             "status": "#/components/schemas/StreamStatusEvent",
             "thinking": "#/components/schemas/StreamThinkingEvent",
             "tool_call_started": "#/components/schemas/StreamToolCallStartedEvent",
@@ -50516,6 +50522,9 @@
           },
           {
             "$ref": "#/components/schemas/StreamAnswerProvenanceEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamServedModelEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -51580,6 +51589,27 @@
           "ack_required"
         ],
         "title": "StreamRiskAlertValue",
+        "type": "object"
+      },
+      "StreamServedModelEvent": {
+        "additionalProperties": false,
+        "description": "The final model receipt, emitted after the answer is persisted.",
+        "properties": {
+          "type": {
+            "const": "served_model",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamServedModelEvent",
         "type": "object"
       },
       "StreamStatusEvent": {
