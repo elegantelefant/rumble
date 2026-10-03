@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.328.0"
+    "version": "0.329.0"
   },
   "paths": {
     "/health": {
@@ -9098,6 +9098,16 @@
           },
           "401": {
             "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -36672,6 +36682,30 @@
         "title": "IndexName",
         "description": "Elasticsearch indices available to search."
       },
+      "IngestCompactionResult": {
+        "properties": {
+          "batchTotal": {
+            "type": "integer",
+            "title": "Batchtotal"
+          },
+          "batchCount": {
+            "type": "integer",
+            "title": "Batchcount"
+          },
+          "creditsCharged": {
+            "type": "integer",
+            "title": "Creditscharged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batchTotal",
+          "batchCount",
+          "creditsCharged"
+        ],
+        "title": "IngestCompactionResult",
+        "description": "Actual accounting for a long-document compaction run."
+      },
       "IngestUploadResult": {
         "properties": {
           "jobType": {
@@ -36719,6 +36753,16 @@
               }
             ],
             "title": "Charcount"
+          },
+          "compaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestCompactionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "warnings": {
             "items": {
