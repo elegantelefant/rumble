@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.330.0"
+    "version": "0.331.0"
   },
   "paths": {
     "/health": {
@@ -30700,6 +30700,12 @@
             "type": "boolean",
             "title": "Retrievalunavailable",
             "description": "Whether corpus retrieval was unavailable during this answer, which may be incomplete.",
+            "default": false
+          },
+          "interrupted": {
+            "type": "boolean",
+            "title": "Interrupted",
+            "description": "Whether this durable draft was interrupted when its turn failed.",
             "default": false
           },
           "quoteVerifiedCount": {
