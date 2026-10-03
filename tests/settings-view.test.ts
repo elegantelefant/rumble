@@ -401,48 +401,27 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Test connection")
   })
 
-  it("test connection rejects an empty server URL", async () => {
-    const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
-    await testBtn!.trigger("click")
-    expect(mockAddToast).toHaveBeenCalledWith("Invalid server URL.", "error")
-  })
-
-  it("test connection fires toast once a server is set", async () => {
+  // Sync isn't available in this version (#56's default): every control below
+  // is disabled, so Test connection can no longer be driven from the UI.
+  it("sync tab shows the not-available note and disables every control", async () => {
     const wrapper = mountSettings()
     const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
     await syncTab[0].trigger("click")
 
-    const serverInput = wrapper
-      .findAll("input")
-      .find((i) => i.attributes("placeholder") === "https://sync.myfirm.com")
-    // The default server field is disabled, so drive the custom one instead.
-    const customToggle = wrapper
-      .findAll('input[type="checkbox"]')
-      .find((c) => c.element.parentElement?.textContent?.includes("custom sync server"))
-    await customToggle!.setValue(true)
-    await serverInput!.setValue("https://sync.example.com")
+    expect(wrapper.text()).toContain("Not available in this version.")
 
-    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
-    await testBtn!.trigger("click")
-    expect(mockAddToast).toHaveBeenCalledWith(
-      expect.stringContaining("Pinging"),
-      "info",
-    )
-  })
-
-  it("sync tab custom server toggle enables input", async () => {
-    const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-    // Find the custom server checkbox
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    const customCheckbox = checkboxes.find(
-      (cb) => cb.element.closest("label")?.textContent?.includes("custom sync"),
-    )
-    expect(customCheckbox).toBeDefined()
+    const enableSync = checkboxes.find((cb) => cb.element.closest("label")?.textContent?.includes("Enable sync"))
+    const useCustom = checkboxes.find((cb) => cb.element.closest("label")?.textContent?.includes("custom sync server"))
+    const teamCode = wrapper.findAll("input").find((i) => i.element.closest("label")?.textContent?.includes("Team code"))
+    const defaultServer = wrapper.findAll("input").find((i) => i.attributes("placeholder") === undefined && i.element.closest("label")?.textContent?.includes("Default Elefant server"))
+    const customServer = wrapper.findAll("input").find((i) => i.attributes("placeholder") === "https://sync.myfirm.com")
+    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
+
+    for (const control of [enableSync, useCustom, teamCode, defaultServer, customServer, testBtn]) {
+      expect(control, control === defaultServer ? "default server" : "sync control").toBeDefined()
+      expect((control!.element as HTMLInputElement | HTMLButtonElement).disabled).toBe(true)
+    }
   })
 
   it("addSecret calls invoke store_api_key for hosted provider", async () => {
