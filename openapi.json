@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.331.0"
+    "version": "0.332.0"
   },
   "paths": {
     "/health": {
@@ -38194,13 +38194,21 @@
           "blurb": {
             "type": "string",
             "title": "Blurb"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Excluded"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "total",
-          "blurb"
+          "blurb",
+          "excluded"
         ],
         "title": "JurisdictionCoverage",
         "description": "Live document total for one jurisdiction, summed across its indices.\n\n``total`` is ``None`` when ANY constituent index count is unavailable: a\npartial sum is a number we cannot stand behind, and publishing it\nunderstates the corpus (#2349 shipped a full corpus as \"0+\"). ``0`` means\nevery constituent index answered, and answered zero."
