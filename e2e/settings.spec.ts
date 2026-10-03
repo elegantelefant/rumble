@@ -9,7 +9,7 @@ test.describe("Settings", () => {
 
   test("renders page heading", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByText("Secrets stay encrypted on-device")).toBeVisible();
+    await expect(page.getByText("API keys are stored in your system keychain.")).toBeVisible();
   });
 
   test("shows all setting tabs", async ({ page }) => {
@@ -45,7 +45,7 @@ test.describe("Settings", () => {
   test("switching to sync tab shows sync config", async ({ page }) => {
     await page.getByRole("button", { name: "Sync" }).click();
     await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable secure sync")).toBeVisible();
+    await expect(page.getByText("Enable sync")).toBeVisible();
     await expect(page.getByRole("button", { name: "Test connection" })).toBeVisible();
   });
 

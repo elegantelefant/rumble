@@ -6,6 +6,10 @@ import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { health, ready, listModels } from "../api/sidecar";
 import { setupVerified } from "../router";
+// Setup only ever configures Ollama — it runs before any other mode is
+// reachable — so it reads the local state directly rather than the current
+// (possibly still-unread) backend mode.
+import { CONFIDENTIALITY } from "../composables/backendMode";
 
 type SetupState = "checking" | "no-ollama" | "no-models" | "ready";
 
@@ -72,7 +76,7 @@ onMounted(checkStatus);
       <div class="text-center">
         <h1 class="text-3xl font-bold text-[var(--primary-900)]">Welcome to Rumble</h1>
         <p class="mt-2 text-[var(--primary-600)]">
-          Local AI for legal work. Your data never leaves your device.
+          Local AI for legal work. {{ CONFIDENTIALITY.local.notice }}
         </p>
       </div>
 

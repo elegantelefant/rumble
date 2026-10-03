@@ -43,7 +43,12 @@ test.describe("Document Draft", () => {
     await expect(page.getByRole("button", { name: "Export to PDF" })).toBeVisible();
   });
 
-  test("data privacy notice is visible", async ({ page }) => {
-    await expect(page.getByText("Sensitive data stays local")).toBeVisible();
+  test("data privacy notice stays hidden until the mode is known", async ({ page }) => {
+    // Only renders once the backend mode is known (honest per #56). e2e has
+    // no real Tauri host, so the read rejects — loadBackendMode's catch resets
+    // the mode to null (same as before any read), so the notice stays hidden
+    // rather than showing unknown-state text. vitest's document-draft-view.test.ts
+    // covers the actual per-mode text once a read succeeds.
+    await expect(page.getByText("Your data stays on this device.")).not.toBeVisible();
   });
 });

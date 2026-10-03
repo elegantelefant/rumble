@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { FileText, Edit3, Microscope, BookOpen, Globe, Settings, ArrowUp, ArrowDown } from "lucide-vue-next";
 import { currentUser } from "../../composables/user";
+import { backendMode, CONFIDENTIALITY, confidentialityOf, loadBackendMode } from "../../composables/backendMode";
+
+// Hidden until the mode is known rather than showing the unknown-state text
+// while it's still loading.
+const modeKnown = computed(() => backendMode.value !== null);
+const confidentialityNotice = computed(() => CONFIDENTIALITY[confidentialityOf(backendMode.value)].notice);
+onMounted(loadBackendMode);
 
 const props = defineProps<{
   open: boolean;
@@ -84,8 +91,8 @@ function handleItemClick(path: string, disabled?: boolean) {
             <div class="text-xs uppercase tracking-[0.45em] text-[var(--primary-500)]">Workspace</div>
           </div>
         </div>
-        <p class="text-xs font-medium uppercase text-[var(--primary-400)]">
-          Confidential AI Tools Running Entirely On Your Device.
+        <p v-if="modeKnown" class="text-xs font-medium uppercase text-[var(--primary-400)]">
+          {{ confidentialityNotice }}
         </p>
       </div>
 
