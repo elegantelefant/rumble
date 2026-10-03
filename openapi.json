@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.329.0"
+    "version": "0.330.0"
   },
   "paths": {
     "/health": {
@@ -26758,7 +26758,7 @@
           "timestamp"
         ],
         "title": "BriefcaseItemAddedEntry",
-        "description": "A legal source was saved into the briefcase.\n\n`briefcase_item` has no actor column (`added_at` only) \u2014 `user_id` is\nalways None for this variant, by design, not a missing read."
+        "description": "A legal source was saved into the briefcase.\n\n`user_id` identifies the human who saved it when one exists. Connector\nimports have no human actor, so their `user_id` is None."
       },
       "BriefcaseItemBatchRequest": {
         "properties": {
