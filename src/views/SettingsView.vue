@@ -649,15 +649,16 @@ const selectedProviderDetails = computed(() =>
       <section v-else class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
+          <p class="text-xs text-[var(--primary-500)]">{{ UNAVAILABLE }}</p>
         </div>
         <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.enabled" />
+          <input type="checkbox" v-model="syncSettings.enabled" disabled />
           Enable sync
         </label>
         <div class="grid gap-4 md:grid-cols-2">
           <label class="text-sm font-medium text-[var(--primary-700)]">
             Team code
-            <input v-model="syncSettings.teamCode" class="input mt-1" />
+            <input v-model="syncSettings.teamCode" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">Share this with colleagues to join your workspace.</span>
           </label>
           <label class="text-sm font-medium text-[var(--primary-700)]">
@@ -669,15 +670,15 @@ const selectedProviderDetails = computed(() =>
           </label>
         </div>
         <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.useCustom" />
+          <input type="checkbox" v-model="syncSettings.useCustom" disabled />
           Use custom sync server
         </label>
         <label class="text-sm font-medium text-[var(--primary-700)]" :class="{ 'opacity-50': !syncSettings.useCustom }">
           Custom server URL
-          <input v-model="syncSettings.customServer" :disabled="!syncSettings.useCustom" class="input mt-1" placeholder="https://sync.myfirm.com" />
+          <input v-model="syncSettings.customServer" disabled class="input mt-1" placeholder="https://sync.myfirm.com" />
         </label>
         <div class="flex justify-end">
-          <button class="btn-secondary" type="button" @click="testSync">Test connection</button>
+          <button class="btn-secondary" type="button" @click="testSync" disabled>Test connection</button>
         </div>
       </section>
 
