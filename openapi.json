@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.333.0"
+    "version": "0.335.0"
   },
   "paths": {
     "/health": {
@@ -45873,6 +45873,11 @@
       },
       "ReviewIssueResult": {
         "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
           "category": {
             "type": "string",
             "title": "Category",
@@ -47233,6 +47238,18 @@
               }
             ],
             "title": "Legisstatus"
+          },
+          "provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision",
+            "description": "Human-readable provision or section identifier from the source corpus."
           },
           "editionCurrent": {
             "anyOf": [
