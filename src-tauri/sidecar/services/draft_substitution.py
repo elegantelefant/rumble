@@ -188,6 +188,28 @@ def apply(draft: str, fields: list[DraftField]) -> tuple[str, list[dict]]:
     return BRACKET_RE.sub(repl, draft), substitutions
 
 
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
+_HEADING_RE = re.compile(r"^#{1,6}\s+", re.MULTILINE)
+
+
+def strip_markdown(text: str) -> str:
+    """Removes markdown emphasis the model sometimes adds -- "**1. TERM**"
+    or "## Heading" -- which would otherwise show up literally in the draft
+    panel and the Word export, keeping only the text itself.
+
+    Only a matched pair of "**"/"__" is touched, so a single asterisk or
+    underscore used mid-sentence (e.g. "3 * 4 = 12") is left alone. A "#"
+    run is only stripped when followed by whitespace, the ordinary heading
+    syntax -- a stray leading "#" with no space after it (not a heading) is
+    left as-is rather than guessed at.
+    """
+    def repl(match: re.Match) -> str:
+        return match.group(1) if match.group(1) is not None else match.group(2)
+
+    text = _BOLD_RE.sub(repl, text)
+    return _HEADING_RE.sub("", text)
+
+
 # --- Presence check, for the retry-once decision in routes/jobs.py ---
 
 def _date_variants(iso_value: str) -> set[str]:
