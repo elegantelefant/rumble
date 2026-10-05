@@ -284,3 +284,13 @@ def test_apply_preserves_an_existing_dollar_sign_in_the_value():
     f = field("salary", "Salary", "$100,000")
     new_text, _ = sub.apply("[Salary]", [f])
     assert new_text == "$100,000"
+
+
+def test_apply_does_not_double_a_dollar_sign_already_in_the_draft():
+    """The draft can carry its own literal "$" ahead of the bracket, e.g.
+    "$[Salary]" -- if the value also renders with a "$" (because the user
+    typed "$100,000"), only one "$" should survive, not "$$100,000"."""
+    f = field("salary", "Salary", "$100,000")
+    new_text, subs = sub.apply("A salary of $[Salary] per year.", [f])
+    assert new_text == "A salary of $100,000 per year."
+    assert subs == [{"placeholder": "[Salary]", "key": "salary", "inserted": "100,000"}]
