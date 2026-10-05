@@ -40,6 +40,15 @@ describe("waitForJob timeout", () => {
     expect(error.message).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i) // no UUID-shaped fragment
   })
 
+  it("the review timeout message also contains no identifier", async () => {
+    const promise = waitForJob("review", "review-job-789")
+    const assertion = promise.catch((error: Error) => error)
+    await vi.runAllTimersAsync()
+    const error = await assertion
+    expect(error.message).not.toContain("review-job-789")
+    expect(error.message).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i)
+  })
+
   it("waits at least as long as the server's 300s job timeout before giving up", async () => {
     const promise = waitForJob("draft", "job-1")
     const assertion = expect(promise).rejects.toThrow()
@@ -55,9 +64,9 @@ describe("waitForJob timeout", () => {
     await assertion
   })
 
-  it("review keeps its existing job-ID message (unchanged, draft-only fix)", async () => {
+  it("review gets its own plain message, matching draft's shape", async () => {
     const promise = waitForJob("review", "review-job-1")
-    const assertion = expect(promise).rejects.toThrow("Job review-job-1 did not complete within polling timeout")
+    const assertion = expect(promise).rejects.toThrow("Review took too long. Please try again.")
     await vi.runAllTimersAsync()
     await assertion
   })

@@ -224,12 +224,12 @@ export async function waitForJob(
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  // No job ID in the draft message: it's an internal detail the user can't
+  // No job ID in either message: it's an internal detail the user can't
   // act on, and a user-facing error shouldn't read like a stack trace.
   throw new Error(
     type === "draft"
       ? "Drafting took too long. Please try again."
-      : `Job ${jobId} did not complete within polling timeout`,
+      : "Review took too long. Please try again.",
   );
 }
 
