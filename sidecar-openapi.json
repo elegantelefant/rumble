@@ -17039,6 +17039,47 @@
         "title": "DocumentUpdateRequest",
         "description": "Update document content (WYSIWYG edits by user)."
       },
+      "DraftField": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Form field key, e.g. 'employeeName'."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable label shown to the user, e.g. 'Employee Name'."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Field type hint: 'date' for date-typed fields, 'freetext' for open-ended prose fields. Omitted for plain exact-match fields."
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "The value the user entered for this field."
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases",
+            "description": "Alternate labels substitution should also recognise for this field, e.g. ['Role', 'Job Title'] for Position."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "value"
+        ],
+        "title": "DraftField",
+        "description": "One of the template's fields as the user filled it in."
+      },
       "DraftRequest": {
         "properties": {
           "prompt": {
@@ -17109,6 +17150,14 @@
             "type": "array",
             "title": "Publish Formats",
             "description": "Export formats to generate (e.g. ['docx', 'pdf']). Empty = markdown only."
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/DraftField"
+            },
+            "type": "array",
+            "title": "Fields",
+            "description": "The template's fields as filled in: key, label, type, value, aliases. Drives placeholder substitution after drafting; absent means no substitution."
           }
         },
         "additionalProperties": false,
