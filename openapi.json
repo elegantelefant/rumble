@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.341.0"
+    "version": "0.342.0"
   },
   "paths": {
     "/health": {
@@ -44321,6 +44321,19 @@
       },
       "PromptImproveContext": {
         "properties": {
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction",
+            "description": "Selected jurisdiction for the rewrite; absent when the composer is set to Auto."
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/PromptImproveTurn"
