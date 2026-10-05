@@ -117,6 +117,31 @@ describe("DocumentDraftView", () => {
 })
 
 
+describe("DocumentDraftView fields payload", () => {
+  it("sends key, label, type, value and aliases for each filled field", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: "Sample draft text.", warnings: [] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    expect(createDraftJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [
+          { key: "employeeName", label: "Employee Name", type: undefined, value: "Jane Doe", aliases: undefined },
+          { key: "startDate", label: "Start Date", type: "date", value: "2025-01-01", aliases: ["Commencement Date"] },
+          { key: "salary", label: "Salary", type: undefined, value: "120000", aliases: ["Compensation", "Annual Salary", "Base Salary"] },
+          { key: "position", label: "Position", type: undefined, value: "Engineer", aliases: ["Role", "Job Title", "Employee Title"] },
+        ],
+      }),
+    )
+  })
+})
+
+
 describe("DocumentDraftView export", () => {
   it("shows info toast when exporting with no draft generated", async () => {
     const wrapper = mountDraft()
