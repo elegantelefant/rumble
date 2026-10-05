@@ -177,6 +177,11 @@ def apply(draft: str, fields: list[DraftField]) -> tuple[str, list[dict]]:
         if field is None:
             return full
         inserted = _format_value(field)
+        # The draft itself sometimes already carries the "$", e.g.
+        # "$[Salary]" -- if the value's own formatting adds another one,
+        # drop it rather than double up into "$$100,000".
+        if inserted.startswith("$") and match.start() > 0 and draft[match.start() - 1] == "$":
+            inserted = inserted[1:]
         substitutions.append({"placeholder": full, "key": field.key, "inserted": inserted})
         return inserted
 
