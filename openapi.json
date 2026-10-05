@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.335.0"
+    "version": "0.341.0"
   },
   "paths": {
     "/health": {
@@ -6365,7 +6365,7 @@
           "chat"
         ],
         "summary": "Export Chat",
-        "description": "Render supplied Ask Elf Markdown to a freshly signed DOCX, PDF, or Markdown URL.\n\nThe client supplies either the complete answer or one table's original\nMarkdown. Both travel through the same GCS-backed document export service\nused for drafts and briefcases, rather than a browser popup or Blob.",
+        "description": "Render supplied Markdown or export this conversation's audit log.\n\nDocument exports take either the complete answer or one table's original\nMarkdown. JSON exports read the tenant-scoped conversation and the same\ncompleted-turn projection used by the Answer log panel.",
         "operationId": "export_chat",
         "parameters": [
           {
@@ -9703,6 +9703,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BriefcaseShareResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Feature not enabled or insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Resource has been revoked or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/briefcases/{briefcase_id}/shares/{share_id}/decline": {
+      "post": {
+        "tags": [
+          "briefcases"
+        ],
+        "summary": "Decline Share",
+        "description": "Decline a pending direct share (sharee only).",
+        "operationId": "decline_share",
+        "parameters": [
+          {
+            "name": "briefcase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Briefcase Id"
+            }
+          },
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -27614,6 +27718,28 @@
             ],
             "title": "Name"
           },
+          "oldName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldname"
+          },
+          "newName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newname"
+          },
           "pinned": {
             "anyOf": [
               {
@@ -30419,6 +30545,25 @@
             "type": "boolean",
             "title": "Excludefrommemory",
             "default": false
+          },
+          "modelFamily": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "claude",
+                  "openai",
+                  "gemini",
+                  "qwen",
+                  "deepseek"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelfamily"
           }
         },
         "additionalProperties": false,
@@ -30540,9 +30685,16 @@
       "ChatExportRequest": {
         "properties": {
           "markdown": {
-            "type": "string",
-            "maxLength": 500000,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Markdown"
           },
           "format": {
@@ -30550,7 +30702,8 @@
             "enum": [
               "docx",
               "markdown",
-              "pdf"
+              "pdf",
+              "json"
             ],
             "title": "Format"
           }
@@ -30558,11 +30711,10 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "markdown",
           "format"
         ],
         "title": "ChatExportRequest",
-        "description": "Markdown source for a signed Ask Elf export."
+        "description": "Markdown source or the persisted conversation audit export."
       },
       "ChatExportResponse": {
         "properties": {
@@ -30571,7 +30723,8 @@
             "enum": [
               "docx",
               "markdown",
-              "pdf"
+              "pdf",
+              "json"
             ],
             "title": "Format"
           },
@@ -31413,6 +31566,30 @@
             "type": "boolean",
             "title": "Replayable",
             "default": false
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode",
+            "description": "Machine-readable terminal failure code, when the turn failed."
+          },
+          "errorDetail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errordetail",
+            "description": "Display-safe terminal failure detail, when the turn failed."
           }
         },
         "additionalProperties": false,
@@ -37991,6 +38168,11 @@
               }
             ],
             "title": "Error"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "default": true
           },
           "tokenCount": {
             "anyOf": [
@@ -47799,6 +47981,17 @@
             "type": "string",
             "title": "Sharerid"
           },
+          "sharerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharername"
+          },
           "permission": {
             "type": "string",
             "title": "Permission"
@@ -47831,10 +48024,16 @@
             "description": "The briefcase's own updated_at; null when its row is not RLS-visible (a cross-org pending share)."
           },
           "sourceCount": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sourcecount",
-            "description": "Wall-visible items + briefcase documents, summaries excluded",
-            "default": 0
+            "description": "Wall-visible count; absent while a pending external share cannot read facts"
           },
           "hasSummary": {
             "type": "boolean",
