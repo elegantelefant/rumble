@@ -139,6 +139,40 @@ describe("DocumentDraftView fields payload", () => {
       }),
     )
   })
+
+  it("appends Additional Terms as a freetext field when the box is filled", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: "Sample draft text.", warnings: [] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await wrapper.find('textarea[placeholder="Enter additional clauses or notes"]').setValue("Confidentiality survives termination.")
+    await fillAndGenerate(wrapper)
+
+    const sentFields = vi.mocked(createDraftJob).mock.calls[0][0].fields
+    expect(sentFields).toContainEqual({
+      key: "terms",
+      label: "Additional Terms",
+      type: "freetext",
+      value: "Confidentiality survives termination.",
+    })
+  })
+
+  it("does not send a terms field when the box is left blank", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: "Sample draft text.", warnings: [] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    const sentFields = vi.mocked(createDraftJob).mock.calls[0][0].fields
+    expect(sentFields?.some((f) => f.key === "terms")).toBe(false)
+  })
 })
 
 

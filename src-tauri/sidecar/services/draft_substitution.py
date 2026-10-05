@@ -8,6 +8,15 @@ from models.generated import DraftField
 
 BRACKET_RE = re.compile(r"\[([^\[\]]{1,80})\]")
 
+# A bracket sometimes carries its own fill-in instruction ahead of the label,
+# e.g. "[Replace with Additional Terms]" or "[Insert Additional Terms]" --
+# stripped before matching so what's left still lines up with the label.
+_INSTRUCTION_PREFIX_RE = re.compile(r"^(replace with|insert|enter)\b[:\s]*", re.IGNORECASE)
+
+
+def _strip_instruction_prefix(text: str) -> str:
+    return _INSTRUCTION_PREFIX_RE.sub("", text, count=1)
+
 
 def _normalise(text: str) -> str:
     """Lowercases and strips a possessive "'s"/"'s" as a unit before
@@ -31,9 +40,28 @@ def _prose_date(iso_value: str) -> str:
         return str(iso_value)
 
 
+def _format_amount(value: str) -> str:
+    """"100000" -> "100,000"; "$100,000" -> "$100,000" (an existing $ prefix
+    is preserved); "100000.50" -> "100,000.50". Falls back to the raw value
+    if it doesn't actually parse as a number -- insertion should never raise."""
+    has_dollar = value.strip().startswith("$")
+    digits_only = re.sub(r"[$,\s]", "", value)
+    try:
+        if "." in digits_only:
+            whole, cents = digits_only.split(".", 1)
+            formatted = f"{int(whole):,}.{cents}"
+        else:
+            formatted = f"{int(digits_only):,}"
+    except ValueError:
+        return value
+    return f"${formatted}" if has_dollar else formatted
+
+
 def _format_value(field: DraftField) -> str:
     if field.type == "date":
         return _prose_date(field.value)
+    if _looks_like_amount(field.value):
+        return _format_amount(field.value)
     return field.value
 
 
@@ -101,9 +129,13 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     A field with a blank or whitespace-only value is ignored entirely, as
     if it weren't passed at all -- it never matches, so apply() can never
     insert an empty string in its place.
+
+    A leading fill-in instruction ("Replace with", "Insert", "Enter") is
+    stripped before any of the above, so "[Replace with Additional Terms]"
+    still lines up with the label "Additional Terms".
     """
     fields = [f for f in fields if f.value and f.value.strip()]
-    norm = _normalise(inner)
+    norm = _normalise(_strip_instruction_prefix(inner))
 
     for field in fields:
         if norm in _label_set(field):

@@ -159,10 +159,10 @@ def test_apply_inserts_prose_date_for_date_typed_fields():
     assert subs == [{"placeholder": "[Start Date]", "key": "startDate", "inserted": "19 September 2026"}]
 
 
-def test_apply_inserts_non_date_values_verbatim():
-    f = field("salary", "Salary", "100000")
-    new_text, _ = sub.apply("A salary of $[Salary].", [f])
-    assert new_text == "A salary of $100000."
+def test_apply_inserts_non_date_non_amount_values_verbatim():
+    f = field("position", "Position", "Role")
+    new_text, _ = sub.apply("Serving as [Position].", [f])
+    assert new_text == "Serving as Role."
 
 
 def test_apply_leaves_unmatched_placeholders_untouched():
@@ -240,3 +240,47 @@ def test_all_present_omits_a_blank_field_rather_than_flagging_it_missing():
     result = sub.all_present("A draft naming Role but no employee.", [blank, position])
     assert "employeeName" not in result
     assert result == {"position": True}
+
+
+# --- A leading fill-in instruction is stripped before matching ---
+
+def test_instruction_prefix_replace_with_is_stripped():
+    f = field("terms", "Additional Terms", "Confidentiality survives.", type="freetext")
+    assert sub.classify_bracket("Replace with Additional Terms", [f]) is f
+    assert sub.classify_bracket("REPLACE WITH ADDITIONAL TERMS", [f]) is f
+
+
+def test_instruction_prefix_insert_and_enter_are_stripped():
+    f = field("terms", "Additional Terms", "Confidentiality survives.", type="freetext")
+    assert sub.classify_bracket("Insert Additional Terms", [f]) is f
+    assert sub.classify_bracket("Enter Additional Terms", [f]) is f
+    assert sub.classify_bracket("Insert: Additional Terms", [f]) is f
+
+
+def test_instruction_prefix_requires_a_word_boundary():
+    """"[Insertion Point]" must not match -- "insert" is a prefix of
+    "insertion", not the whole word, and there's no field for "Point"
+    either way."""
+    f = field("terms", "Additional Terms", "Confidentiality survives.", type="freetext")
+    assert sub.classify_bracket("Insertion Point", [f]) is None
+
+
+# --- Amount formatting on insertion ---
+
+def test_apply_formats_a_whole_number_amount_with_thousands_separators():
+    f = field("salary", "Salary", "100000")
+    new_text, subs = sub.apply("A salary of $[Salary] per year.", [f])
+    assert new_text == "A salary of $100,000 per year."
+    assert subs == [{"placeholder": "[Salary]", "key": "salary", "inserted": "100,000"}]
+
+
+def test_apply_formats_a_decimal_amount_keeping_the_cents():
+    f = field("salary", "Salary", "145000.50")
+    new_text, _ = sub.apply("[Salary]", [f])
+    assert new_text == "145,000.50"
+
+
+def test_apply_preserves_an_existing_dollar_sign_in_the_value():
+    f = field("salary", "Salary", "$100,000")
+    new_text, _ = sub.apply("[Salary]", [f])
+    assert new_text == "$100,000"
