@@ -73,6 +73,11 @@ async def _run_draft(request: DraftRequest) -> dict:
             raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
             draft, _ = draft_substitution.apply(raw, fields)
 
+    # The model sometimes wraps clause headings in markdown ("**1. TERM**",
+    # "## Heading"), which would otherwise show up literally in the draft
+    # panel and the Word export rather than as styling.
+    draft = draft_substitution.strip_markdown(draft)
+
     return {"draft": draft, "warnings": []}
 
 

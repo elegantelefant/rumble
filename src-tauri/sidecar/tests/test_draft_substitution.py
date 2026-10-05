@@ -294,3 +294,40 @@ def test_apply_does_not_double_a_dollar_sign_already_in_the_draft():
     new_text, subs = sub.apply("A salary of $[Salary] per year.", [f])
     assert new_text == "A salary of $100,000 per year."
     assert subs == [{"placeholder": "[Salary]", "key": "salary", "inserted": "100,000"}]
+
+
+# --- Markdown stripping (post-substitution, before the draft is returned) ---
+
+def test_strip_markdown_removes_double_asterisk_bold():
+    assert sub.strip_markdown("**1. TERM AND TERMINATION**") == "1. TERM AND TERMINATION"
+
+
+def test_strip_markdown_removes_double_underscore_bold():
+    assert sub.strip_markdown("__Confidentiality__ survives termination.") == "Confidentiality survives termination."
+
+
+def test_strip_markdown_removes_leading_heading_hashes():
+    assert sub.strip_markdown("# TERM AND TERMINATION") == "TERM AND TERMINATION"
+    assert sub.strip_markdown("## Subheading") == "Subheading"
+
+
+def test_strip_markdown_handles_multiple_headings_and_bold_runs_in_one_draft():
+    draft = "# SERVICE AGREEMENT\n\n**1. TERM**\nThis agreement begins on the Start Date."
+    assert sub.strip_markdown(draft) == "SERVICE AGREEMENT\n\n1. TERM\nThis agreement begins on the Start Date."
+
+
+def test_strip_markdown_leaves_an_ordinary_sentence_with_a_single_asterisk_alone():
+    """A single "*" mid-sentence (not a matched "**" pair) is not markdown
+    emphasis and must survive untouched, e.g. a footnote marker or a literal
+    multiplication."""
+    assert sub.strip_markdown("Rate: $50 * 2 hours = $100.") == "Rate: $50 * 2 hours = $100."
+
+
+def test_strip_markdown_leaves_a_single_underscore_alone():
+    assert sub.strip_markdown("See file_name.txt for the schedule.") == "See file_name.txt for the schedule."
+
+
+def test_strip_markdown_leaves_a_hash_with_no_following_space_alone():
+    """"#1" is not heading syntax -- there's no space after the "#" -- so
+    it's left as ordinary text rather than guessed at as a heading."""
+    assert sub.strip_markdown("Item #1 on the list.") == "Item #1 on the list."
