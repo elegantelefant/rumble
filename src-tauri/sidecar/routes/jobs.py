@@ -17,7 +17,7 @@ from models.generated import (
     ReviewResponse,
 )
 from routes.ai import _parse_llm_json, _safe_construct
-from services import db, jobs, llm, prompts
+from services import db, draft_substitution, jobs, llm, prompts
 
 
 def _parse_job_json(raw: str) -> dict:
@@ -45,8 +45,21 @@ async def _run_draft(request: DraftRequest) -> dict:
         context_parts.append(f"Terms: {json.dumps(request.document_terms)}")
     user_text = "\n".join([request.prompt, *context_parts]) if context_parts else request.prompt
 
+    # Plain prose, not JSON (rumble#46, services/prompts.py's DRAFT comment):
+    # the model's raw text IS the draft, substituted against the form's own
+    # fields rather than parsed as a contract the model has to get exactly
+    # right. One retry if a provided value is still missing afterwards --
+    # not retried indefinitely, since a model that omits it once tends to
+    # omit it again, and the job should still resolve.
+    fields = request.fields or []
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-    return _parse_job_json(raw)
+    draft, _ = draft_substitution.apply(raw, fields)
+
+    if fields and not all(draft_substitution.all_present(draft, fields).values()):
+        raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
+        draft, _ = draft_substitution.apply(raw, fields)
+
+    return {"draft": draft, "warnings": []}
 
 
 @router.post("/draft", response_model=JobCreatedResponse)

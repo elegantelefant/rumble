@@ -79,7 +79,9 @@ def _fake_run_single_turn(user_text, system_prompt, model_name=None, api_key=Non
     if "summar" in system_prompt.lower():
         return json.dumps({"summary": f"Summary: {user_text}", "key_points": ["point1"]})
     if "draft" in system_prompt.lower():
-        return json.dumps({"draft": f"Draft: {user_text}", "warnings": []})
+        # Plain prose, not JSON (rumble#46): the draft pipeline treats this
+        # raw text as the draft directly, it doesn't parse it as JSON.
+        return f"Draft: {user_text}"
     if "review" in system_prompt.lower():
         return json.dumps({"summary": f"Review: {user_text}", "issues": []})
     if "research" in system_prompt.lower():
