@@ -58,13 +58,20 @@ async def _run_draft(request: DraftRequest) -> dict:
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
     draft, _ = draft_substitution.apply(raw, fields)
 
-    if fields and not all(draft_substitution.all_present(draft, fields).values()):
-        # warning, not info: uvicorn's log_level="warning" (main.py) sets the
-        # root logger's effective level, so info() here would be silently
-        # dropped and never visible without changing the deployed log level.
-        logger.warning("Draft retry: a provided value was missing after substitution")
-        raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-        draft, _ = draft_substitution.apply(raw, fields)
+    if fields:
+        presence = draft_substitution.all_present(draft, fields)
+        missing_keys = [key for key, present in presence.items() if not present]
+        if missing_keys:
+            # warning, not info: uvicorn's log_level="warning" (main.py) sets
+            # the root logger's effective level, so info() here would be
+            # silently dropped and never visible without changing the
+            # deployed log level.
+            # Keys only, never values: a value is the user's own document
+            # content (an employee's name, a client's address), and a log
+            # line is not where that belongs.
+            logger.warning("Draft retry: missing field(s) %s after substitution", missing_keys)
+            raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
+            draft, _ = draft_substitution.apply(raw, fields)
 
     return {"draft": draft, "warnings": []}
 
