@@ -70,11 +70,23 @@ def _qualified_label_candidates(value_field: DraftField, label_field: DraftField
     return out
 
 
+def _label_name_candidates(field: DraftField) -> set[str]:
+    """"<field's label or alias> Name" means this field itself, e.g.
+    "[Provider Name]" for serviceProvider (aliased "Provider"), or
+    "[Disclosing Party's Name]" for disclosingParty. Possessive or not
+    collapse to the same candidate: _normalise already strips "'s" as a
+    unit, so "Provider's Name" and "Provider Name" both become "provider
+    name" before this ever compares them."""
+    return {f"{label} name" for label in _label_set(field)}
+
+
 def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     """Return the field a bracket should be substituted with, or None to leave it.
 
     Checked in order:
       1. The bracket exactly equals a field's label or one of its aliases.
+      4. "<field's label/alias> Name" (possessive or not) -- "[Provider
+         Name]" means serviceProvider, not a separate, unprovided field.
       3. "[Label: anything]" -- the label alone decides; whatever follows the
          colon is discarded in favour of the field's own value.
       0. The bracket is just the field's own provided value (optionally with
@@ -90,6 +102,10 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
 
     for field in fields:
         if norm in _label_set(field):
+            return field
+
+    for field in fields:
+        if norm in _label_name_candidates(field):
             return field
 
     if ":" in norm:

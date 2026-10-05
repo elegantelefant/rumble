@@ -27,6 +27,36 @@ def test_rule1_does_not_match_a_longer_descriptive_phrase():
     assert sub.classify_bracket("Detailed description of primary role", [f]) is None
 
 
+# --- Rule 4: "<field's label/alias> Name" means the field itself ---
+
+def test_rule4_label_plus_name_matches_the_field():
+    """"[Provider Name]" stands in for serviceProvider's own value -- it is
+    not a separate, unprovided field. Caught #46's actual regression: these
+    were wrongly scored as honest blanks."""
+    f = field("serviceProvider", "Service Provider", "Bright Path Consulting", aliases=["Provider", "Contractor"])
+    assert sub.classify_bracket("Provider Name", [f]) is f
+    assert sub.classify_bracket("Service Provider Name", [f]) is f
+    assert sub.classify_bracket("Contractor Name", [f]) is f
+
+
+def test_rule4_possessive_label_plus_name_matches_too():
+    f = field("disclosingParty", "Disclosing Party", "Acme Innovations Inc.", aliases=["Discloser"])
+    assert sub.classify_bracket("Disclosing Party's Name", [f]) is f
+    assert sub.classify_bracket("Discloser Name", [f]) is f
+
+
+def test_rule4_does_not_match_an_unrelated_label_plus_name():
+    """"[Employer Name]" must stay None when no field is labelled or
+    aliased "Employer" -- Rule 4 only fires off a REAL label/alias."""
+    f = field("serviceProvider", "Service Provider", "Bright Path Consulting", aliases=["Provider"])
+    assert sub.classify_bracket("Employer Name", [f]) is None
+
+
+def test_rule4_does_not_match_label_plus_a_different_attribute():
+    f = field("disclosingParty", "Disclosing Party", "Acme Innovations Inc.", aliases=["Discloser"])
+    assert sub.classify_bracket("Disclosing Party's Address", [f]) is None
+
+
 # --- Possessive normalisation: "'s" strips as a unit, not just the apostrophe ---
 
 def test_possessive_label_matches_the_plain_label():
