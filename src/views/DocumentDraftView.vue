@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
+import type { DraftField } from "../api/models/draftField";
 import { useToast } from "../composables/toast";
 
 const toasts = useToast();
@@ -100,7 +101,7 @@ async function generateDraft() {
 
     // validateForm() above already guarantees every activeFields value is
     // non-blank before this point, so there's nothing left to filter out.
-    const fields = activeFields.value
+    const fields: DraftField[] = activeFields.value
       .map((f) => ({
         key: f.key,
         label: f.label,
@@ -108,6 +109,12 @@ async function generateDraft() {
         value: formState[f.key],
         aliases: f.aliases,
       }));
+
+    // Additional Terms is global, not per-template, and optional -- only
+    // sent when the user actually wrote something.
+    if (formState.terms?.trim()) {
+      fields.push({ key: "terms", label: "Additional Terms", type: "freetext", value: formState.terms.trim() });
+    }
 
     const jobResponse = await createDraftJob({
       prompt,
