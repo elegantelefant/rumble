@@ -201,3 +201,42 @@ def test_all_present_exact_field_requires_the_literal_value():
     f = field("employeeName", "Employee Name", "Tester")
     assert sub.all_present("Employed: Tester.", [f]) == {"employeeName": True}
     assert sub.all_present("Employed: the Employee.", [f]) == {"employeeName": False}
+
+
+# --- A blank or whitespace-only value is ignored entirely ---
+
+def test_classify_bracket_ignores_a_blank_valued_field():
+    f = field("employeeName", "Employee Name", "")
+    assert sub.classify_bracket("Employee Name", [f]) is None
+
+
+def test_classify_bracket_ignores_a_whitespace_only_valued_field():
+    f = field("employeeName", "Employee Name", "   ")
+    assert sub.classify_bracket("Employee Name", [f]) is None
+
+
+def test_apply_never_inserts_an_empty_string():
+    """A blank field's own bracket is left untouched -- not replaced with
+    nothing, which would silently delete the placeholder from the text."""
+    f = field("employeeName", "Employee Name", "")
+    new_text, subs = sub.apply("See [Employee Name] here.", [f])
+    assert new_text == "See [Employee Name] here."
+    assert subs == []
+
+
+def test_apply_still_substitutes_other_fields_when_one_is_blank():
+    blank = field("employeeName", "Employee Name", "")
+    position = field("position", "Position", "Role")
+    new_text, subs = sub.apply("[Employee Name], [Position]", [blank, position])
+    assert new_text == "[Employee Name], Role"
+    assert subs == [{"placeholder": "[Position]", "key": "position", "inserted": "Role"}]
+
+
+def test_all_present_omits_a_blank_field_rather_than_flagging_it_missing():
+    """A blank field has nothing to have been missing -- it must never
+    trigger routes.jobs._run_draft's retry."""
+    blank = field("employeeName", "Employee Name", "  ")
+    position = field("position", "Position", "Role")
+    result = sub.all_present("A draft naming Role but no employee.", [blank, position])
+    assert "employeeName" not in result
+    assert result == {"position": True}

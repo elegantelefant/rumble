@@ -97,7 +97,12 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     Address]" (employee name "Tester", no address field) never collides
     with anything: "testers address" isn't itself a candidate, even though
     "tester" is a provided value and would be if checked by substring.
+
+    A field with a blank or whitespace-only value is ignored entirely, as
+    if it weren't passed at all -- it never matches, so apply() can never
+    insert an empty string in its place.
     """
+    fields = [f for f in fields if f.value and f.value.strip()]
     norm = _normalise(inner)
 
     for field in fields:
@@ -198,10 +203,16 @@ def all_present(draft: str, fields: list[DraftField]) -> dict[str, bool]:
     """Per-field key -> whether that value made it into the draft, in some
     recognisable form. Dates are normalised across common renderings;
     amounts compare digits only (so "$100,000" matches "100000"); freetext
-    fields accept a paraphrase; everything else is a literal substring check."""
+    fields accept a paraphrase; everything else is a literal substring check.
+
+    A field with a blank or whitespace-only value is left out of the
+    result entirely -- there's nothing to have been missing, so it can
+    never trigger routes.jobs._run_draft's retry."""
     lowered = draft.lower()
     result = {}
     for field in fields:
+        if not field.value or not field.value.strip():
+            continue
         if field.type == "date":
             result[field.key] = any(v in lowered for v in _date_variants(field.value))
         elif field.type == "freetext":
