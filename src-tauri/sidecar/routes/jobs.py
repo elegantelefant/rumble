@@ -2,8 +2,11 @@
 # ABOUTME: POST creates a job and spawns background work; GET polls for results.
 
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from models.generated import (
     DraftRequest,
@@ -56,6 +59,10 @@ async def _run_draft(request: DraftRequest) -> dict:
     draft, _ = draft_substitution.apply(raw, fields)
 
     if fields and not all(draft_substitution.all_present(draft, fields).values()):
+        # warning, not info: uvicorn's log_level="warning" (main.py) sets the
+        # root logger's effective level, so info() here would be silently
+        # dropped and never visible without changing the deployed log level.
+        logger.warning("Draft retry: a provided value was missing after substitution")
         raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
         draft, _ = draft_substitution.apply(raw, fields)
 

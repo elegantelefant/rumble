@@ -19,7 +19,7 @@ type FieldConfig = {
 
 const templateFields: Record<string, FieldConfig[]> = {
   employment: [
-    { key: "employeeName", label: "Employee Name", placeholder: "Full name" },
+    { key: "employeeName", label: "Employee Name", placeholder: "Full name", aliases: ["Name of Employee", "Full Name"] },
     { key: "startDate", label: "Start Date", type: "date", aliases: ["Commencement Date"] },
     { key: "salary", label: "Salary", placeholder: "$100,000", aliases: ["Compensation", "Annual Salary", "Base Salary"] },
     { key: "position", label: "Position", placeholder: "Role", aliases: ["Role", "Job Title", "Employee Title"] },
@@ -98,8 +98,9 @@ async function generateDraft() {
       formState.terms?.trim() ? `\nAdditional terms: ${formState.terms.trim()}` : "",
     ].filter(Boolean).join("\n");
 
+    // validateForm() above already guarantees every activeFields value is
+    // non-blank before this point, so there's nothing left to filter out.
     const fields = activeFields.value
-      .filter((f) => formState[f.key]?.toString().trim())
       .map((f) => ({
         key: f.key,
         label: f.label,

@@ -131,7 +131,7 @@ describe("DocumentDraftView fields payload", () => {
     expect(createDraftJob).toHaveBeenCalledWith(
       expect.objectContaining({
         fields: [
-          { key: "employeeName", label: "Employee Name", type: undefined, value: "Jane Doe", aliases: undefined },
+          { key: "employeeName", label: "Employee Name", type: undefined, value: "Jane Doe", aliases: ["Name of Employee", "Full Name"] },
           { key: "startDate", label: "Start Date", type: "date", value: "2025-01-01", aliases: ["Commencement Date"] },
           { key: "salary", label: "Salary", type: undefined, value: "120000", aliases: ["Compensation", "Annual Salary", "Base Salary"] },
           { key: "position", label: "Position", type: undefined, value: "Engineer", aliases: ["Role", "Job Title", "Employee Title"] },

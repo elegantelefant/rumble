@@ -27,6 +27,22 @@ def test_rule1_does_not_match_a_longer_descriptive_phrase():
     assert sub.classify_bracket("Detailed description of primary role", [f]) is None
 
 
+# --- Possessive normalisation: "'s" strips as a unit, not just the apostrophe ---
+
+def test_possessive_label_matches_the_plain_label():
+    """"[Employee's Name]" must equal label "Employee Name" -- stripping only
+    the apostrophe character would leave "employees name", which doesn't."""
+    f = field("employeeName", "Employee Name", "Tester")
+    assert sub.classify_bracket("Employee's Name", [f]) is f
+    assert sub.classify_bracket("EMPLOYEE'S NAME", [f]) is f
+
+
+def test_possessive_value_still_matches_alongside_the_no_apostrophe_form():
+    f = field("employeeName", "Employee Name", "Tester")
+    assert sub.classify_bracket("Tester's Name", [f]) is f
+    assert sub.classify_bracket("Testers Name", [f]) is f  # model dropped the apostrophe itself
+
+
 # --- Rule 3: "[Label: anything]" -- the label alone decides ---
 
 def test_rule3_label_colon_value_matches_on_the_label_alone():

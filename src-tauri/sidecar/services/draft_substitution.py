@@ -10,8 +10,14 @@ BRACKET_RE = re.compile(r"\[([^\[\]]{1,80})\]")
 
 
 def _normalise(text: str) -> str:
-    text = text.replace("'", "").replace("’", "")
-    return re.sub(r"\s+", " ", text.strip().lower())
+    """Lowercases and strips a possessive "'s"/"'s" as a unit before
+    dropping any remaining apostrophe, so "Employee's Name" lines up with
+    the label "Employee Name" -- stripping only the apostrophe character
+    would leave "employees name", one letter short of matching."""
+    text = text.strip().lower()
+    text = re.sub(r"[’']s\b", "", text)
+    text = text.replace("’", "").replace("'", "")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _prose_date(iso_value: str) -> str:
