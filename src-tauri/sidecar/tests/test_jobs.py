@@ -64,6 +64,24 @@ async def test_draft_retry_logs_the_missing_fields_key_not_its_value(client, cap
     assert "Tester" not in retry_logs[0]
 
 
+async def test_draft_strips_markdown_from_the_final_draft(client):
+    """The model sometimes wraps clause headings in markdown; the /draft
+    route's own response must come back with it stripped (#46), not just
+    the substitution helper in isolation."""
+    from unittest.mock import AsyncMock, patch
+
+    raw = "# SERVICE AGREEMENT\n\n**1. TERM**\nThis agreement begins on the Start Date."
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/draft", json={"prompt": "Draft an agreement"})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    draft = result.json()["result"]["draft"]
+    assert draft == "SERVICE AGREEMENT\n\n1. TERM\nThis agreement begins on the Start Date."
+
+
 # --- Review ---
 
 async def test_review_creates_job(client):
