@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.346.0"
+    "version": "0.348.0"
   },
   "paths": {
     "/health": {
@@ -3124,7 +3124,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/files": {
@@ -3158,7 +3158,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "post": {
         "tags": [
@@ -3220,7 +3220,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/files/{file_id}": {
@@ -3285,7 +3285,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "delete": {
         "tags": [
@@ -3682,7 +3682,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/exports/beacon": {
@@ -4922,7 +4922,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/search/history": {
@@ -6075,7 +6075,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "get": {
         "tags": [
@@ -6845,7 +6845,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/chats/{id}/messages": {
@@ -7024,7 +7024,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/chats/{id}/turns/{turn_id}/cancel": {
@@ -8828,7 +8828,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "get": {
         "tags": [
@@ -8882,7 +8882,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/briefcases/shared-with-me": {
@@ -9055,7 +9055,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "patch": {
         "tags": [
@@ -10142,7 +10142,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "post": {
         "tags": [
@@ -10225,7 +10225,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/briefcases/{briefcase_id}/resolve": {
@@ -21401,7 +21401,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "patch": {
         "tags": [
@@ -21552,7 +21552,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/jobs/{job_id}/cancel": {
@@ -21627,7 +21627,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/jobs": {
@@ -21733,7 +21733,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/webhooks": {
@@ -23427,6 +23427,78 @@
         },
         "x-stability": "best-effort",
         "x-consumer": "fe"
+      }
+    },
+    "/api/v1/gateway": {
+      "post": {
+        "tags": [
+          "partner-gateway"
+        ],
+        "summary": "Partner Gateway",
+        "description": "Execute a partner request without adding a second routing classifier.",
+        "operationId": "partner_gateway",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GatewayResearchResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GatewayActionResponse"
+                    }
+                  ],
+                  "title": "Response Partner Gateway Api V1 Gateway Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Monthly quota exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-consumer": "worker",
+        "x-stability": "best-effort"
       }
     },
     "/api/v1/integrations/{channel}/oauth/install": {
@@ -26249,7 +26321,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -36395,6 +36467,138 @@
         ],
         "title": "FlaggedAuthorityResponse",
         "description": "One authority a connected file relies on that later judgments moved against."
+      },
+      "GatewayActionResponse": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "const": "action",
+            "title": "Route"
+          },
+          "jobId": {
+            "type": "string",
+            "title": "Jobid"
+          },
+          "legalRequestId": {
+            "type": "string",
+            "title": "Legalrequestid"
+          },
+          "pollUrl": {
+            "type": "string",
+            "title": "Pollurl"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "route",
+          "jobId",
+          "legalRequestId",
+          "pollUrl"
+        ],
+        "title": "GatewayActionResponse"
+      },
+      "GatewayRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Query"
+          },
+          "documents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documents"
+          },
+          "briefcaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefcaseid"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "research",
+              "action"
+            ],
+            "title": "Mode",
+            "default": "auto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "GatewayRequest"
+      },
+      "GatewayResearchResponse": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "const": "research",
+            "title": "Route"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "citations": {
+            "items": {},
+            "type": "array",
+            "title": "Citations"
+          },
+          "sources": {
+            "items": {},
+            "type": "array",
+            "title": "Sources"
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requestid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "route",
+          "answer"
+        ],
+        "title": "GatewayResearchResponse"
       },
       "GenericWebhookSetupRequest": {
         "properties": {
@@ -50439,6 +50643,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
