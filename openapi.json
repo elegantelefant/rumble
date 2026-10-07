@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.350.0"
+    "version": "0.351.0"
   },
   "paths": {
     "/health": {
@@ -41656,6 +41656,13 @@
               }
             ],
             "title": "Formattinginstructions"
+          },
+          "pinnedFeatureKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pinnedfeaturekeys"
           }
         },
         "additionalProperties": false,
@@ -41744,7 +41751,8 @@
               "askElfModelFamily": "auto",
               "reviewModelFamily": "auto",
               "draftModelFamily": "auto",
-              "mammothModelFamily": "auto"
+              "mammothModelFamily": "auto",
+              "pinnedFeatureKeys": []
             }
           },
           "learnLevel": {
@@ -50361,6 +50369,20 @@
               }
             ],
             "title": "Formatting Instructions"
+          },
+          "pinned_feature_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Feature Keys"
           }
         },
         "additionalProperties": false,
@@ -50541,6 +50563,13 @@
               }
             ],
             "title": "Formattinginstructions"
+          },
+          "pinnedFeatureKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pinnedfeaturekeys"
           }
         },
         "additionalProperties": false,
