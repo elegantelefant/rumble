@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.349.0"
+    "version": "0.350.0"
   },
   "paths": {
     "/health": {
@@ -31567,6 +31567,18 @@
             "minItems": 1,
             "title": "Messages",
             "description": "Chat messages to generate title from (1-50 messages)."
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction",
+            "description": "The chat's selected jurisdiction, used to interpret legal abbreviations."
           }
         },
         "additionalProperties": false,
