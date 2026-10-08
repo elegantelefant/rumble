@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.352.0"
+    "version": "0.356.0"
   },
   "paths": {
     "/health": {
@@ -2163,6 +2163,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiRegisterSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Feature not enabled or insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/organizations/ai-register/drafting-report": {
+      "get": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Get Org Drafting Report",
+        "description": "Completed drafting volume and turnaround, for firm owners/admins only.\n\nThe router's gate is intentionally shared with the Firm activity view. The\nrepository returns display names and aggregates only; no draft text, title,\nor raw job/member identifier reaches this response.",
+        "operationId": "get_org_drafting_report",
+        "parameters": [
+          {
+            "name": "window_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Window Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftingReport"
                 }
               }
             }
@@ -5655,6 +5723,116 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HistoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/history/export": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Export History",
+        "description": "Export the caller's filtered activity feed in one capped response.",
+        "operationId": "export_history",
+        "parameters": [
+          {
+            "name": "tool",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tool"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryExportResponse"
                 }
               }
             }
@@ -35073,6 +35251,76 @@
         "type": "object",
         "title": "DraftVersionListResponse"
       },
+      "DraftingReport": {
+        "properties": {
+          "windowDays": {
+            "type": "integer",
+            "title": "Windowdays"
+          },
+          "weekly": {
+            "items": {
+              "$ref": "#/components/schemas/DraftingReportWeek"
+            },
+            "type": "array",
+            "title": "Weekly"
+          },
+          "medianCompletionSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mediancompletionseconds"
+          },
+          "p90CompletionSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90Completionseconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "windowDays"
+        ],
+        "title": "DraftingReport",
+        "description": "Completed drafting volume and completion-time percentiles for a window."
+      },
+      "DraftingReportWeek": {
+        "properties": {
+          "weekStart": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Weekstart"
+          },
+          "memberName": {
+            "type": "string",
+            "title": "Membername"
+          },
+          "completedDrafts": {
+            "type": "integer",
+            "title": "Completeddrafts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekStart",
+          "memberName",
+          "completedDrafts"
+        ],
+        "title": "DraftingReportWeek",
+        "description": "One member's completed drafts in an ISO week; identity is display-name only."
+      },
       "DroppedRow": {
         "properties": {
           "key": {
@@ -36970,6 +37218,26 @@
           "status"
         ],
         "title": "HealthResponse"
+      },
+      "HistoryExportResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HistoryExportResponse",
+        "description": "One capped, filterable export of the caller's personal history."
       },
       "HistoryListResponse": {
         "properties": {
@@ -39185,6 +39453,7 @@
         "enum": [
           "current",
           "repealed",
+          "revoked",
           "amended",
           "superseded"
         ],
@@ -44734,6 +45003,11 @@
             },
             "type": "object",
             "title": "Checks"
+          },
+          "alembicRevision": {
+            "type": "string",
+            "title": "Alembicrevision",
+            "default": "unknown"
           }
         },
         "additionalProperties": false,
