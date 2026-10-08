@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.356.0"
+    "version": "0.357.0"
   },
   "paths": {
     "/health": {
@@ -25706,6 +25706,15 @@
         "title": "AnalysisResultPayload",
         "description": "Result of an `analysis` legal request."
       },
+      "AnswerConfidenceLevel": {
+        "type": "string",
+        "enum": [
+          "high",
+          "medium",
+          "not_verified"
+        ],
+        "title": "AnswerConfidenceLevel"
+      },
       "AnswerLogCheck": {
         "properties": {
           "check": {
@@ -25906,6 +25915,19 @@
             "type": "string",
             "format": "date-time",
             "title": "Createdat"
+          },
+          "answerConfidence": {
+            "$ref": "#/components/schemas/AnswerConfidenceLevel",
+            "description": "Answer-wide confidence derived from the paragraph provenance ledger.",
+            "default": "not_verified"
+          },
+          "confidenceDerivation": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerProvenanceKind"
+            },
+            "type": "array",
+            "title": "Confidencederivation",
+            "description": "Distinct paragraph provenance kinds used to derive answer confidence."
           },
           "searches": {
             "items": {
@@ -31182,6 +31204,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Createdat"
+          },
+          "answerConfidence": {
+            "$ref": "#/components/schemas/AnswerConfidenceLevel",
+            "description": "Answer-wide confidence derived from the paragraph provenance ledger.",
+            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -31190,7 +31217,8 @@
           "id",
           "role",
           "content",
-          "createdAt"
+          "createdAt",
+          "answerConfidence"
         ],
         "title": "ChatMessage"
       },
