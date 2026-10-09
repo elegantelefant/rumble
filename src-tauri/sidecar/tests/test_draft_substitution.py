@@ -331,3 +331,39 @@ def test_strip_markdown_leaves_a_hash_with_no_following_space_alone():
     """"#1" is not heading syntax -- there's no space after the "#" -- so
     it's left as ordinary text rather than guessed at as a heading."""
     assert sub.strip_markdown("Item #1 on the list.") == "Item #1 on the list."
+
+
+# --- Dropping a bracket that would double a value already written (#46) ---
+
+def test_apply_drops_a_bracket_that_would_double_the_value_just_written():
+    """Reproduces a live packaged-app bug: the model wrote the party's name
+    itself, then redundantly added a bracket for the same field right after
+    -- "Apple [Disclosing Party]" -- which substitution turned into
+    "Apple Apple" before this fix."""
+    f = field("disclosingParty", "Disclosing Party", "Apple", aliases=["Discloser"])
+    new_text, subs = sub.apply("by and between Apple [Disclosing Party], with its address at X.", [f])
+    assert new_text == "by and between Apple, with its address at X."
+    assert subs == []
+
+
+def test_apply_drops_a_duplicate_bracket_with_no_separator():
+    f = field("disclosingParty", "Disclosing Party", "Apple")
+    new_text, _ = sub.apply("Apple[Disclosing Party] Inc.", [f])
+    assert new_text == "Apple Inc."
+
+
+def test_apply_still_substitutes_normally_when_nothing_precedes_the_bracket():
+    f = field("disclosingParty", "Disclosing Party", "Apple")
+    new_text, subs = sub.apply("[Disclosing Party] Inc.", [f])
+    assert new_text == "Apple Inc."
+    assert subs == [{"placeholder": "[Disclosing Party]", "key": "disclosingParty", "inserted": "Apple"}]
+
+
+def test_apply_does_not_treat_an_unrelated_preceding_word_as_a_duplicate():
+    """"Pineapple" ends with the same characters as the value "Apple", but
+    it's one unrelated word, not the value standing alone before the
+    bracket -- the bracket must still be filled normally."""
+    f = field("disclosingParty", "Disclosing Party", "Apple")
+    new_text, subs = sub.apply("Manufactured by Pineapple [Disclosing Party] today.", [f])
+    assert new_text == "Manufactured by Pineapple Apple today."
+    assert subs == [{"placeholder": "[Disclosing Party]", "key": "disclosingParty", "inserted": "Apple"}]

@@ -165,27 +165,69 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     return None
 
 
+def _drop_duplicate_separator(preceding: str, value: str) -> str | None:
+    """If `preceding` already ends with `value` -- allowing a trailing comma
+    and/or whitespace as the only thing between them -- return `preceding`
+    with that separator trimmed back to end right at `value`, signalling the
+    caller to drop the bracket instead of inserting `value` again. Returns
+    None when there's no such duplicate to drop.
+
+    A longer word that merely ends with `value`'s characters, like
+    "Pineapple" ending in "apple", does not count: the character immediately
+    before where `value` would start must not be alphanumeric, or this
+    would wrongly treat an unrelated word as a repeated value."""
+    stripped = preceding.rstrip()
+    if stripped.endswith(","):
+        stripped = stripped[:-1].rstrip()
+    if not stripped.endswith(value):
+        return None
+    before_idx = len(stripped) - len(value)
+    if before_idx > 0 and stripped[before_idx - 1].isalnum():
+        return None
+    return stripped
+
+
 def apply(draft: str, fields: list[DraftField]) -> tuple[str, list[dict]]:
     """Returns (new_draft, substitutions_made). Values are inserted verbatim,
     exactly as given, except date-typed fields which are rendered as a prose
-    date (e.g. "19 September 2026")."""
-    substitutions: list[dict] = []
+    date (e.g. "19 September 2026").
 
-    def repl(match: re.Match) -> str:
+    The model sometimes writes a value itself and then redundantly adds a
+    bracket for the same field right after -- "Apple [Disclosing Party]" --
+    which would otherwise double to "Apple Apple". When the text immediately
+    before a bracket already ends with the exact value about to be inserted,
+    the bracket (and the separator before it) is dropped instead."""
+    substitutions: list[dict] = []
+    out = ""
+    last_end = 0
+
+    for match in BRACKET_RE.finditer(draft):
         full, inner = match.group(0), match.group(1)
+        out += draft[last_end:match.start()]
+        last_end = match.end()
+
         field = classify_bracket(inner, fields)
         if field is None:
-            return full
+            out += full
+            continue
+
         inserted = _format_value(field)
         # The draft itself sometimes already carries the "$", e.g.
         # "$[Salary]" -- if the value's own formatting adds another one,
         # drop it rather than double up into "$$100,000".
         if inserted.startswith("$") and match.start() > 0 and draft[match.start() - 1] == "$":
             inserted = inserted[1:]
-        substitutions.append({"placeholder": full, "key": field.key, "inserted": inserted})
-        return inserted
 
-    return BRACKET_RE.sub(repl, draft), substitutions
+        deduplicated = _drop_duplicate_separator(out, inserted)
+        if deduplicated is not None:
+            out = deduplicated
+            continue
+
+        substitutions.append({"placeholder": full, "key": field.key, "inserted": inserted})
+        out += inserted
+
+    out += draft[last_end:]
+    return out, substitutions
 
 
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
