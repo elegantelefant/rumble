@@ -214,3 +214,47 @@ describe("DocumentDraftView export", () => {
     )
   })
 })
+
+describe("DocumentDraftView result type guards (#49)", () => {
+  it("renders each warning as its own bullet when warnings is a real array", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: "Sample draft text.", warnings: ["Check the dates.", "Confirm the salary."] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    expect(wrapper.findAll("li").map((li) => li.text())).toEqual(["Check the dates.", "Confirm the salary."])
+  })
+
+  it("shows no warnings, rather than one bullet per character, when warnings is a string", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      // A payload the contract doesn't promise: `warnings` as a plain string
+      // instead of a string[]. A bare `?? []` null guard lets this through,
+      // and the template's v-for then iterates it character by character.
+      result: { draft: "Sample draft text.", warnings: "Check the dates." },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    expect(wrapper.findAll("li")).toHaveLength(0)
+  })
+
+  it("shows no draft text, rather than throwing, when draft is not a string", async () => {
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: { draft: { unexpected: "shape" }, warnings: [] },
+    } as never)
+
+    const wrapper = mountDraft()
+    await fillAndGenerate(wrapper)
+
+    expect(mockAddToast).toHaveBeenCalledWith("Draft completed but returned no content.", "info")
+  })
+})
