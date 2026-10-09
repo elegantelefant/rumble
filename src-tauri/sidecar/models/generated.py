@@ -660,6 +660,33 @@ class DocumentUpdateRequest(BaseModel):
     content: dict[str, Any] | None = Field(None, title='Content')
 
 
+class DraftField(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    key: str = Field(
+        ..., description="Form field key, e.g. 'employeeName'.", title='Key'
+    )
+    label: str = Field(
+        ...,
+        description="Human-readable label shown to the user, e.g. 'Employee Name'.",
+        title='Label',
+    )
+    type: str | None = Field(
+        None,
+        description="Field type hint: 'date' for date-typed fields, 'freetext' for open-ended prose fields. Omitted for plain exact-match fields.",
+        title='Type',
+    )
+    value: str = Field(
+        ..., description='The value the user entered for this field.', title='Value'
+    )
+    aliases: list[str] | None = Field(
+        None,
+        description="Alternate labels substitution should also recognise for this field, e.g. ['Role', 'Job Title'] for Position.",
+        title='Aliases',
+    )
+
+
 class DraftRequest(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -703,6 +730,11 @@ class DraftRequest(BaseModel):
         None,
         description="Export formats to generate (e.g. ['docx', 'pdf']). Empty = markdown only.",
         title='Publish Formats',
+    )
+    fields: list[DraftField] | None = Field(
+        None,
+        description="The template's fields as filled in: key, label, type, value, aliases. Drives placeholder substitution after drafting; absent means no substitution.",
+        title='Fields',
     )
 
 

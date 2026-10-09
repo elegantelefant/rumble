@@ -2,30 +2,40 @@
 import { computed, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
+import type { DraftField } from "../api/models/draftField";
 import { useToast } from "../composables/toast";
 
 const toasts = useToast();
 
-type FieldConfig = { key: string; label: string; type?: string; placeholder?: string };
+type FieldConfig = {
+  key: string;
+  label: string;
+  type?: string;
+  placeholder?: string;
+  // Alternate labels the drafting model might reasonably use in place of
+  // this field's own label -- substitution (services/draft_substitution.py)
+  // treats an alias exactly like the label.
+  aliases?: string[];
+};
 
 const templateFields: Record<string, FieldConfig[]> = {
   employment: [
-    { key: "employeeName", label: "Employee Name", placeholder: "Full name" },
-    { key: "startDate", label: "Start Date", type: "date" },
-    { key: "salary", label: "Salary", placeholder: "$100,000" },
-    { key: "position", label: "Position", placeholder: "Role" },
+    { key: "employeeName", label: "Employee Name", placeholder: "Full name", aliases: ["Name of Employee", "Full Name"] },
+    { key: "startDate", label: "Start Date", type: "date", aliases: ["Commencement Date"] },
+    { key: "salary", label: "Salary", placeholder: "$100,000", aliases: ["Compensation", "Annual Salary", "Base Salary"] },
+    { key: "position", label: "Position", placeholder: "Role", aliases: ["Role", "Job Title", "Employee Title"] },
   ],
   nda: [
-    { key: "disclosingParty", label: "Disclosing Party", placeholder: "Company or person" },
-    { key: "receivingParty", label: "Receiving Party", placeholder: "Company or person" },
-    { key: "effectiveDate", label: "Effective Date", type: "date" },
-    { key: "duration", label: "Duration", placeholder: "e.g. 2 years" },
+    { key: "disclosingParty", label: "Disclosing Party", placeholder: "Company or person", aliases: ["Discloser"] },
+    { key: "receivingParty", label: "Receiving Party", placeholder: "Company or person", aliases: ["Recipient", "Receiver"] },
+    { key: "effectiveDate", label: "Effective Date", type: "date", aliases: ["Start Date", "Commencement Date"] },
+    { key: "duration", label: "Duration", type: "freetext", placeholder: "e.g. 2 years", aliases: ["Term", "Term Length"] },
   ],
   service: [
-    { key: "serviceProvider", label: "Service Provider", placeholder: "Provider name" },
-    { key: "clientName", label: "Client Name", placeholder: "Client name" },
-    { key: "startDate", label: "Start Date", type: "date" },
-    { key: "scopeOfWork", label: "Scope of Work", placeholder: "Brief description" },
+    { key: "serviceProvider", label: "Service Provider", placeholder: "Provider name", aliases: ["Provider", "Contractor"] },
+    { key: "clientName", label: "Client Name", placeholder: "Client name", aliases: ["Client"] },
+    { key: "startDate", label: "Start Date", type: "date", aliases: ["Commencement Date", "Effective Date"] },
+    { key: "scopeOfWork", label: "Scope of Work", type: "freetext", placeholder: "Brief description", aliases: ["Scope", "Services"] },
   ],
 };
 
@@ -89,9 +99,27 @@ async function generateDraft() {
       formState.terms?.trim() ? `\nAdditional terms: ${formState.terms.trim()}` : "",
     ].filter(Boolean).join("\n");
 
+    // validateForm() above already guarantees every activeFields value is
+    // non-blank before this point, so there's nothing left to filter out.
+    const fields: DraftField[] = activeFields.value
+      .map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        value: formState[f.key],
+        aliases: f.aliases,
+      }));
+
+    // Additional Terms is global, not per-template, and optional -- only
+    // sent when the user actually wrote something.
+    if (formState.terms?.trim()) {
+      fields.push({ key: "terms", label: "Additional Terms", type: "freetext", value: formState.terms.trim() });
+    }
+
     const jobResponse = await createDraftJob({
       prompt,
       document_type: selectedTemplate.value,
+      fields,
     });
 
     const result = await waitForJob("draft", jobResponse.job_id);

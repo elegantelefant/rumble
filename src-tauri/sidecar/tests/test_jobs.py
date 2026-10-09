@@ -35,6 +35,53 @@ async def test_draft_nonexistent_job(client):
     assert resp.status_code == 404
 
 
+async def test_draft_retry_logs_the_missing_fields_key_not_its_value(client, caplog):
+    """A retry's log line names which field was missing by key, never by
+    value (#46) -- a value is the user's own document content."""
+    from unittest.mock import AsyncMock, patch
+
+    import routes.jobs as jobs_module
+
+    first_attempt = "A draft that never mentions the employee by name."
+    second_attempt = "A complete draft naming Tester as the employee."
+
+    with (
+        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=[first_attempt, second_attempt])),
+        caplog.at_level("WARNING", logger=jobs_module.__name__),
+    ):
+        resp = await client.post("/draft", json={
+            "prompt": "Draft an agreement",
+            "fields": [{"key": "employeeName", "label": "Employee Name", "value": "Tester"}],
+        })
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    assert result.json()["result"]["draft"] == second_attempt
+    retry_logs = [r.message for r in caplog.records if "Draft retry" in r.message]
+    assert len(retry_logs) == 1
+    assert "employeeName" in retry_logs[0]
+    assert "Tester" not in retry_logs[0]
+
+
+async def test_draft_strips_markdown_from_the_final_draft(client):
+    """The model sometimes wraps clause headings in markdown; the /draft
+    route's own response must come back with it stripped (#46), not just
+    the substitution helper in isolation."""
+    from unittest.mock import AsyncMock, patch
+
+    raw = "# SERVICE AGREEMENT\n\n**1. TERM**\nThis agreement begins on the Start Date."
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/draft", json={"prompt": "Draft an agreement"})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    draft = result.json()["result"]["draft"]
+    assert draft == "SERVICE AGREEMENT\n\n1. TERM\nThis agreement begins on the Start Date."
+
+
 # --- Review ---
 
 async def test_review_creates_job(client):

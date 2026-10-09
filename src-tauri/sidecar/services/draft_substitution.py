@@ -1,0 +1,325 @@
+# ABOUTME: Fills bracketed placeholders in a drafted document with the form's own
+# ABOUTME: field values, generalised from labels/aliases rather than hardcoded per field.
+
+import re
+from datetime import date
+
+from models.generated import DraftField
+
+BRACKET_RE = re.compile(r"\[([^\[\]]{1,80})\]")
+
+# A bracket sometimes carries its own fill-in instruction ahead of the label,
+# e.g. "[Replace with Additional Terms]" or "[Insert Additional Terms]" --
+# stripped before matching so what's left still lines up with the label.
+_INSTRUCTION_PREFIX_RE = re.compile(r"^(replace with|insert|enter)\b[:\s]*", re.IGNORECASE)
+
+
+def _strip_instruction_prefix(text: str) -> str:
+    return _INSTRUCTION_PREFIX_RE.sub("", text, count=1)
+
+
+def _normalise(text: str) -> str:
+    """Lowercases and strips a possessive "'s"/"'s" as a unit before
+    dropping any remaining apostrophe, so "Employee's Name" lines up with
+    the label "Employee Name" -- stripping only the apostrophe character
+    would leave "employees name", one letter short of matching."""
+    text = text.strip().lower()
+    text = re.sub(r"[’']s\b", "", text)
+    text = text.replace("’", "").replace("'", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _prose_date(iso_value: str) -> str:
+    """"2026-09-19" -> "19 September 2026". Falls back to the raw value if it
+    isn't a plain ISO date -- insertion should never raise on an odd input."""
+    try:
+        y, m, d = (int(x) for x in str(iso_value).split("-"))
+        dt = date(y, m, d)
+        return f"{dt.day} {dt.strftime('%B')} {dt.year}"
+    except (ValueError, TypeError):
+        return str(iso_value)
+
+
+def _format_amount(value: str) -> str:
+    """"100000" -> "100,000"; "$100,000" -> "$100,000" (an existing $ prefix
+    is preserved); "100000.50" -> "100,000.50". Falls back to the raw value
+    if it doesn't actually parse as a number -- insertion should never raise."""
+    has_dollar = value.strip().startswith("$")
+    digits_only = re.sub(r"[$,\s]", "", value)
+    try:
+        if "." in digits_only:
+            whole, cents = digits_only.split(".", 1)
+            formatted = f"{int(whole):,}.{cents}"
+        else:
+            formatted = f"{int(digits_only):,}"
+    except ValueError:
+        return value
+    return f"${formatted}" if has_dollar else formatted
+
+
+def _format_value(field: DraftField) -> str:
+    if field.type == "date":
+        return _prose_date(field.value)
+    if _looks_like_amount(field.value):
+        return _format_amount(field.value)
+    return field.value
+
+
+def _field_labels(field: DraftField) -> list[str]:
+    """A field's label plus every alias -- deliberately treated identically
+    everywhere a label is matched, per the field's own `aliases` list."""
+    return [field.label, *(field.aliases or [])]
+
+
+def _label_set(field: DraftField) -> set[str]:
+    return {_normalise(label) for label in _field_labels(field)}
+
+
+def _value_literal_candidates(field: DraftField) -> set[str]:
+    """Exact strings meaning "this bracket just echoes the provided value
+    itself", e.g. value "Tester" -> {"tester", "tester name", "testers name"}.
+    The "name" suffix only applies when the field's own label is name-like."""
+    v = _normalise(field.value)
+    candidates = {v}
+    if "name" in _normalise(field.label):
+        candidates |= {f"{v} name", f"{v}s name", f"{v} full name"}
+    return candidates
+
+
+def _qualified_label_candidates(value_field: DraftField, label_field: DraftField) -> set[str]:
+    """"<value_field's value> <label_field's label/alias>" -- e.g. value_field
+    is employeeName ("Tester"), label_field is position ("Position") ->
+    {"tester position", "testers position"}. Generalises "[Tester Position]"
+    to any pair of fields, not just employee name + position."""
+    v = _normalise(value_field.value)
+    out = set()
+    for label in _label_set(label_field):
+        out |= {f"{v} {label}", f"{v}s {label}"}
+    return out
+
+
+def _label_name_candidates(field: DraftField) -> set[str]:
+    """"<field's label or alias> Name" means this field itself, e.g.
+    "[Provider Name]" for serviceProvider (aliased "Provider"), or
+    "[Disclosing Party's Name]" for disclosingParty. Possessive or not
+    collapse to the same candidate: _normalise already strips "'s" as a
+    unit, so "Provider's Name" and "Provider Name" both become "provider
+    name" before this ever compares them."""
+    return {f"{label} name" for label in _label_set(field)}
+
+
+def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
+    """Return the field a bracket should be substituted with, or None to leave it.
+
+    Checked in order:
+      1. The bracket exactly equals a field's label or one of its aliases.
+      4. "<field's label/alias> Name" (possessive or not) -- "[Provider
+         Name]" means serviceProvider, not a separate, unprovided field.
+      3. "[Label: anything]" -- the label alone decides; whatever follows the
+         colon is discarded in favour of the field's own value.
+      0. The bracket is just the field's own provided value (optionally with
+         a "name" suffix, for name-like fields).
+      2. The bracket is "<another field's value> <this field's label/alias>".
+    Every rule is an EXACT match on the normalised bracket text against a
+    precomputed candidate set, never a substring test -- so "[Tester's
+    Address]" (employee name "Tester", no address field) never collides
+    with anything: "testers address" isn't itself a candidate, even though
+    "tester" is a provided value and would be if checked by substring.
+
+    A field with a blank or whitespace-only value is ignored entirely, as
+    if it weren't passed at all -- it never matches, so apply() can never
+    insert an empty string in its place.
+
+    A leading fill-in instruction ("Replace with", "Insert", "Enter") is
+    stripped before any of the above, so "[Replace with Additional Terms]"
+    still lines up with the label "Additional Terms".
+    """
+    fields = [f for f in fields if f.value and f.value.strip()]
+    norm = _normalise(_strip_instruction_prefix(inner))
+
+    for field in fields:
+        if norm in _label_set(field):
+            return field
+
+    for field in fields:
+        if norm in _label_name_candidates(field):
+            return field
+
+    if ":" in norm:
+        label_part = norm.split(":", 1)[0].strip()
+        for field in fields:
+            if label_part in _label_set(field):
+                return field
+
+    for field in fields:
+        if norm in _value_literal_candidates(field):
+            return field
+
+    for value_field in fields:
+        for label_field in fields:
+            if value_field is label_field:
+                continue
+            if norm in _qualified_label_candidates(value_field, label_field):
+                return label_field
+
+    return None
+
+
+def _drop_duplicate_separator(preceding: str, value: str) -> str | None:
+    """If `preceding` already ends with `value` -- allowing a trailing comma
+    and/or whitespace as the only thing between them -- return `preceding`
+    with that separator trimmed back to end right at `value`, signalling the
+    caller to drop the bracket instead of inserting `value` again. Returns
+    None when there's no such duplicate to drop.
+
+    A longer word that merely ends with `value`'s characters, like
+    "Pineapple" ending in "apple", does not count: the character immediately
+    before where `value` would start must not be alphanumeric, or this
+    would wrongly treat an unrelated word as a repeated value."""
+    stripped = preceding.rstrip()
+    if stripped.endswith(","):
+        stripped = stripped[:-1].rstrip()
+    if not stripped.endswith(value):
+        return None
+    before_idx = len(stripped) - len(value)
+    if before_idx > 0 and stripped[before_idx - 1].isalnum():
+        return None
+    return stripped
+
+
+def apply(draft: str, fields: list[DraftField]) -> tuple[str, list[dict]]:
+    """Returns (new_draft, substitutions_made). Values are inserted verbatim,
+    exactly as given, except date-typed fields which are rendered as a prose
+    date (e.g. "19 September 2026").
+
+    The model sometimes writes a value itself and then redundantly adds a
+    bracket for the same field right after -- "Apple [Disclosing Party]" --
+    which would otherwise double to "Apple Apple". When the text immediately
+    before a bracket already ends with the exact value about to be inserted,
+    the bracket (and the separator before it) is dropped instead."""
+    substitutions: list[dict] = []
+    out = ""
+    last_end = 0
+
+    for match in BRACKET_RE.finditer(draft):
+        full, inner = match.group(0), match.group(1)
+        out += draft[last_end:match.start()]
+        last_end = match.end()
+
+        field = classify_bracket(inner, fields)
+        if field is None:
+            out += full
+            continue
+
+        inserted = _format_value(field)
+        # The draft itself sometimes already carries the "$", e.g.
+        # "$[Salary]" -- if the value's own formatting adds another one,
+        # drop it rather than double up into "$$100,000".
+        if inserted.startswith("$") and match.start() > 0 and draft[match.start() - 1] == "$":
+            inserted = inserted[1:]
+
+        deduplicated = _drop_duplicate_separator(out, inserted)
+        if deduplicated is not None:
+            out = deduplicated
+            continue
+
+        substitutions.append({"placeholder": full, "key": field.key, "inserted": inserted})
+        out += inserted
+
+    out += draft[last_end:]
+    return out, substitutions
+
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
+_HEADING_RE = re.compile(r"^#{1,6}\s+", re.MULTILINE)
+
+
+def strip_markdown(text: str) -> str:
+    """Removes markdown emphasis the model sometimes adds -- "**1. TERM**"
+    or "## Heading" -- which would otherwise show up literally in the draft
+    panel and the Word export, keeping only the text itself.
+
+    Only a matched pair of "**"/"__" is touched, so a single asterisk or
+    underscore used mid-sentence (e.g. "3 * 4 = 12") is left alone. A "#"
+    run is only stripped when followed by whitespace, the ordinary heading
+    syntax -- a stray leading "#" with no space after it (not a heading) is
+    left as-is rather than guessed at.
+    """
+    def repl(match: re.Match) -> str:
+        return match.group(1) if match.group(1) is not None else match.group(2)
+
+    text = _BOLD_RE.sub(repl, text)
+    return _HEADING_RE.sub("", text)
+
+
+# --- Presence check, for the retry-once decision in routes/jobs.py ---
+
+def _date_variants(iso_value: str) -> set[str]:
+    """A handful of common prose/numeric renderings of an ISO date, lowercased."""
+    try:
+        y, m, d = (int(x) for x in str(iso_value).split("-"))
+        dt = date(y, m, d)
+    except (ValueError, TypeError):
+        return {str(iso_value).lower()}
+    return {
+        str(iso_value).lower(),
+        dt.strftime("%B %d, %Y").lower(),
+        dt.strftime("%B %d, %Y").replace(" 0", " ").lower(),
+        dt.strftime("%b %d, %Y").lower(),
+        dt.strftime("%m/%d/%Y").lower(),
+        dt.strftime("%d %B %Y").lower(),
+        f"{dt.day} {dt.strftime('%B')} {dt.year}".lower(),
+    }
+
+
+def _looks_like_amount(value: str) -> bool:
+    stripped = re.sub(r"[$,\s]", "", value)
+    return bool(stripped) and stripped.replace(".", "", 1).isdigit()
+
+
+def _amount_present(draft: str, value: str) -> bool:
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return False
+    return any(re.sub(r"\D", "", run) == digits for run in re.findall(r"[\d,]+", draft) if re.sub(r"\D", "", run))
+
+
+_STOPWORDS = {"the", "a", "an", "of", "and", "to", "for", "in", "on", "with", "is", "this", "that"}
+
+
+def _freetext_present(draft: str, value: str) -> bool:
+    """A paraphrase counts, not just a verbatim match: at least half of the
+    value's significant words (longer than 2 letters, not a stopword) must
+    appear somewhere in the draft. A verbatim restatement still passes --
+    this only widens what counts, it never narrows it."""
+    lowered = draft.lower()
+    words = [w for w in re.findall(r"[a-z0-9]+", value.lower()) if len(w) > 2 and w not in _STOPWORDS]
+    if not words:
+        return value.strip().lower() in lowered
+    hits = sum(1 for w in words if w in lowered)
+    return hits >= max(1, (len(words) + 1) // 2)
+
+
+def all_present(draft: str, fields: list[DraftField]) -> dict[str, bool]:
+    """Per-field key -> whether that value made it into the draft, in some
+    recognisable form. Dates are normalised across common renderings;
+    amounts compare digits only (so "$100,000" matches "100000"); freetext
+    fields accept a paraphrase; everything else is a literal substring check.
+
+    A field with a blank or whitespace-only value is left out of the
+    result entirely -- there's nothing to have been missing, so it can
+    never trigger routes.jobs._run_draft's retry."""
+    lowered = draft.lower()
+    result = {}
+    for field in fields:
+        if not field.value or not field.value.strip():
+            continue
+        if field.type == "date":
+            result[field.key] = any(v in lowered for v in _date_variants(field.value))
+        elif field.type == "freetext":
+            result[field.key] = _freetext_present(draft, field.value)
+        elif _looks_like_amount(field.value):
+            result[field.key] = _amount_present(draft, field.value)
+        else:
+            result[field.key] = _normalise(field.value) in lowered
+    return result

@@ -2,8 +2,11 @@
 # ABOUTME: POST creates a job and spawns background work; GET polls for results.
 
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from models.generated import (
     DraftRequest,
@@ -17,7 +20,7 @@ from models.generated import (
     ReviewResponse,
 )
 from routes.ai import _parse_llm_json, _safe_construct
-from services import db, jobs, llm, prompts
+from services import db, draft_substitution, jobs, llm, prompts
 
 
 def _parse_job_json(raw: str) -> dict:
@@ -45,8 +48,37 @@ async def _run_draft(request: DraftRequest) -> dict:
         context_parts.append(f"Terms: {json.dumps(request.document_terms)}")
     user_text = "\n".join([request.prompt, *context_parts]) if context_parts else request.prompt
 
+    # Plain prose, not JSON (rumble#46, services/prompts.py's DRAFT comment):
+    # the model's raw text IS the draft, substituted against the form's own
+    # fields rather than parsed as a contract the model has to get exactly
+    # right. One retry if a provided value is still missing afterwards --
+    # not retried indefinitely, since a model that omits it once tends to
+    # omit it again, and the job should still resolve.
+    fields = request.fields or []
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-    return _parse_job_json(raw)
+    draft, _ = draft_substitution.apply(raw, fields)
+
+    if fields:
+        presence = draft_substitution.all_present(draft, fields)
+        missing_keys = [key for key, present in presence.items() if not present]
+        if missing_keys:
+            # warning, not info: uvicorn's log_level="warning" (main.py) sets
+            # the root logger's effective level, so info() here would be
+            # silently dropped and never visible without changing the
+            # deployed log level.
+            # Keys only, never values: a value is the user's own document
+            # content (an employee's name, a client's address), and a log
+            # line is not where that belongs.
+            logger.warning("Draft retry: missing field(s) %s after substitution", missing_keys)
+            raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
+            draft, _ = draft_substitution.apply(raw, fields)
+
+    # The model sometimes wraps clause headings in markdown ("**1. TERM**",
+    # "## Heading"), which would otherwise show up literally in the draft
+    # panel and the Word export rather than as styling.
+    draft = draft_substitution.strip_markdown(draft)
+
+    return {"draft": draft, "warnings": []}
 
 
 @router.post("/draft", response_model=JobCreatedResponse)
