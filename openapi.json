@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.357.0"
+    "version": "0.360.0"
   },
   "paths": {
     "/health": {
@@ -18285,6 +18285,81 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/graph/{legisId}/references/citing-cases": {
+      "get": {
+        "tags": [
+          "graph"
+        ],
+        "summary": "Graph Citing Cases",
+        "description": "Return cases citing a legislation or provision node.",
+        "operationId": "graph_citing_cases",
+        "parameters": [
+          {
+            "name": "legisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Legisid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphReferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backend dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Graph query timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/graph/{legisId}/references/outbound": {
       "get": {
         "tags": [
@@ -31178,6 +31253,18 @@
             "title": "Answerprovenance",
             "description": "Paragraph-level source class displayed beside answer prose, never embedded in it."
           },
+          "retiredModelNotice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retiredmodelnotice",
+            "description": "Display name for the one-time retired-model notice. The frontend localises the surrounding sentence and never receives the retired id."
+          },
           "tokenCount": {
             "anyOf": [
               {
@@ -37319,6 +37406,18 @@
           "href": {
             "type": "string",
             "title": "Href"
+          },
+          "deviceSummary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devicesummary",
+            "description": "Browser and operating-system summary for a sign-in row, when available."
           }
         },
         "additionalProperties": false,
@@ -52224,6 +52323,18 @@
             },
             "title": "Artifacts",
             "type": "array"
+          },
+          "retired_model_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Retired Model Notice"
           }
         },
         "required": [
