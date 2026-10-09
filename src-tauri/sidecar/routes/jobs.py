@@ -97,17 +97,47 @@ async def create_review(body: ReviewRequest) -> JobCreatedResponse:
     )
 
 
+_VALID_ISSUE_KINDS = {"risk", "ambiguity", "missing", "style", "other"}
+
+
+def _normalise_issue_kind(kind: object) -> object:
+    """A model asked for one of five kinds sometimes hands back several of
+    them joined with "|" (e.g. "risk|ambiguity"), or a near-miss like the
+    plural "risks" (#49's review baseline: 4 of 14 parseable runs had a
+    kind outside the five). Recover a valid kind where there's an obvious
+    one; otherwise leave the value as-is for _safe_construct's enum
+    validation to reset to the field's own default ("other") -- this never
+    needs to invent a kind the model didn't effectively already suggest."""
+    if not isinstance(kind, str):
+        return kind
+    if "|" in kind:
+        for part in kind.split("|"):
+            if part in _VALID_ISSUE_KINDS:
+                return part
+        return kind
+    if kind not in _VALID_ISSUE_KINDS and kind.endswith("s") and kind[:-1] in _VALID_ISSUE_KINDS:
+        return kind[:-1]
+    return kind
+
+
+def _normalise_issue_kinds(result: dict) -> None:
+    issues = result.get("issues")
+    if not isinstance(issues, list):
+        return
+    for item in issues:
+        if isinstance(item, dict) and "kind" in item:
+            item["kind"] = _normalise_issue_kind(item["kind"])
+
+
 @router.get("/review/{job_id}/result", response_model=JobResultResponse)
 async def get_review_result(job_id: str) -> JobResultResponse:
     response = await _poll_job(job_id)
     if response.status == "completed" and response.result is not None:
-        # Raw passthrough, unlike get_draft_result above: DocumentReviewView reads
-        # issue.severity/issue.description, which aren't ReviewIssue fields
-        # (kind/message/location/suggestion), so filtering to the constructed
-        # model would strip what it renders. Flip this to match get_draft_result
-        # once the view is updated to match the model (rumble#49). Same
-        # permanent-502 caveat as get_draft_result applies here too.
-        _safe_construct(ReviewResponse, response.result)
+        # Same permanent-502 caveat as get_draft_result above: a completed
+        # job's result is persisted with no re-run path, so a stored result
+        # missing a required field 502s on every poll from now on.
+        _normalise_issue_kinds(response.result)
+        response.result = _safe_construct(ReviewResponse, response.result).model_dump()
     return response
 
 
