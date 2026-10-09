@@ -106,6 +106,38 @@ describe("DocumentReviewView issue rendering (#49)", () => {
     expect(wrapper.text()).not.toContain("Info")
   })
 
+  it("renders the issues message with no literal markdown asterisks and its line breaks preserved in the DOM", async () => {
+    // Checks the rendered element, not just the string formatReviewIssue
+    // builds: this view has no markdown renderer, so a literal "**" would
+    // show up as two asterisks rather than bold, and a plain <p> collapses
+    // "\n" to a single space unless something tells the browser not to.
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: {
+        summary: "One risk found.",
+        issues: [
+          {
+            kind: "risk",
+            message: "Liability is uncapped.",
+            location: "Section 5",
+            suggestion: "Cap liability at a fixed amount.",
+          },
+        ],
+      },
+    } as never)
+
+    const wrapper = mountReview()
+    await uploadFile(wrapper)
+
+    expect(wrapper.html()).not.toContain("**")
+
+    const issuesParagraph = wrapper
+      .findAll("p")
+      .find((p) => p.text().includes("Liability is uncapped."))
+    expect(issuesParagraph).toBeDefined()
+    expect(issuesParagraph!.classes()).toContain("whitespace-pre-line")
+  })
+
   it("omits the location and suggestion lines when the issue doesn't have them", async () => {
     vi.mocked(waitForJob).mockResolvedValue({
       status: "completed",
