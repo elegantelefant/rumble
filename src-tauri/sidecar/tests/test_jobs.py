@@ -4,6 +4,10 @@
 import asyncio
 import json
 
+import pytest
+
+from routes.jobs import _normalise_issue_kind
+
 
 # --- Draft ---
 
@@ -57,6 +61,73 @@ async def test_review_completes(client):
     data = result.json()
     assert data["status"] == "completed"
     assert data["result"] is not None
+
+
+# --- Review issue kind normalisation (#49) ---
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Real values from the #49 review baseline (.scratch/49-review-baseline):
+        ("risk|ambiguity", "risk"),
+        ("risk|ambiguity|missing|style|other", "risk"),
+        ("style|other", "style"),
+        ("risks", "risk"),
+        ("rhetorical error", "rhetorical error"),  # no "|", stripping "s" doesn't help -- left for validation
+        # Already-valid values pass through unchanged.
+        ("risk", "risk"),
+        ("other", "other"),
+    ],
+)
+def test_normalise_issue_kind_baseline_values(raw, expected):
+    assert _normalise_issue_kind(raw) == expected
+
+
+def test_normalise_issue_kind_leaves_a_non_string_alone():
+    assert _normalise_issue_kind(None) is None
+
+
+async def test_review_result_returns_the_validated_payload_not_the_raw_one(client):
+    """get_review_result used to call _safe_construct only to discard its
+    result (#49) -- an off-contract key on an issue shipped to the client
+    unchanged. It must not survive now that the endpoint matches
+    get_draft_result's pattern."""
+    from unittest.mock import AsyncMock, patch
+
+    raw = json.dumps({
+        "summary": "One risk found.",
+        "issues": [
+            {"kind": "risk", "message": "Liability is uncapped.", "severity": "High"},
+        ],
+    })
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    issue = result.json()["result"]["issues"][0]
+    assert "severity" not in issue
+    assert issue["kind"] == "risk"
+    assert issue["message"] == "Liability is uncapped."
+
+
+async def test_review_result_normalises_a_pipe_joined_kind_through_the_real_route(client):
+    from unittest.mock import AsyncMock, patch
+
+    raw = json.dumps({
+        "summary": "Mixed signals.",
+        "issues": [{"kind": "risk|ambiguity|missing|style|other", "message": "Several things at once."}],
+    })
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["result"]["issues"][0]["kind"] == "risk"
 
 
 # --- Research ---
