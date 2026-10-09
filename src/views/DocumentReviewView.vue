@@ -174,7 +174,10 @@ function formatReviewIssue(issue: Record<string, unknown>, index: number): strin
   // been validated server-side yet (#49) could still omit it or send the
   // wrong type, so this still needs its own fallback rather than assuming it.
   const message = typeof issue.message === "string" ? issue.message : JSON.stringify(issue);
-  const lines = [`${index + 1}. **${issueKindLabel(issue.kind)}** — ${message}`];
+  // No markdown rendering here (plain-text <p>), so "**" would show up as
+  // literal asterisks rather than bold -- the label alone, undecorated,
+  // reads better than fake-bold markup that never renders as bold.
+  const lines = [`${index + 1}. ${issueKindLabel(issue.kind)} — ${message}`];
   if (typeof issue.location === "string" && issue.location) {
     lines.push(`   Location: ${issue.location}`);
   }
@@ -541,7 +544,7 @@ const workflowSteps = [
                 <span>{{ message.role === "user" ? "You" : "Elefant Assistant" }}</span>
                 <span>{{ message.timestamp }}</span>
               </div>
-              <p>{{ message.content }}</p>
+              <p class="whitespace-pre-line">{{ message.content }}</p>
               <div v-if="message.citations?.length" class="mt-2 flex flex-wrap gap-2">
                 <span v-for="citation in message.citations" :key="citation" class="chip">
                   {{ citation }}
