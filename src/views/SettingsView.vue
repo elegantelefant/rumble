@@ -10,6 +10,7 @@ import {
   loadBackendMode,
   MODE_TO_STATE,
   setBackendMode,
+  STORAGE_NOTICES,
   type BackendMode,
 } from "../composables/backendMode";
 
@@ -176,7 +177,7 @@ const appearanceSettings = reactive({
 });
 
 const syncSettings = reactive({
-  enabled: true,
+  enabled: false,
   teamCode: "",
   server: "",
   useCustom: false,
@@ -347,8 +348,8 @@ async function saveSettings() {
     });
     toast.addToast(
       aside
-        ? `Settings saved on this device. The unreadable settings file was kept as ${aside}.`
-        : "Settings saved on this device.",
+        ? `${STORAGE_NOTICES.savedToast} The unreadable settings file was kept as ${aside}.`
+        : STORAGE_NOTICES.savedToast,
       "success",
     );
   } catch (error) {
@@ -405,7 +406,7 @@ const selectedProviderDetails = computed(() =>
     <header>
       <h1 class="h1">Settings</h1>
       <p class="body-muted">
-        Manage provider credentials, local storage, appearance, and sync endpoints. Secrets stay encrypted on-device.
+        Manage provider credentials, local storage, appearance, and sync endpoints. API keys are stored in your system keychain.
       </p>
     </header>
 
@@ -453,7 +454,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Local storage uses SQLCipher for encryption. Hosted providers transmit prompts and outputs to their APIs.
+            Hosted providers transmit prompts and outputs to their APIs.
           </p>
         </div>
 
@@ -521,7 +522,7 @@ const selectedProviderDetails = computed(() =>
             </label>
           </div>
           <p class="text-xs text-[var(--primary-500)]">
-            Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.
+            {{ STORAGE_NOTICES.providersHint }}
           </p>
           <div class="flex justify-end">
             <button class="btn-primary" type="button" @click="addSecret">Save secret</button>
@@ -546,9 +547,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h3 class="text-base font-semibold text-[var(--primary-800)]">Workspace data</h3>
           <p class="text-xs text-[var(--primary-500)]">
-            Chats, messages and document review, draft and research jobs, including the document text, are kept in a
-            database in this device's local app data folder, not in the workspace path below. Jobs are deleted the next
-            time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.
+            {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">
@@ -650,41 +649,36 @@ const selectedProviderDetails = computed(() =>
       <section v-else class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
-          <p class="text-xs text-[var(--primary-500)]">
-            Use the Elefant sync service or supply your own server built from our open-source reference implementation.
-          </p>
+          <p class="text-xs text-[var(--primary-500)]">{{ UNAVAILABLE }}</p>
         </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.enabled" />
-          Enable secure sync
+        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
+          <input type="checkbox" v-model="syncSettings.enabled" disabled />
+          Enable sync
         </label>
         <div class="grid gap-4 md:grid-cols-2">
-          <label class="text-sm font-medium text-[var(--primary-700)]">
+          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
             Team code
-            <input v-model="syncSettings.teamCode" class="input mt-1" />
+            <input v-model="syncSettings.teamCode" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">Share this with colleagues to join your workspace.</span>
           </label>
-          <label class="text-sm font-medium text-[var(--primary-700)]">
+          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
             Default Elefant server
             <input v-model="syncSettings.server" class="input mt-1" disabled />
             <span class="text-xs text-[var(--primary-500)]">
-              Hosted by Elefant. Data is encrypted in transit and at rest.
+              Default server for workspace sync.
             </span>
           </label>
         </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.useCustom" />
+        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
+          <input type="checkbox" v-model="syncSettings.useCustom" disabled />
           Use custom sync server
         </label>
-        <label class="text-sm font-medium text-[var(--primary-700)]" :class="{ 'opacity-50': !syncSettings.useCustom }">
+        <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
           Custom server URL
-          <input v-model="syncSettings.customServer" :disabled="!syncSettings.useCustom" class="input mt-1" placeholder="https://sync.myfirm.com" />
-          <span class="text-xs text-[var(--primary-500)]">
-            Build your own server using our reference repo: github.com/ielegante/rumble-sync
-          </span>
+          <input v-model="syncSettings.customServer" disabled class="input mt-1" placeholder="https://sync.myfirm.com" />
         </label>
         <div class="flex justify-end">
-          <button class="btn-secondary" type="button" @click="testSync">Test connection</button>
+          <button class="btn-secondary opacity-50" type="button" @click="testSync" disabled>Test connection</button>
         </div>
       </section>
 
