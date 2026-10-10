@@ -100,9 +100,13 @@ async function generateDraft() {
       throw new Error("Draft generation failed — the AI could not produce a draft.");
     }
 
-    const payload = result.result as { draft?: string; warnings?: string[] } | undefined;
-    draftResult.value = payload?.draft ?? "";
-    draftWarnings.value = payload?.warnings ?? [];
+    // The server's own contract doesn't guarantee these types (#49) -- a
+    // wrong-typed `warnings` would pass a plain `?? []` null guard, and
+    // iterating a string in the template's v-for renders one bullet per
+    // character instead of failing visibly.
+    const payload = result.result as { draft?: unknown; warnings?: unknown } | undefined;
+    draftResult.value = typeof payload?.draft === "string" ? payload.draft : "";
+    draftWarnings.value = Array.isArray(payload?.warnings) ? payload.warnings : [];
 
     if (draftResult.value) {
       toasts.addToast("Draft prepared. Review before sharing with clients.", "success");

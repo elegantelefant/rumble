@@ -53,7 +53,11 @@ DRAFT = (
 REVIEW = (
     "You are a legal document reviewer. "
     "Review the provided text and identify issues, risks, ambiguities, and style problems. "
-    "Return JSON: {\"summary\": \"...\", \"issues\": [{\"kind\": \"risk|ambiguity|missing|style|other\", "
+    "For each issue, choose exactly one kind that best fits: "
+    "risk (a legal or business risk), ambiguity (unclear or undefined language), "
+    "missing (an absent clause or term), style (wording, formatting, or clarity), "
+    "or other (anything that doesn't fit the above). "
+    "Return JSON: {\"summary\": \"...\", \"issues\": [{\"kind\": \"<one of: risk, ambiguity, missing, style, other>\", "
     "\"message\": \"...\", \"location\": \"...\", \"suggestion\": \"...\"}]}"
 )
 

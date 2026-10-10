@@ -153,6 +153,40 @@ function openSession(id: string) {
   beginInitialReview(session);
 }
 
+// ReviewIssue's actual contract fields (sidecar-openapi.json): kind, message,
+// location, suggestion. "other" is the contract's own default for an
+// unrecognised kind -- labelled the same as any kind value we don't
+// recognise here, rather than as a separate case.
+const ISSUE_KIND_LABELS: Record<string, string> = {
+  risk: "Risk",
+  ambiguity: "Ambiguity",
+  missing: "Missing clause",
+  style: "Style",
+  other: "Note",
+};
+
+function issueKindLabel(kind: unknown): string {
+  return typeof kind === "string" && kind in ISSUE_KIND_LABELS ? ISSUE_KIND_LABELS[kind] : "Note";
+}
+
+function formatReviewIssue(issue: Record<string, unknown>, index: number): string {
+  // message is the contract's only required field -- a payload that hasn't
+  // been validated server-side yet (#49) could still omit it or send the
+  // wrong type, so this still needs its own fallback rather than assuming it.
+  const message = typeof issue.message === "string" ? issue.message : JSON.stringify(issue);
+  // No markdown rendering here (plain-text <p>), so "**" would show up as
+  // literal asterisks rather than bold -- the label alone, undecorated,
+  // reads better than fake-bold markup that never renders as bold.
+  const lines = [`${index + 1}. ${issueKindLabel(issue.kind)} — ${message}`];
+  if (typeof issue.location === "string" && issue.location) {
+    lines.push(`   Location: ${issue.location}`);
+  }
+  if (typeof issue.suggestion === "string" && issue.suggestion) {
+    lines.push(`   Suggestion: ${issue.suggestion}`);
+  }
+  return lines.join("\n");
+}
+
 async function queueInitialReview(file: UploadedFile, fileText: string) {
   try {
     syncingCount.value++;
@@ -173,10 +207,14 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
       throw new Error("Review failed — the AI could not process this document.");
     }
 
-    // 3. Extract summary and issues from result
+    // 3. Extract summary and issues from result. The server's own contract
+    // doesn't guarantee these types (#49) -- a wrong-typed `issues` would
+    // pass a plain `?? []` null guard, and issues.length is truthy for a
+    // non-empty string, so issues.map() below would throw instead of
+    // failing (or silently misrendering) in a way the user can make sense of.
     const payload = result.result as Record<string, unknown> | undefined;
-    const summary = (payload?.summary as string) ?? "Review complete.";
-    const issues = (payload?.issues as Array<Record<string, string>>) ?? [];
+    const summary = typeof payload?.summary === "string" ? payload.summary : "Review complete.";
+    const issues = Array.isArray(payload?.issues) ? (payload.issues as Array<Record<string, unknown>>) : [];
 
     session.summary = summary;
 
@@ -190,9 +228,7 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
       });
     }
     if (issues.length) {
-      const issueText = issues
-        .map((issue, i) => `${i + 1}. **${issue.severity ?? "Info"}** — ${issue.description ?? issue.issue ?? JSON.stringify(issue)}`)
-        .join("\n");
+      const issueText = issues.map((issue, i) => formatReviewIssue(issue, i)).join("\n");
       session.messages.push({
         id: generateId(),
         role: "assistant",
@@ -508,7 +544,7 @@ const workflowSteps = [
                 <span>{{ message.role === "user" ? "You" : "Elefant Assistant" }}</span>
                 <span>{{ message.timestamp }}</span>
               </div>
-              <p>{{ message.content }}</p>
+              <p class="whitespace-pre-line">{{ message.content }}</p>
               <div v-if="message.citations?.length" class="mt-2 flex flex-wrap gap-2">
                 <span v-for="citation in message.citations" :key="citation" class="chip">
                   {{ citation }}
