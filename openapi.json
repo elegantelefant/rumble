@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.362.0"
+    "version": "0.363.0"
   },
   "paths": {
     "/health": {
@@ -25992,9 +25992,15 @@
             "title": "Createdat"
           },
           "answerConfidence": {
-            "$ref": "#/components/schemas/AnswerConfidenceLevel",
-            "description": "Answer-wide confidence derived from the paragraph provenance ledger.",
-            "default": "not_verified"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Answer-wide confidence derived from the paragraph provenance ledger."
           },
           "confidenceDerivation": {
             "items": {
@@ -31312,8 +31318,38 @@
             "title": "Createdat"
           },
           "answerConfidence": {
-            "$ref": "#/components/schemas/AnswerConfidenceLevel",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Answer-wide confidence derived from the paragraph provenance ledger.",
+            "readOnly": true
+          },
+          "answerConfidenceReason": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "$ref": "#/components/schemas/AnswerProvenanceKind"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answerconfidencereason",
+            "description": "Localisable reason and affected claim count for a non-high answer confidence.",
             "readOnly": true
           }
         },
@@ -31323,8 +31359,7 @@
           "id",
           "role",
           "content",
-          "createdAt",
-          "answerConfidence"
+          "createdAt"
         ],
         "title": "ChatMessage"
       },
@@ -52354,6 +52389,39 @@
             ],
             "default": null,
             "title": "Retired Model Notice"
+          },
+          "answer_confidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "answer_confidence_reason": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "$ref": "#/components/schemas/AnswerProvenanceKind"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer Confidence Reason"
           }
         },
         "required": [
