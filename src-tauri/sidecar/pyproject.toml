@@ -16,6 +16,7 @@ dependencies = [
     "pypdf[crypto]>=6.18.1",
     "python-docx>=1.2.0",
     "python-multipart>=0.0.22",
+    "json-repair==0.64.0",
 ]
 
 [project.scripts]
