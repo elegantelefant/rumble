@@ -6,6 +6,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+logger = logging.getLogger(__name__)
+
 from models.generated import (
     DraftField,
     DraftRequest,
@@ -146,7 +148,15 @@ async def _run_review(request: ReviewRequest) -> dict:
     user_text = "\n".join([request.text, *context_parts]) if context_parts else request.text
 
     raw = await llm.run_single_turn(user_text, prompts.REVIEW)
-    return _parse_job_json(raw)
+    try:
+        return _parse_job_json(raw)
+    except ValueError:
+        # rumble#90: _parse_llm_json already tried a repair pass; this is only
+        # reached when that also failed. One regeneration, not an open-ended
+        # loop -- a model that garbles the structure once tends to again.
+        logger.warning("Review retry: parsing failed even after repair, regenerating once")
+        raw = await llm.run_single_turn(user_text, prompts.REVIEW)
+        return _parse_job_json(raw)
 
 
 @router.post("/review", response_model=JobCreatedResponse)

@@ -6,6 +6,7 @@ import logging
 import re
 import typing
 
+import json_repair
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
@@ -49,6 +50,20 @@ def _parse_llm_json(raw: str) -> dict:
     try:
         return json.loads(text)
     except (json.JSONDecodeError, ValueError) as exc:
+        # rumble#90: a live baseline found most of the model's own JSON
+        # breakages (trailing commas, bad escapes, stray control characters,
+        # missing delimiters) are mechanically repairable without a retry.
+        # Accepted only when repair actually produces a dict -- a repaired
+        # list, scalar, or None means the output wasn't a review/draft/etc.
+        # payload to begin with, and the original error is the honest one.
+        try:
+            repaired = json_repair.loads(text, skip_json_loads=True)
+        except Exception:
+            repaired = None
+        if isinstance(repaired, dict):
+            # Never log the content -- it's the user's own document text.
+            logger.warning("Repaired malformed LLM JSON output (%s)", type(exc).__name__)
+            return repaired
         raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
 
