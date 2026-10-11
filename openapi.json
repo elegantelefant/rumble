@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.365.0"
+    "version": "0.366.0"
   },
   "paths": {
     "/health": {
@@ -39423,6 +39423,52 @@
             ],
             "title": "Jurisdiction"
           },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
+          },
           "docType": {
             "anyOf": [
               {
@@ -39577,6 +39623,52 @@
               }
             ],
             "title": "Jurisdiction"
+          },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
           },
           "docType": {
             "anyOf": [
