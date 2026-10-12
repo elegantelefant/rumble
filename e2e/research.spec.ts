@@ -1,10 +1,11 @@
 // ABOUTME: E2e tests for the Research Assistant view.
 // ABOUTME: Validates thread management, model selection, prompt submission, and workflow tips.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("Research Assistant", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/research");
+    await gotoRoute(page, "/research");
   });
 
   test("renders page heading", async ({ page }) => {

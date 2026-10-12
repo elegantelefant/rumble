@@ -1,6 +1,7 @@
 // ABOUTME: Screenshot capture test for visual UI/UX review.
 // ABOUTME: Takes full-page screenshots of every active route for manual inspection.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 const routes = [
   { path: "/login", name: "login" },
@@ -13,7 +14,7 @@ const routes = [
 
 for (const route of routes) {
   test(`screenshot ${route.name}`, async ({ page }) => {
-    await page.goto(route.path);
+    await gotoRoute(page, route.path);
     await page.waitForLoadState("networkidle");
     await page.screenshot({ path: `screenshots/${route.name}.png`, fullPage: true });
   });

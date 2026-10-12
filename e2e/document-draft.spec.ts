@@ -1,10 +1,11 @@
 // ABOUTME: E2e tests for the Document Draft view.
 // ABOUTME: Validates template selection, form fields, validation, and draft generation.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("Document Draft", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
   });
 
   test("renders page heading", async ({ page }) => {
