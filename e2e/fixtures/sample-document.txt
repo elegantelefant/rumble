@@ -1,0 +1,11 @@
+Sample Services Agreement
+
+Section 1: Scope of Work
+The provider shall deliver the services described in Exhibit A.
+
+Section 2: Term and Termination
+This agreement begins on the effective date and continues for twelve months
+unless terminated earlier by either party on thirty days' written notice.
+
+Section 3: Payment
+Client shall pay the provider's invoices within thirty days of receipt.
