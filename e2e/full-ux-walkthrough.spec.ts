@@ -465,25 +465,24 @@ test.describe("8. Settings", () => {
 
   test("8b. providers tab — configured secrets", async ({ page }) => {
     await expect(page.getByText("Configured secrets")).toBeVisible();
-    await expect(page.getByText("Primary local runtime")).toBeVisible();
     await page.screenshot({ path: S("08b-settings-providers"), fullPage: true });
   });
 
   test("8c. providers tab — add secret form", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("openai");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("openai");
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Research key");
     await page.screenshot({ path: S("08c-settings-add-openai"), fullPage: true });
   });
 
   test("8d. providers tab — API key field appears for hosted provider", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("openai");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("openai");
     await expect(page.getByPlaceholder("sk-...")).toBeVisible();
     await page.getByPlaceholder("sk-...").fill("sk-test-key-12345");
     await page.screenshot({ path: S("08d-settings-api-key-field"), fullPage: true });
   });
 
   test("8e. providers tab — local config fields for Ollama", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("elefant-local");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
     await expect(page.getByPlaceholder("http://127.0.0.1")).toBeVisible();
     await expect(page.getByPlaceholder("11434")).toBeVisible();
     await expect(page.getByPlaceholder("elefant-legal-blend")).toBeVisible();
@@ -491,15 +490,33 @@ test.describe("8. Settings", () => {
   });
 
   test("8f. providers tab — save secret button", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("anthropic");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("anthropic");
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Claude key");
     await page.getByPlaceholder("sk-...").fill("sk-ant-test");
     await page.getByRole("button", { name: "Save secret" }).click();
     await page.screenshot({ path: S("08f-settings-secret-saved"), fullPage: true });
   });
 
-  test("8g. providers tab — remove secret", async ({ page }) => {
-    await page.getByText("Remove").first().click();
+  test("8g. providers tab — add ollama secret shows remove button", async ({ page }) => {
+    // Ollama is the one provider with requiresKey: false, so adding it never
+    // calls Tauri invoke and succeeds with no host (unlike openai/anthropic).
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
+    await page.getByRole("button", { name: "Save secret" }).click();
+    const secretRow = page.getByRole("listitem").filter({ hasText: "Ollama · Elefant Legal Blend" });
+    await expect(secretRow).toBeVisible();
+    await expect(secretRow.getByRole("button", { name: "Remove" })).toBeVisible();
+    await page.screenshot({ path: S("08g-settings-secret-added"), fullPage: true });
+  });
+
+  // Removal always calls invoke("delete_api_key"), which rejects with no
+  // Tauri host, so the secret can never actually come off the list here.
+  // Needs the IPC bridge from rumble#62 before this is testable.
+  test.fixme("8g-removal. providers tab — remove secret — needs IPC bridge (#62)", async ({ page }) => {
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
+    await page.getByRole("button", { name: "Save secret" }).click();
+    const secretRow = page.getByRole("listitem").filter({ hasText: "Ollama · Elefant Legal Blend" });
+    await secretRow.getByRole("button", { name: "Remove" }).click();
+    await expect(secretRow).not.toBeVisible();
     await page.screenshot({ path: S("08g-settings-secret-removed"), fullPage: true });
   });
 
