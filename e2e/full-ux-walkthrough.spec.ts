@@ -1,9 +1,19 @@
 // ABOUTME: Full interactive UX walkthrough — acts as a new user.
 // ABOUTME: Screenshots every page and exercises every clickable/typable interaction.
 import { expect, test } from "@playwright/test";
+import * as path from "path";
+import { fileURLToPath } from "url";
 import { gotoRoute } from "./helpers";
+import { mockTauri } from "./mockTauri";
 
 const S = (name: string) => `screenshots/${name}.png`;
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SAMPLE_DOCUMENT = path.join(__dirname, "fixtures", "sample-document.txt");
+
+async function uploadSampleDocument(page: import("@playwright/test").Page) {
+  await page.locator('input[type="file"]').setInputFiles(SAMPLE_DOCUMENT);
+}
 
 // ═══════════════════════════════════════
 // 1. FIRST LAUNCH — Login & Entry
@@ -186,22 +196,51 @@ test.describe("4. Document Review", () => {
     await page.screenshot({ path: S("04c-review-custom-prompt"), fullPage: true });
   });
 
-  test("4d. pre-seeded session visible in sidebar", async ({ page }) => {
-    await expect(page.getByText("Contract_2024.pdf").first()).toBeVisible();
+  // The app no longer ships a seeded session (#62) — these upload through a mocked IPC bridge
+  // instead of expecting demo data, and assert only the uploaded filename, the summary text, and
+  // the chat flow, not issue rendering (this branch predates #91's issue-rendering rework).
+  test("4d. uploaded session visible in sidebar", async ({ page }) => {
+    await mockTauri(page, { reviewSummary: "No material risks found in the uploaded document." });
+    // beforeEach already navigated to /review; reload (not gotoRoute to the same URL again) so
+    // the init script registered above actually takes effect on a fresh document.
+    await page.reload();
+    await uploadSampleDocument(page);
+
+    await expect(page.getByText("sample-document.txt").first()).toBeVisible();
     await expect(page.getByText("Summary ready")).toBeVisible();
     await page.screenshot({ path: S("04d-review-session-list"), fullPage: true });
   });
 
-  test("4e. active session shows chat with citations", async ({ page }) => {
+  test("4e. active session shows chat messages", async ({ page }) => {
+    await mockTauri(page, { reviewSummary: "Summary: two obligations flagged for review." });
+    await page.reload();
+    await uploadSampleDocument(page);
+
     await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
-    await expect(page.getByText("Highlight the key renewal obligations")).toBeVisible();
-    await expect(page.getByText("Renewal clauses flagged")).toBeVisible();
-    await expect(page.getByText("Contract_2024.pdf · Section 4")).toBeVisible();
+    await expect(page.getByText("Starting initial review for sample-document.txt.")).toBeVisible();
+    // Appears both in the summary panel and as the final chat message — assert it's shown at all.
+    await expect(page.getByText("Summary: two obligations flagged for review.").first()).toBeVisible();
+    await page.screenshot({ path: S("04e-review-chat"), fullPage: true });
+  });
+
+  // The citation-chip UI is dead code on this branch — nothing ever sets message.citations for a
+  // review message (confirmed while building this mock; filed as #96, asking whether to remove
+  // the chip UI or wire issue locations into it). Un-skip once #96 is resolved either way.
+  test.fixme("4e-citations. active session shows citation chips — dead code, see #96", async ({ page }) => {
+    await mockTauri(page);
+    await page.reload();
+    await uploadSampleDocument(page);
+    await expect(page.locator(".chip").first()).toBeVisible();
     await page.screenshot({ path: S("04e-review-chat-citations"), fullPage: true });
   });
 
   test("4f. type and send a follow-up question", async ({ page }) => {
+    await mockTauri(page);
+    await page.reload();
+    await uploadSampleDocument(page);
+
     const input = page.locator("#document-question");
+    await expect(input).toBeVisible();
     await input.fill("What are the termination clauses?");
     await page.screenshot({ path: S("04f-review-typing-question"), fullPage: true });
     await page.getByRole("button", { name: "Send" }).click();
@@ -227,6 +266,9 @@ test.describe("4. Document Review", () => {
   });
 
   test("4j. export session button present", async ({ page }) => {
+    await mockTauri(page);
+    await page.reload();
+    await uploadSampleDocument(page);
     await expect(page.getByRole("button", { name: "Export Session" })).toBeVisible();
   });
 });
@@ -340,7 +382,13 @@ test.describe("6. Research Assistant", () => {
     await page.screenshot({ path: S("06b-research-badges"), fullPage: true });
   });
 
+  // Without a mocked /models, the model list stays empty (no sidecar host in plain e2e), so
+  // selectedModel never resolves to anything and the select stays at "" — see #62.
   test("6c. model selector defaults to local", async ({ page }) => {
+    await mockTauri(page);
+    // beforeEach already navigated to /research; reload (not gotoRoute to the same URL again)
+    // so the init script registered above actually takes effect on a fresh document.
+    await page.reload();
     const select = page.locator("select").first();
     await expect(select).toHaveValue("elefant-local");
     await page.screenshot({ path: S("06c-research-model-select"), fullPage: true });
@@ -352,7 +400,11 @@ test.describe("6. Research Assistant", () => {
     await page.screenshot({ path: S("06d-research-new-thread"), fullPage: true });
   });
 
+  // Same root cause as 6c: submitPrompt() bails at its "no models available" guard before the
+  // question is ever added to the thread, unless /models resolves to something usable (#62).
   test("6e. type and submit research prompt", async ({ page }) => {
+    await mockTauri(page);
+    await page.reload();
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the key requirements for PDPA compliance in Singapore for SaaS companies?");
     await page.screenshot({ path: S("06e-research-typing-prompt"), fullPage: true });
@@ -497,10 +549,13 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08g-settings-secret-added"), fullPage: true });
   });
 
-  // Removal always calls invoke("delete_api_key"), which rejects with no
-  // Tauri host, so the secret can never actually come off the list here.
-  // Needs the IPC bridge from rumble#62 before this is testable.
-  test.fixme("8g-removal. providers tab — remove secret — needs IPC bridge (#62)", async ({ page }) => {
+  // Removal always calls invoke("delete_api_key"), which rejects with no Tauri host — mocked
+  // here (#62) so the keychain delete actually succeeds and the row comes off the list.
+  test("8g-removal. providers tab — remove secret", async ({ page }) => {
+    await mockTauri(page);
+    // beforeEach already navigated to /settings; reload (not gotoRoute to the same URL again)
+    // so the init script registered above actually takes effect on a fresh document.
+    await page.reload();
     await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
     await page.getByRole("button", { name: "Save secret" }).click();
     const secretRow = page.getByRole("listitem").filter({ hasText: "Ollama · Elefant Legal Blend" });

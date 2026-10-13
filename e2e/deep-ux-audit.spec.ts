@@ -3,22 +3,19 @@
 import { expect, test } from "@playwright/test";
 import { gotoRoute } from "./helpers";
 import * as path from "path";
-import * as fs from "fs";
 import { fileURLToPath } from "url";
+import { mockTauri } from "./mockTauri";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const S = (name: string) => `screenshots/deep-${name}.png`;
 
-// Create a temp test file for upload testing
-const TEST_FILE_PATH = path.join(__dirname, "test-upload.txt");
-test.beforeAll(() => {
-  fs.writeFileSync(TEST_FILE_PATH, "This is a test legal document for review.\nSection 1: Obligations\nSection 2: Termination");
-});
-test.afterAll(() => {
-  fs.unlinkSync(TEST_FILE_PATH);
-});
+const SAMPLE_DOCUMENT = path.join(__dirname, "fixtures", "sample-document.txt");
+
+async function uploadSampleDocument(page: import("@playwright/test").Page) {
+  await page.locator('input[type="file"]').setInputFiles(SAMPLE_DOCUMENT);
+}
 
 // ═══════════════════════════════════════
 // 1. LOGIN PAGE — Actually see it
@@ -40,29 +37,26 @@ test.describe("1. Login Page (bypass auth stub)", () => {
 // ═══════════════════════════════════════
 
 test.describe("2. File Upload", () => {
+  // extract_document goes through Tauri invoke, which has no bridge in plain Chromium — needs
+  // the mocked IPC from #62, same as the rest of Document Review's "no seeded session" tests.
   test("2a. upload a file via file input", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/review");
+    await uploadSampleDocument(page);
 
-    // Get the hidden file input and set files on it
-    const fileInput = page.locator('input[type="file"]');
-    await fileInput.setInputFiles(TEST_FILE_PATH);
-
-    // Should see the uploaded file in the session list
-    await page.waitForTimeout(500);
     await page.screenshot({ path: S("02a-file-uploaded"), fullPage: true });
-    // File should appear as "test-upload.txt" in the session heading
-    await expect(page.getByRole("heading", { name: "test-upload.txt" })).toBeVisible();
+    // File should appear as "sample-document.txt" in the session heading
+    await expect(page.getByRole("heading", { name: "sample-document.txt" })).toBeVisible();
   });
 
   test("2b. uploaded file shows review status", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/review");
-    const fileInput = page.locator('input[type="file"]');
-    await fileInput.setInputFiles(TEST_FILE_PATH);
-    await page.waitForTimeout(500);
+    await uploadSampleDocument(page);
 
     // Click on the uploaded file session in the sidebar list
-    await page.getByRole("button", { name: /test-upload\.txt/ }).first().click();
-    await page.waitForTimeout(1000);
+    await page.getByRole("button", { name: /sample-document\.txt/ }).first().click();
+    await expect(page.getByText("Summary ready")).toBeVisible();
     await page.screenshot({ path: S("02b-uploaded-session-active"), fullPage: true });
   });
 
@@ -140,7 +134,10 @@ test.describe("3. Toast Notifications", () => {
     await page.screenshot({ path: S("03f-toast-secret-error"), fullPage: true });
   });
 
+  // submitPrompt() bails at its "no models available" guard before this toast fires, unless
+  // /models resolves to something usable — there's no sidecar host in plain e2e otherwise (#62).
   test("3g. research prompt shows info toast", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/research");
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the elements of negligence?");
@@ -150,12 +147,16 @@ test.describe("3. Toast Notifications", () => {
     await page.screenshot({ path: S("03g-toast-research-sent"), fullPage: true });
   });
 
+  // The real success copy is "Translation complete." (TranslationView.vue) — "Translation
+  // generated" never existed. translate() goes through Tauri invoke, so it needs the mocked
+  // IPC bridge from #62 to resolve at all; before that, this failed on both the wrong text and
+  // the missing host.
   test("3h. translation generates success toast", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/translation");
     await page.getByPlaceholder("Paste or type the passage").fill("This is a test");
     await page.getByRole("button", { name: "Translate" }).click();
-    await page.waitForTimeout(500);
-    await expect(page.getByText("Translation generated")).toBeVisible();
+    await expect(page.getByText("Translation complete.")).toBeVisible();
     await page.screenshot({ path: S("03h-toast-translation-success"), fullPage: true });
   });
 });
@@ -188,13 +189,18 @@ test.describe("4. Keyboard Navigation", () => {
     await page.screenshot({ path: S("04d-palette-enter-navigate"), fullPage: true });
   });
 
+  // #document-question only renders once a session is active — there's no seeded session (#62),
+  // so this uploads one through the mocked IPC bridge first.
   test("4e. Enter submits review question", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/review");
+    await uploadSampleDocument(page);
+
     const input = page.locator("#document-question");
+    await expect(input).toBeVisible();
     await input.fill("Is there a force majeure clause?");
     await input.press("Enter");
     // Form should submit — question appears in chat
-    await page.waitForTimeout(300);
     await expect(page.getByText("Is there a force majeure clause?", { exact: true })).toBeVisible();
     await page.screenshot({ path: S("04e-enter-submit-question"), fullPage: true });
   });
@@ -232,8 +238,14 @@ test.describe("5. Edge Cases", () => {
     await page.screenshot({ path: S("05c-research-empty-noop"), fullPage: true });
   });
 
+  // "Send" only renders once a session is active — there's no seeded session (#62), so this
+  // uploads one through the mocked IPC bridge first, then checks the empty-question guard.
   test("5d. review send empty question does nothing", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/review");
+    await uploadSampleDocument(page);
+
+    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
     await page.getByRole("button", { name: "Send" }).click();
     // No error, no action — empty question guard
     await page.screenshot({ path: S("05d-review-empty-send"), fullPage: true });
@@ -251,10 +263,10 @@ test.describe("5. Edge Cases", () => {
     await page.screenshot({ path: S("05e-settings-secret-added"), fullPage: true });
   });
 
-  // Removal always calls invoke("delete_api_key"), which rejects with no
-  // Tauri host, so the secret can never actually come off the list here.
-  // Needs the IPC bridge from rumble#62 before this is testable.
-  test.fixme("5e-removal. settings remove secret — needs IPC bridge (#62)", async ({ page }) => {
+  // Removal always calls invoke("delete_api_key"), which rejects with no Tauri host — mocked
+  // here (#62) so the keychain delete actually succeeds and the row comes off the list.
+  test("5e-removal. settings remove secret", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/settings");
     await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
     await page.getByRole("button", { name: "Save secret" }).click();

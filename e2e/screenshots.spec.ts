@@ -1,6 +1,6 @@
 // ABOUTME: Screenshot capture test for visual UI/UX review.
 // ABOUTME: Takes full-page screenshots of every active route for manual inspection.
-import { expect, test } from "@playwright/test";
+import { test } from "@playwright/test";
 import { gotoRoute } from "./helpers";
 
 const routes = [
