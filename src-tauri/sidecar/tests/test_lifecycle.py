@@ -135,7 +135,7 @@ HOST_PID = 4242
 SUBREAPER_PID = 900
 
 
-def _data_dir(tmp_path, bundle_id="com.ielegante.rumble"):
+def _data_dir(tmp_path, bundle_id="legal.elefant.rumble"):
     return str(tmp_path / "Library" / "Application Support" / bundle_id)
 
 
@@ -242,10 +242,10 @@ def test_reap_leaves_different_data_dir_alone(tmp_path, monkeypatch):
 
 
 def test_reap_leaves_prefix_sharing_data_dir_alone(tmp_path, monkeypatch):
-    # "com.ielegante.rumble-dev" starts with "com.ielegante.rumble" — a plain
+    # "legal.elefant.rumble-dev" starts with "legal.elefant.rumble" — a plain
     # substring check on the needle would wrongly match this.
     data_dir = _data_dir(tmp_path)
-    lookalike = _sidecar(STRAY_PID, 1, _data_dir(tmp_path, "com.ielegante.rumble-dev"))
+    lookalike = _sidecar(STRAY_PID, 1, _data_dir(tmp_path, "legal.elefant.rumble-dev"))
     calls = _reap_with(tmp_path, monkeypatch, [lookalike], data_dir)
 
     assert calls == []

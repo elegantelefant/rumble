@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.365.0"
+    "version": "0.369.0"
   },
   "paths": {
     "/health": {
@@ -13797,6 +13797,14 @@
           }
         },
         "x-stability": "stable",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "x-consumer": "fe"
       }
     },
@@ -36119,6 +36127,30 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
+          },
+          "invitationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitationid",
+            "description": "Set on create for a pending invitation's recovery link."
+          },
+          "emailSent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emailsent",
+            "description": "Set on create only \u2014 the mailer's own answer, best-effort."
           }
         },
         "additionalProperties": false,
@@ -37547,7 +37579,6 @@
           "search-tw_legislation",
           "search-vn_legislation",
           "search-kr_legislation_v2",
-          "search-kr_legislation_v3",
           "search-tw_legislation_v3e5",
           "search-tw_legislation_v4",
           "search-vn_legislation_v3e5",
@@ -39423,6 +39454,52 @@
             ],
             "title": "Jurisdiction"
           },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
+          },
           "docType": {
             "anyOf": [
               {
@@ -39506,6 +39583,27 @@
               }
             ],
             "title": "Provisions"
+          },
+          "stub": {
+            "type": "boolean",
+            "title": "Stub",
+            "default": false
+          },
+          "stubReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "stamp_only",
+                  "no_text_layer",
+                  "empty"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stubreason"
           }
         },
         "additionalProperties": false,
@@ -39577,6 +39675,52 @@
               }
             ],
             "title": "Jurisdiction"
+          },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
           },
           "docType": {
             "anyOf": [
