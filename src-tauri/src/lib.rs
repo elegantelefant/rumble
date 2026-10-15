@@ -2062,8 +2062,8 @@ mod tests {
     #[test]
     fn settings_path_is_settings_json_in_the_given_dir() {
         assert_eq!(
-            settings_path_in(Path::new("/data/com.ielegante.rumble")),
-            Path::new("/data/com.ielegante.rumble/settings.json")
+            settings_path_in(Path::new("/data/legal.elefant.rumble")),
+            Path::new("/data/legal.elefant.rumble/settings.json")
         );
     }
 
@@ -2662,8 +2662,8 @@ mod tests {
 
     fn roaming_and_local() -> (tempfile::TempDir, PathBuf, PathBuf) {
         let root = tempfile::tempdir().unwrap();
-        let old = root.path().join("Roaming").join("com.ielegante.rumble");
-        let new = root.path().join("Local").join("com.ielegante.rumble");
+        let old = root.path().join("Roaming").join("legal.elefant.rumble");
+        let new = root.path().join("Local").join("legal.elefant.rumble");
         (root, old, new)
     }
 

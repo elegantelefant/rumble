@@ -1,6 +1,6 @@
 name: rumble
 options:
-  bundleIdPrefix: com.ielegante.rumble
+  bundleIdPrefix: legal.elefant.rumble
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: rumble
-      PRODUCT_BUNDLE_IDENTIFIER: com.ielegante.rumble
+      PRODUCT_BUNDLE_IDENTIFIER: legal.elefant.rumble
 targetTemplates:
   app:
     type: application
