@@ -128,6 +128,9 @@ async def test_purged_text_is_gone_from_the_database_file_and_wal(tmp_path):
 async def test_a_database_from_an_earlier_build_is_compacted_once(tmp_path, caplog):
     # What earlier builds left: a row deleted without secure_delete, its text still in the file.
     conn = sqlite3.connect(tmp_path / "rumble.db")
+    # Ubuntu's SQLite defaults secure_delete on (macOS off); force off so the DELETE below
+    # leaves the marker in free pages here too, matching the earlier-build residue this simulates.
+    conn.execute("PRAGMA secure_delete=OFF")
     conn.executescript(db.SCHEMA)
     conn.execute(
         "INSERT INTO jobs (id, type, request, created_at) VALUES ('j', 'review', ?, ?)",
