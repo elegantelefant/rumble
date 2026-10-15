@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.315.0"
+    "version": "0.369.0"
   },
   "paths": {
     "/health": {
@@ -2202,6 +2202,74 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/organizations/ai-register/drafting-report": {
+      "get": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Get Org Drafting Report",
+        "description": "Completed drafting volume and turnaround, for firm owners/admins only.\n\nThe router's gate is intentionally shared with the Firm activity view. The\nrepository returns display names and aggregates only; no draft text, title,\nor raw job/member identifier reaches this response.",
+        "operationId": "get_org_drafting_report",
+        "parameters": [
+          {
+            "name": "window_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Window Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftingReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Feature not enabled or insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/organizations/briefcases": {
       "get": {
         "tags": [
@@ -3124,7 +3192,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/files": {
@@ -3158,7 +3226,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "post": {
         "tags": [
@@ -3220,7 +3288,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/files/{file_id}": {
@@ -3285,14 +3353,14 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "delete": {
         "tags": [
           "files"
         ],
         "summary": "Delete File",
-        "description": "Delete a file (metadata and GCS object).\n\nDesign \u00a78.4 delete-guard: `file_usages.file_id` has a plain (RESTRICT)\nFK to `files.id`, so the DELETE itself fails at the DB layer once a file\nhas any recorded usage \u2014 surfaced here as 409 instead of a 500, and\ninstead of silently orphaning `document.source_file_id` /\n`legal_request_attachments.file_id` the way the pre-guard DELETE could.",
+        "description": "Delete a file (metadata and GCS object).\n\nUsage rows are provenance history, not live attachments, and cascade with\nthe file. Other live references still surface as a 409 rather than a 500.",
         "operationId": "delete_file",
         "parameters": [
           {
@@ -3377,6 +3445,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FileListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/files/{file_id}/preview": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Preview File",
+        "description": "Return the extracted text a ready uploaded file contributes to tools.",
+        "operationId": "preview_file",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilePreviewResponse"
                 }
               }
             }
@@ -3617,7 +3750,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/exports/beacon": {
@@ -4857,7 +4990,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/search/history": {
@@ -5619,6 +5752,116 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/history/export": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Export History",
+        "description": "Export the caller's filtered activity feed in one capped response.",
+        "operationId": "export_history",
+        "parameters": [
+          {
+            "name": "tool",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tool"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryExportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/search/cite/count": {
       "post": {
         "tags": [
@@ -6010,7 +6253,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "get": {
         "tags": [
@@ -6300,7 +6543,7 @@
           "chat"
         ],
         "summary": "Export Chat",
-        "description": "Render supplied Ask Elf Markdown to a freshly signed DOCX, PDF, or Markdown URL.\n\nThe client supplies either the complete answer or one table's original\nMarkdown. Both travel through the same GCS-backed document export service\nused for drafts and briefcases, rather than a browser popup or Blob.",
+        "description": "Render supplied Markdown or export this conversation's audit log.\n\nDocument exports take either the complete answer or one table's original\nMarkdown. JSON exports read the tenant-scoped conversation and the same\ncompleted-turn projection used by the Answer log panel.",
         "operationId": "export_chat",
         "parameters": [
           {
@@ -6356,6 +6599,71 @@
           },
           "400": {
             "description": "Business-logic precondition failed (e.g. invalid state transition). Distinct from 422 which indicates body-validation failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
+    "/api/v1/chats/{id}/answer-log": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Get Answer Log",
+        "description": "Return this tenant's completed assistant-turn audit entries.",
+        "operationId": "get_answer_log",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -6715,7 +7023,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/chats/{id}/messages": {
@@ -6894,7 +7202,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/chats/{id}/turns/{turn_id}/cancel": {
@@ -8698,7 +9006,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "get": {
         "tags": [
@@ -8752,7 +9060,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/briefcases/shared-with-me": {
@@ -8925,7 +9233,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "patch": {
         "tags": [
@@ -8968,6 +9276,16 @@
           },
           "401": {
             "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -9632,6 +9950,110 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/briefcases/{briefcase_id}/shares/{share_id}/decline": {
+      "post": {
+        "tags": [
+          "briefcases"
+        ],
+        "summary": "Decline Share",
+        "description": "Decline a pending direct share (sharee only).",
+        "operationId": "decline_share",
+        "parameters": [
+          {
+            "name": "briefcase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Briefcase Id"
+            }
+          },
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Feature not enabled or insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Resource has been revoked or withdrawn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of this resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/briefcase-invitations/pending": {
       "get": {
         "tags": [
@@ -9898,7 +10320,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "post": {
         "tags": [
@@ -9981,7 +10403,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/briefcases/{briefcase_id}/resolve": {
@@ -13375,6 +13797,14 @@
           }
         },
         "x-stability": "stable",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "x-consumer": "fe"
       }
     },
@@ -17863,6 +18293,81 @@
         "x-consumer": "fe"
       }
     },
+    "/api/v1/graph/{legisId}/references/citing-cases": {
+      "get": {
+        "tags": [
+          "graph"
+        ],
+        "summary": "Graph Citing Cases",
+        "description": "Return cases citing a legislation or provision node.",
+        "operationId": "graph_citing_cases",
+        "parameters": [
+          {
+            "name": "legisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Legisid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphReferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backend dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Graph query timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-stability": "best-effort",
+        "x-consumer": "fe"
+      }
+    },
     "/api/v1/graph/{legisId}/references/outbound": {
       "get": {
         "tags": [
@@ -18162,7 +18667,7 @@
           "elf"
         ],
         "summary": "Get Elf Capabilities",
-        "description": "Deployment-static, user-facing Elf capability catalogue.",
+        "description": "User-facing Elf capability catalogue with the caller's access verdicts.",
         "operationId": "get_elf_capabilities",
         "responses": {
           "200": {
@@ -21157,7 +21662,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       },
       "patch": {
         "tags": [
@@ -21308,7 +21813,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/jobs/{job_id}/cancel": {
@@ -21383,7 +21888,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/jobs": {
@@ -21489,7 +21994,7 @@
           }
         },
         "x-stability": "best-effort",
-        "x-consumer": "fe"
+        "x-consumer": "partner"
       }
     },
     "/api/v1/webhooks": {
@@ -23183,6 +23688,78 @@
         },
         "x-stability": "best-effort",
         "x-consumer": "fe"
+      }
+    },
+    "/api/v1/gateway": {
+      "post": {
+        "tags": [
+          "partner-gateway"
+        ],
+        "summary": "Partner Gateway",
+        "description": "Execute a partner request without adding a second routing classifier.",
+        "operationId": "partner_gateway",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GatewayResearchResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GatewayActionResponse"
+                    }
+                  ],
+                  "title": "Response Partner Gateway Api V1 Gateway Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Monthly quota exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-consumer": "worker",
+        "x-stability": "best-effort"
       }
     },
     "/api/v1/integrations/{channel}/oauth/install": {
@@ -25212,6 +25789,327 @@
         "title": "AnalysisResultPayload",
         "description": "Result of an `analysis` legal request."
       },
+      "AnswerConfidenceLevel": {
+        "type": "string",
+        "enum": [
+          "high",
+          "medium",
+          "not_verified"
+        ],
+        "title": "AnswerConfidenceLevel"
+      },
+      "AnswerLogCheck": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "currency",
+              "quotes",
+              "citations"
+            ],
+            "title": "Check"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "findings",
+              "not_run",
+              "not_recorded"
+            ],
+            "title": "Outcome"
+          },
+          "findings": {
+            "type": "integer",
+            "title": "Findings",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "check",
+          "outcome"
+        ],
+        "title": "AnswerLogCheck"
+      },
+      "AnswerLogResponse": {
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "title": "Chatid"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogTurn"
+            },
+            "type": "array",
+            "title": "Turns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chatId"
+        ],
+        "title": "AnswerLogResponse"
+      },
+      "AnswerLogSearch": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "error",
+              "queued"
+            ],
+            "title": "Status"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "indexFamilies": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Indexfamilies"
+          },
+          "hits": {
+            "type": "integer",
+            "title": "Hits"
+          },
+          "elapsedMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsedms"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "label",
+          "status",
+          "hits"
+        ],
+        "title": "AnswerLogSearch"
+      },
+      "AnswerLogSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "judgment",
+              "provision",
+              "document"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "citation": {
+            "type": "string",
+            "title": "Citation"
+          },
+          "provision": {
+            "type": "string",
+            "title": "Provision",
+            "default": ""
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "cited",
+                  "retrieved_not_cited"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "citation"
+        ],
+        "title": "AnswerLogSource"
+      },
+      "AnswerLogTurn": {
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "title": "Messageid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "answerConfidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Answer-wide confidence derived from the paragraph provenance ledger."
+          },
+          "confidenceDerivation": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerProvenanceKind"
+            },
+            "type": "array",
+            "title": "Confidencederivation",
+            "description": "Distinct paragraph provenance kinds used to derive answer confidence."
+          },
+          "searches": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSearch"
+            },
+            "type": "array",
+            "title": "Searches"
+          },
+          "sourcesReliedOn": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcesreliedon"
+          },
+          "sourcesSetAside": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcessetaside"
+          },
+          "sourcesUsed": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogSource"
+            },
+            "type": "array",
+            "title": "Sourcesused"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerLogCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "creditsCharged": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditscharged"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "messageId",
+          "createdAt"
+        ],
+        "title": "AnswerLogTurn"
+      },
+      "AnswerParagraphProvenance": {
+        "properties": {
+          "paragraph": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Paragraph"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AnswerProvenanceKind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paragraph",
+          "kind"
+        ],
+        "title": "AnswerParagraphProvenance",
+        "description": "One provenance value for one non-empty answer paragraph."
+      },
+      "AnswerProvenanceKind": {
+        "type": "string",
+        "enum": [
+          "corpus",
+          "official_source",
+          "model_reasoning",
+          "not_verified"
+        ],
+        "title": "AnswerProvenanceKind"
+      },
       "AskTrackedResult": {
         "properties": {
           "jobType": {
@@ -25226,6 +26124,13 @@
           "stepsRecorded": {
             "type": "integer",
             "title": "Stepsrecorded"
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance"
           },
           "error": {
             "anyOf": [
@@ -25525,6 +26430,11 @@
             "type": "integer",
             "title": "Balance"
           },
+          "used": {
+            "type": "integer",
+            "title": "Used",
+            "default": 0
+          },
           "monthlyGrant": {
             "anyOf": [
               {
@@ -25705,7 +26615,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -26073,6 +26983,17 @@
       },
       "BriefcaseExportedDetail": {
         "properties": {
+          "briefcaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefcaseid"
+          },
           "format": {
             "anyOf": [
               {
@@ -26094,6 +27015,20 @@
               }
             ],
             "title": "Variant"
+          },
+          "views": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Views"
           },
           "viaShare": {
             "anyOf": [
@@ -26318,7 +27253,7 @@
           "timestamp"
         ],
         "title": "BriefcaseItemAddedEntry",
-        "description": "A legal source was saved into the briefcase.\n\n`briefcase_item` has no actor column (`added_at` only) \u2014 `user_id` is\nalways None for this variant, by design, not a missing read."
+        "description": "A legal source was saved into the briefcase.\n\n`user_id` identifies the human who saved it when one exists. Connector\nimports have no human actor, so their `user_id` is None."
       },
       "BriefcaseItemBatchRequest": {
         "properties": {
@@ -26758,6 +27693,17 @@
             "type": "array",
             "title": "Tags"
           },
+          "provNo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provno"
+          },
           "timestamp": {
             "anyOf": [
               {
@@ -26821,17 +27767,6 @@
               }
             ],
             "title": "Decisiondate"
-          },
-          "provNo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provno"
           },
           "instTitle": {
             "anyOf": [
@@ -26963,6 +27898,17 @@
             "type": "array",
             "title": "Tags"
           },
+          "provNo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provno"
+          },
           "timestamp": {
             "anyOf": [
               {
@@ -27026,17 +27972,6 @@
               }
             ],
             "title": "Decisiondate"
-          },
-          "provNo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provno"
           },
           "instTitle": {
             "anyOf": [
@@ -27173,6 +28108,28 @@
               }
             ],
             "title": "Name"
+          },
+          "oldName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldname"
+          },
+          "newName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newname"
           },
           "pinned": {
             "anyOf": [
@@ -28261,6 +29218,17 @@
           "createdAt": {
             "type": "string",
             "title": "Createdat"
+          },
+          "shareeEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shareeemail"
           }
         },
         "additionalProperties": false,
@@ -29446,7 +30414,9 @@
                 "executive_brief_extraction",
                 "defined_terms_extraction",
                 "correspondence_extraction",
-                "last_round_comparison"
+                "last_round_comparison",
+                "ocr_batch",
+                "document_compaction"
               ]
             },
             "type": "array",
@@ -29966,6 +30936,25 @@
             "type": "boolean",
             "title": "Excludefrommemory",
             "default": false
+          },
+          "modelFamily": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "claude",
+                  "openai",
+                  "gemini",
+                  "qwen",
+                  "deepseek"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelfamily"
           }
         },
         "additionalProperties": false,
@@ -30036,6 +31025,17 @@
             ],
             "title": "Modelfamily"
           },
+          "lastJurisdictionLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastjurisdictionlabel"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -30087,9 +31087,16 @@
       "ChatExportRequest": {
         "properties": {
           "markdown": {
-            "type": "string",
-            "maxLength": 500000,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Markdown"
           },
           "format": {
@@ -30097,7 +31104,8 @@
             "enum": [
               "docx",
               "markdown",
-              "pdf"
+              "pdf",
+              "json"
             ],
             "title": "Format"
           }
@@ -30105,11 +31113,10 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "markdown",
           "format"
         ],
         "title": "ChatExportRequest",
-        "description": "Markdown source for a signed Ask Elf export."
+        "description": "Markdown source or the persisted conversation audit export."
       },
       "ChatExportResponse": {
         "properties": {
@@ -30118,7 +31125,8 @@
             "enum": [
               "docx",
               "markdown",
-              "pdf"
+              "pdf",
+              "json"
             ],
             "title": "Format"
           },
@@ -30249,6 +31257,58 @@
             "description": "Whether corpus retrieval was unavailable during this answer, which may be incomplete.",
             "default": false
           },
+          "interrupted": {
+            "type": "boolean",
+            "title": "Interrupted",
+            "description": "Whether this durable draft was interrupted when its turn failed.",
+            "default": false
+          },
+          "quoteVerifiedCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoteverifiedcount",
+            "description": "Number of long quoted passages the quote channel verified for this answer."
+          },
+          "quoteUnverifiedCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoteunverifiedcount",
+            "description": "Number of long quoted passages the quote channel could not verify for this answer."
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance",
+            "description": "Paragraph-level source class displayed beside answer prose, never embedded in it."
+          },
+          "retiredModelNotice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retiredmodelnotice",
+            "description": "Display name for the one-time retired-model notice. The frontend localises the surrounding sentence and never receives the retired id."
+          },
           "tokenCount": {
             "anyOf": [
               {
@@ -30275,6 +31335,41 @@
             "type": "string",
             "format": "date-time",
             "title": "Createdat"
+          },
+          "answerConfidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Answer-wide confidence derived from the paragraph provenance ledger.",
+            "readOnly": true
+          },
+          "answerConfidenceReason": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "$ref": "#/components/schemas/AnswerProvenanceKind"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answerconfidencereason",
+            "description": "Localisable reason and affected claim count for a non-high answer confidence.",
+            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -30652,6 +31747,30 @@
             ],
             "title": "Documentid",
             "description": "Document row created by an enqueueing tool, when present."
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query",
+            "description": "Display-safe query summary recorded for this call."
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Display-safe model name used for this call."
           }
         },
         "additionalProperties": false,
@@ -30814,6 +31933,18 @@
             "minItems": 1,
             "title": "Messages",
             "description": "Chat messages to generate title from (1-50 messages)."
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction",
+            "description": "The chat's selected jurisdiction, used to interpret legal abbreviations."
           }
         },
         "additionalProperties": false,
@@ -30896,6 +32027,30 @@
             "type": "boolean",
             "title": "Replayable",
             "default": false
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode",
+            "description": "Machine-readable terminal failure code, when the turn failed."
+          },
+          "errorDetail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errordetail",
+            "description": "Display-safe terminal failure detail, when the turn failed."
           }
         },
         "additionalProperties": false,
@@ -31007,6 +32162,11 @@
             "type": "integer",
             "title": "Verified"
           },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
+            "default": 0
+          },
           "uncertain": {
             "type": "integer",
             "title": "Uncertain"
@@ -31115,6 +32275,11 @@
             "type": "integer",
             "title": "Verified"
           },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
+            "default": 0
+          },
           "hallucinated": {
             "type": "integer",
             "title": "Hallucinated"
@@ -31165,6 +32330,11 @@
           "verified": {
             "type": "integer",
             "title": "Verified",
+            "default": 0
+          },
+          "mismatch": {
+            "type": "integer",
+            "title": "Mismatch",
             "default": 0
           },
           "hallucinated": {
@@ -31336,7 +32506,7 @@
           "verdict": {
             "type": "string",
             "title": "Verdict",
-            "description": "Terse real-or-fake verdict for the citation report: 'Verified (corpus)', 'Found online, unverified: <source>', 'Not found in corpus \u2014 unverified', or 'Not found \u2014 likely hallucinated' (reserved for a positive fabrication signal).",
+            "description": "Terse verdict for the citation report: 'Verified (corpus)', 'Mismatch: citation belongs to a different case', 'Found online, unverified: <source>', 'Not found in corpus \u2014 unverified', or 'Not found \u2014 likely hallucinated' (reserved for a positive fabrication signal).",
             "default": ""
           },
           "formatNote": {
@@ -31414,6 +32584,7 @@
         "type": "string",
         "enum": [
           "verified",
+          "mismatch",
           "hallucinated",
           "uncertain"
         ],
@@ -34268,6 +35439,76 @@
         "type": "object",
         "title": "DraftVersionListResponse"
       },
+      "DraftingReport": {
+        "properties": {
+          "windowDays": {
+            "type": "integer",
+            "title": "Windowdays"
+          },
+          "weekly": {
+            "items": {
+              "$ref": "#/components/schemas/DraftingReportWeek"
+            },
+            "type": "array",
+            "title": "Weekly"
+          },
+          "medianCompletionSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mediancompletionseconds"
+          },
+          "p90CompletionSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90Completionseconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "windowDays"
+        ],
+        "title": "DraftingReport",
+        "description": "Completed drafting volume and completion-time percentiles for a window."
+      },
+      "DraftingReportWeek": {
+        "properties": {
+          "weekStart": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Weekstart"
+          },
+          "memberName": {
+            "type": "string",
+            "title": "Membername"
+          },
+          "completedDrafts": {
+            "type": "integer",
+            "title": "Completeddrafts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekStart",
+          "memberName",
+          "completedDrafts"
+        ],
+        "title": "DraftingReportWeek",
+        "description": "One member's completed drafts in an ISO week; identity is display-name only."
+      },
       "DroppedRow": {
         "properties": {
           "key": {
@@ -34361,6 +35602,11 @@
               }
             ],
             "title": "Expiresat"
+          },
+          "isTrialWindowLive": {
+            "type": "boolean",
+            "title": "Istrialwindowlive",
+            "default": false
           },
           "searchWebRequestsMonthly": {
             "type": "integer",
@@ -34881,6 +36127,30 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
+          },
+          "invitationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitationid",
+            "description": "Set on create for a pending invitation's recovery link."
+          },
+          "emailSent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emailsent",
+            "description": "Set on create only \u2014 the mailer's own answer, best-effort."
           }
         },
         "additionalProperties": false,
@@ -35513,6 +36783,18 @@
               }
             ],
             "title": "Contenttype"
+          },
+          "briefcaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefcaseid",
+            "description": "Optional owned briefcase which will receive this upload. Its save capacity is checked before a pending file row or upload URL is created."
           }
         },
         "additionalProperties": false,
@@ -35550,6 +36832,31 @@
         ],
         "title": "FilePresignResponse",
         "description": "Response with presigned upload URL."
+      },
+      "FilePreviewResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "text"
+        ],
+        "title": "FilePreviewResponse",
+        "description": "Text extracted from an uploaded file for the Documents viewer."
       },
       "FileUsageListResponse": {
         "properties": {
@@ -35637,6 +36944,138 @@
         ],
         "title": "FlaggedAuthorityResponse",
         "description": "One authority a connected file relies on that later judgments moved against."
+      },
+      "GatewayActionResponse": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "const": "action",
+            "title": "Route"
+          },
+          "jobId": {
+            "type": "string",
+            "title": "Jobid"
+          },
+          "legalRequestId": {
+            "type": "string",
+            "title": "Legalrequestid"
+          },
+          "pollUrl": {
+            "type": "string",
+            "title": "Pollurl"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "route",
+          "jobId",
+          "legalRequestId",
+          "pollUrl"
+        ],
+        "title": "GatewayActionResponse"
+      },
+      "GatewayRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Query"
+          },
+          "documents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documents"
+          },
+          "briefcaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefcaseid"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "research",
+              "action"
+            ],
+            "title": "Mode",
+            "default": "auto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "GatewayRequest"
+      },
+      "GatewayResearchResponse": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "const": "research",
+            "title": "Route"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "citations": {
+            "items": {},
+            "type": "array",
+            "title": "Citations"
+          },
+          "sources": {
+            "items": {},
+            "type": "array",
+            "title": "Sources"
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requestid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "route",
+          "answer"
+        ],
+        "title": "GatewayResearchResponse"
       },
       "GenericWebhookSetupRequest": {
         "properties": {
@@ -35997,6 +37436,26 @@
         ],
         "title": "HealthResponse"
       },
+      "HistoryExportResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HistoryExportResponse",
+        "description": "One capped, filterable export of the caller's personal history."
+      },
       "HistoryListResponse": {
         "properties": {
           "items": {
@@ -36049,6 +37508,18 @@
           "href": {
             "type": "string",
             "title": "Href"
+          },
+          "deviceSummary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devicesummary",
+            "description": "Browser and operating-system summary for a sign-in row, when available."
           }
         },
         "additionalProperties": false,
@@ -36108,7 +37579,6 @@
           "search-tw_legislation",
           "search-vn_legislation",
           "search-kr_legislation_v2",
-          "search-kr_legislation_v3",
           "search-tw_legislation_v3e5",
           "search-tw_legislation_v4",
           "search-vn_legislation_v3e5",
@@ -36117,6 +37587,30 @@
         ],
         "title": "IndexName",
         "description": "Elasticsearch indices available to search."
+      },
+      "IngestCompactionResult": {
+        "properties": {
+          "batchTotal": {
+            "type": "integer",
+            "title": "Batchtotal"
+          },
+          "batchCount": {
+            "type": "integer",
+            "title": "Batchcount"
+          },
+          "creditsCharged": {
+            "type": "integer",
+            "title": "Creditscharged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batchTotal",
+          "batchCount",
+          "creditsCharged"
+        ],
+        "title": "IngestCompactionResult",
+        "description": "Actual accounting for a long-document compaction run."
       },
       "IngestUploadResult": {
         "properties": {
@@ -36165,6 +37659,16 @@
               }
             ],
             "title": "Charcount"
+          },
+          "compaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestCompactionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "warnings": {
             "items": {
@@ -37388,6 +38892,11 @@
             ],
             "title": "Error"
           },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "default": true
+          },
           "tokenCount": {
             "anyOf": [
               {
@@ -37590,13 +39099,21 @@
           "blurb": {
             "type": "string",
             "title": "Blurb"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Excluded"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "total",
-          "blurb"
+          "blurb",
+          "excluded"
         ],
         "title": "JurisdictionCoverage",
         "description": "Live document total for one jurisdiction, summed across its indices.\n\n``total`` is ``None`` when ANY constituent index count is unavailable: a\npartial sum is a number we cannot stand behind, and publishing it\nunderstates the corpus (#2349 shipped a full corpus as \"0+\"). ``0`` means\nevery constituent index answered, and answered zero."
@@ -37851,6 +39368,13 @@
             "type": "array",
             "title": "Outbound"
           },
+          "unlinkedCitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unlinkedcitations"
+          },
           "nextCursor": {
             "anyOf": [
               {
@@ -37930,6 +39454,52 @@
             ],
             "title": "Jurisdiction"
           },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
+          },
           "docType": {
             "anyOf": [
               {
@@ -37981,6 +39551,13 @@
             "type": "array",
             "title": "Degradedparts"
           },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          },
           "content": {
             "anyOf": [
               {
@@ -38006,6 +39583,27 @@
               }
             ],
             "title": "Provisions"
+          },
+          "stub": {
+            "type": "boolean",
+            "title": "Stub",
+            "default": false
+          },
+          "stubReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "stamp_only",
+                  "no_text_layer",
+                  "empty"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stubreason"
           }
         },
         "additionalProperties": false,
@@ -38078,6 +39676,52 @@
             ],
             "title": "Jurisdiction"
           },
+          "court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Court"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation"
+          },
+          "decisionDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisiondate"
+          },
+          "enactedDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enacteddate"
+          },
           "docType": {
             "anyOf": [
               {
@@ -38128,6 +39772,13 @@
             },
             "type": "array",
             "title": "Degradedparts"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
           }
         },
         "additionalProperties": false,
@@ -38143,6 +39794,7 @@
         "enum": [
           "current",
           "repealed",
+          "revoked",
           "amended",
           "superseded"
         ],
@@ -39196,6 +40848,13 @@
           "stepsRecorded": {
             "type": "integer",
             "title": "Stepsrecorded"
+          },
+          "answerProvenance": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "type": "array",
+            "title": "Answerprovenance"
           },
           "error": {
             "anyOf": [
@@ -40607,6 +42266,13 @@
               }
             ],
             "title": "Formattinginstructions"
+          },
+          "pinnedFeatureKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pinnedfeaturekeys"
           }
         },
         "additionalProperties": false,
@@ -40695,7 +42361,8 @@
               "askElfModelFamily": "auto",
               "reviewModelFamily": "auto",
               "draftModelFamily": "auto",
-              "mammothModelFamily": "auto"
+              "mammothModelFamily": "auto",
+              "pinnedFeatureKeys": []
             }
           },
           "learnLevel": {
@@ -43506,6 +45173,19 @@
       },
       "PromptImproveContext": {
         "properties": {
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction",
+            "description": "Selected jurisdiction for the rewrite; absent when the composer is set to Auto."
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/PromptImproveTurn"
@@ -43664,6 +45344,11 @@
             },
             "type": "object",
             "title": "Checks"
+          },
+          "alembicRevision": {
+            "type": "string",
+            "title": "Alembicrevision",
+            "default": "unknown"
           }
         },
         "additionalProperties": false,
@@ -45240,6 +46925,11 @@
       },
       "ReviewIssueResult": {
         "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
           "category": {
             "type": "string",
             "title": "Category",
@@ -45274,6 +46964,28 @@
             "type": "string",
             "title": "Explanation",
             "default": ""
+          },
+          "targetQuote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetquote"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement"
           }
         },
         "type": "object",
@@ -46508,6 +48220,11 @@
             "title": "Title",
             "default": ""
           },
+          "provNo": {
+            "type": "string",
+            "title": "Provno",
+            "default": ""
+          },
           "date": {
             "type": "string",
             "title": "Date",
@@ -46573,6 +48290,18 @@
               }
             ],
             "title": "Legisstatus"
+          },
+          "provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision",
+            "description": "Human-readable provision or section identifier from the source corpus."
           },
           "editionCurrent": {
             "anyOf": [
@@ -47122,6 +48851,17 @@
             "type": "string",
             "title": "Sharerid"
           },
+          "sharerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharername"
+          },
           "permission": {
             "type": "string",
             "title": "Permission"
@@ -47154,10 +48894,16 @@
             "description": "The briefcase's own updated_at; null when its row is not RLS-visible (a cross-org pending share)."
           },
           "sourceCount": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sourcecount",
-            "description": "Wall-visible items + briefcase documents, summaries excluded",
-            "default": 0
+            "description": "Wall-visible count; absent while a pending external share cannot read facts"
           },
           "hasSummary": {
             "type": "boolean",
@@ -47579,6 +49325,11 @@
             "minLength": 1,
             "title": "Markdown"
           },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Title"
+          },
           "format": {
             "type": "string",
             "enum": [
@@ -47593,6 +49344,7 @@
         "type": "object",
         "required": [
           "markdown",
+          "title",
           "format"
         ],
         "title": "SummaryExportRequest",
@@ -48224,6 +49976,17 @@
             "title": "Versionedid",
             "description": "Versioned legisId"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "effectiveDate": {
             "type": "string",
             "format": "date",
@@ -48667,6 +50430,18 @@
             "type": "boolean",
             "title": "Indiasearchall",
             "description": "India 'Search all Indian judgments' toggle. False (default) queries the vectorised full-text judgments index; True switches the cases tier to the complete metadata catalog. Honoured only when region=IN and SEARCH_INDIA_ENABLED; legislation/regulatory selections are unaffected.",
+            "default": false
+          },
+          "includeEarlierEditions": {
+            "type": "boolean",
+            "title": "Includeearliereditions",
+            "description": "Include earlier editions of legislation. Default search returns only the newest edition.",
+            "default": false
+          },
+          "includeRevokedRepealed": {
+            "type": "boolean",
+            "title": "Includerevokedrepealed",
+            "description": "Include revoked, repealed, spent, and partially repealed legislation. Default search hides these lifecycle states.",
             "default": false
           },
           "preferredLanguage": {
@@ -49220,6 +50995,20 @@
               }
             ],
             "title": "Formatting Instructions"
+          },
+          "pinned_feature_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Feature Keys"
           }
         },
         "additionalProperties": false,
@@ -49400,6 +51189,13 @@
               }
             ],
             "title": "Formattinginstructions"
+          },
+          "pinnedFeatureKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pinnedfeaturekeys"
           }
         },
         "additionalProperties": false,
@@ -49521,6 +51317,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -49785,6 +51588,7 @@
         "discriminator": {
           "mapping": {
             "answer": "#/components/schemas/StreamAnswerEvent",
+            "answer_provenance": "#/components/schemas/StreamAnswerProvenanceEvent",
             "context": "#/components/schemas/StreamContextEvent",
             "currency_status": "#/components/schemas/StreamCurrencyStatusEvent",
             "currency_verdicts": "#/components/schemas/StreamCurrencyVerdictsEvent",
@@ -49800,8 +51604,10 @@
             "message_saved": "#/components/schemas/StreamMessageSavedEvent",
             "phase": "#/components/schemas/StreamPhaseEvent",
             "question": "#/components/schemas/StreamQuestionEvent",
+            "quote_verification": "#/components/schemas/StreamQuoteVerificationEvent",
             "retrieval_status": "#/components/schemas/StreamRetrievalStatusEvent",
             "risk_alert": "#/components/schemas/StreamRiskAlertEvent",
+            "served_model": "#/components/schemas/StreamServedModelEvent",
             "status": "#/components/schemas/StreamStatusEvent",
             "thinking": "#/components/schemas/StreamThinkingEvent",
             "tool_call_started": "#/components/schemas/StreamToolCallStartedEvent",
@@ -49841,6 +51647,15 @@
           },
           {
             "$ref": "#/components/schemas/StreamRetrievalStatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamQuoteVerificationEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamAnswerProvenanceEvent"
+          },
+          {
+            "$ref": "#/components/schemas/StreamServedModelEvent"
           },
           {
             "$ref": "#/components/schemas/StreamRiskAlertEvent"
@@ -49906,6 +51721,30 @@
         "title": "StreamAnswerEvent",
         "type": "object"
       },
+      "StreamAnswerProvenanceEvent": {
+        "additionalProperties": false,
+        "description": "Paragraph provenance rendered beside, never inside, answer text.",
+        "properties": {
+          "type": {
+            "const": "answer_provenance",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerParagraphProvenance"
+            },
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamAnswerProvenanceEvent",
+        "type": "object"
+      },
       "StreamCitationSource": {
         "additionalProperties": false,
         "description": "A single citation captured during the turn.\n\nMirrors the dict shape `_record_turn_citations` (ai/functions.py) appends\nto the turn-scoped capture list \u2014 same shape persisted to\n`chat_message.sources`.",
@@ -49931,6 +51770,19 @@
             "default": "",
             "title": "Provision",
             "type": "string"
+          },
+          "jurisdictionLabel": {
+            "anyOf": [
+              {
+                "const": "general",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Jurisdictionlabel"
           }
         },
         "required": [
@@ -50685,6 +52537,51 @@
             },
             "title": "Artifacts",
             "type": "array"
+          },
+          "retired_model_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Retired Model Notice"
+          },
+          "answer_confidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerConfidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "answer_confidence_reason": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "$ref": "#/components/schemas/AnswerProvenanceKind"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer Confidence Reason"
           }
         },
         "required": [
@@ -50751,6 +52648,46 @@
           "value"
         ],
         "title": "StreamQuestionEvent",
+        "type": "object"
+      },
+      "StreamQuoteVerificationEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "quote_verification",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StreamQuoteVerificationValue"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamQuoteVerificationEvent",
+        "type": "object"
+      },
+      "StreamQuoteVerificationValue": {
+        "additionalProperties": false,
+        "properties": {
+          "verified_count": {
+            "minimum": 0,
+            "title": "Verified Count",
+            "type": "integer"
+          },
+          "unverified_count": {
+            "minimum": 0,
+            "title": "Unverified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "verified_count",
+          "unverified_count"
+        ],
+        "title": "StreamQuoteVerificationValue",
         "type": "object"
       },
       "StreamRetrievalStatusEvent": {
@@ -50841,6 +52778,27 @@
           "ack_required"
         ],
         "title": "StreamRiskAlertValue",
+        "type": "object"
+      },
+      "StreamServedModelEvent": {
+        "additionalProperties": false,
+        "description": "The final model receipt, emitted after the answer is persisted.",
+        "properties": {
+          "type": {
+            "const": "served_model",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StreamServedModelEvent",
         "type": "object"
       },
       "StreamStatusEvent": {
@@ -51274,7 +53232,8 @@
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT or MCP OAuth",
+        "description": "Send `Authorization: Bearer <token>`. This accepts a BetterAuth JWT or an opaque OAuth access token issued by the MCP OAuth server. Where advertised, `ApiKeyAuth` is the alternative `x-api-key: ele_*` scheme."
       },
       "ApiKeyAuth": {
         "type": "apiKey",

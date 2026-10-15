@@ -43,24 +43,24 @@ is "offline after setup", not "offline".
 ## Where data lives
 
 - **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
-  directory for identifier `com.ielegante.rumble`: `~/Library/Application Support/com.ielegante.rumble/`
-  on macOS, `%APPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
+  directory for identifier `legal.elefant.rumble`: `~/Library/Application Support/legal.elefant.rumble/`
+  on macOS, `%APPDATA%\legal.elefant.rumble\` on Windows, `~/.local/share/legal.elefant.rumble/`
   on Linux. It holds chats, messages and jobs; a job row stores its full request and result,
   which includes document text. (`src-tauri/src/lib.rs` `spawn_sidecar`,
   `src-tauri/sidecar/services/db.py`.) Settings shows a hardcoded path that isn't this one ([#22]).
 - **Settings** — `settings.json` in the Tauri app *local* data directory:
-  `~/Library/Application Support/com.ielegante.rumble/` on macOS,
-  `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows (not the roaming profile),
-  `~/.local/share/com.ielegante.rumble/` on Linux. It holds the preferences saved from Settings:
+  `~/Library/Application Support/legal.elefant.rumble/` on macOS,
+  `%LOCALAPPDATA%\legal.elefant.rumble\` on Windows (not the roaming profile),
+  `~/.local/share/legal.elefant.rumble/` on Linux. It holds the preferences saved from Settings:
   appearance, workspace and templates paths, briefcase and attached-resource names, sync options
   and the local Ollama host/port/model. Plain JSON, never provider keys. (`src-tauri/src/lib.rs`
   `load_settings`/`save_settings`.)
-  on macOS, `%LOCALAPPDATA%\com.ielegante.rumble\` on Windows, `~/.local/share/com.ielegante.rumble/`
-  (or `$XDG_DATA_HOME/com.ielegante.rumble/`) on Linux. It holds chats, messages and jobs; a job row
+  on macOS, `%LOCALAPPDATA%\legal.elefant.rumble\` on Windows, `~/.local/share/legal.elefant.rumble/`
+  (or `$XDG_DATA_HOME/legal.elefant.rumble/`) on Linux. It holds chats, messages and jobs; a job row
   stores its full request and result, which includes document text. (`src-tauri/src/lib.rs`
   `sidecar_data_dir`, `src-tauri/sidecar/services/db.py`; paths per `app_local_data_dir` → the `dirs`
   crate's `data_local_dir`.) Settings shows a hardcoded path that isn't this one ([#22]).
-  - **Windows roaming.** Earlier builds used `%APPDATA%\com.ielegante.rumble\` (Roaming), which
+  - **Windows roaming.** Earlier builds used `%APPDATA%\legal.elefant.rumble\` (Roaming), which
     roaming profiles and folder redirection copy to domain servers. On startup rumble copies the
     database from there into `%LOCALAPPDATA%` if the old one exists and the new one doesn't, and only
     once the copy is complete removes the roaming files; until then the roaming copy is untouched and
