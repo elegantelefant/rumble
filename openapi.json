@@ -3,7 +3,7 @@
   "info": {
     "title": "elefant-api",
     "description": "Legal AI platform API. Provides search, drafting, review, research, citation checking, and conversational AI for legal professionals.",
-    "version": "0.368.0"
+    "version": "0.369.0"
   },
   "paths": {
     "/health": {
@@ -13797,6 +13797,14 @@
           }
         },
         "x-stability": "stable",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "x-consumer": "fe"
       }
     },
@@ -36119,6 +36127,30 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
+          },
+          "invitationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitationid",
+            "description": "Set on create for a pending invitation's recovery link."
+          },
+          "emailSent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emailsent",
+            "description": "Set on create only \u2014 the mailer's own answer, best-effort."
           }
         },
         "additionalProperties": false,
