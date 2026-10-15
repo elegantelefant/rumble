@@ -42,7 +42,7 @@ No lint or format gate exists in any of the three languages: no ESLint/Prettier,
 
 ## Merge gate
 
-GitHub Actions is billing-gated and currently runs zero steps in every job. It is never the blocker and never the evidence. The gate is the full local suite on the exact merged tree:
+GitHub Actions runs the repository checks; the local gate is the full suite on the exact merged tree:
 
 ```sh
 git fetch origin refs/pull/<N>/merge && git checkout -q FETCH_HEAD
@@ -61,7 +61,7 @@ All four tallies quoted in the verdict (`vitest 141 passed`, `pytest 146 passed`
 | `lib.rs` spawn / `resolve_url` / keychain, `capabilities/*.json`, `tauri.conf.json`, `sidecar.spec` | a packaged build (`pnpm tauri build`) smoked by a human — #35 (BYOK unreachable in the packaged app) is invisible to every automated suite |
 | `sidecar-openapi.json` | it is frozen; changing it is a contract decision — ask first (#34 / #42) |
 
-Not yet in place: a `scripts/premerge-check.sh` that runs the block above on the merge ref; lint/format gates; the toolchain pin on `main`. Until then the verifier runs the commands by hand and says so.
+Use `scripts/premerge-check.sh <N>` to run the block above on `refs/pull/<N>/merge`; lint/format gates and the toolchain pin on `main` are not yet in place.
 
 ## Issues, branches, PRs, verdicts
 
