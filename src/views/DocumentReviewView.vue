@@ -7,6 +7,9 @@ import { useToast } from "../composables/toast";
 import { backendMode, loadBackendMode } from "../composables/backendMode";
 import type { ChatMessage } from "../types/chat";
 import { generateId, formatTimestamp } from "../utils/ids";
+import type { ReviewResponse } from "../api/models/reviewResponse";
+import type { ReviewIssue } from "../api/models/reviewIssue";
+import type { ReviewIssueKind } from "../api/models/reviewIssueKind";
 
 const toasts = useToast();
 
@@ -165,23 +168,25 @@ const ISSUE_KIND_LABELS: Record<string, string> = {
   other: "Note",
 };
 
-function issueKindLabel(kind: unknown): string {
-  return typeof kind === "string" && kind in ISSUE_KIND_LABELS ? ISSUE_KIND_LABELS[kind] : "Note";
+function issueKindLabel(kind: ReviewIssueKind | undefined): string {
+  return kind !== undefined && kind in ISSUE_KIND_LABELS ? ISSUE_KIND_LABELS[kind] : "Note";
 }
 
-function formatReviewIssue(issue: Record<string, unknown>, index: number): string {
-  // message is the contract's only required field -- a payload that hasn't
-  // been validated server-side yet (#49) could still omit it or send the
-  // wrong type, so this still needs its own fallback rather than assuming it.
-  const message = typeof issue.message === "string" ? issue.message : JSON.stringify(issue);
+function formatReviewIssue(issue: ReviewIssue, index: number): string {
+  // message is the contract's only required field, and get_review_result now
+  // returns the server's _safe_construct(ReviewResponse, ...) payload (#49) --
+  // a missing/wrong-typed message there 502s the whole poll rather than
+  // reaching the client, so this can trust the contract instead of falling
+  // back to JSON.stringify(issue).
+  const message = issue.message;
   // No markdown rendering here (plain-text <p>), so "**" would show up as
   // literal asterisks rather than bold -- the label alone, undecorated,
   // reads better than fake-bold markup that never renders as bold.
   const lines = [`${index + 1}. ${issueKindLabel(issue.kind)} — ${message}`];
-  if (typeof issue.location === "string" && issue.location) {
+  if (issue.location) {
     lines.push(`   Location: ${issue.location}`);
   }
-  if (typeof issue.suggestion === "string" && issue.suggestion) {
+  if (issue.suggestion) {
     lines.push(`   Suggestion: ${issue.suggestion}`);
   }
   return lines.join("\n");
@@ -207,14 +212,13 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
       throw new Error("Review failed — the AI could not process this document.");
     }
 
-    // 3. Extract summary and issues from result. The server's own contract
-    // doesn't guarantee these types (#49) -- a wrong-typed `issues` would
-    // pass a plain `?? []` null guard, and issues.length is truthy for a
-    // non-empty string, so issues.map() below would throw instead of
-    // failing (or silently misrendering) in a way the user can make sense of.
-    const payload = result.result as Record<string, unknown> | undefined;
-    const summary = typeof payload?.summary === "string" ? payload.summary : "Review complete.";
-    const issues = Array.isArray(payload?.issues) ? (payload.issues as Array<Record<string, unknown>>) : [];
+    // 3. Extract summary and issues from result. get_review_result now
+    // returns the server's validated ReviewResponse (#49) instead of the raw
+    // payload, so this can parse once at the boundary and trust the type
+    // inside rather than re-guarding each field with typeof/Array.isArray.
+    const payload = result.result as ReviewResponse | null | undefined;
+    const summary = payload?.summary ?? "Review complete.";
+    const issues = payload?.issues ?? [];
 
     session.summary = summary;
 

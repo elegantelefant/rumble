@@ -1,5 +1,5 @@
 // ABOUTME: Tests for DocumentReviewView.vue's handling of the /review result payload.
-// ABOUTME: Covers type guards against a wrong-typed payload and ReviewIssue field rendering (#49).
+// ABOUTME: Covers ReviewIssue field rendering against the generated contract (#49).
 
 import { mount, flushPromises } from "@vue/test-utils"
 import DocumentReviewView from "../src/views/DocumentReviewView.vue"
@@ -43,40 +43,6 @@ beforeEach(() => {
   vi.mocked(createReviewJob).mockResolvedValue({ job_id: "job-1" } as never)
   vi.mocked(createChat).mockResolvedValue({ id: "chat-1" } as never)
   vi.mocked(sendMessage).mockResolvedValue(undefined as never)
-})
-
-describe("DocumentReviewView result type guards (#49)", () => {
-  it("shows the summary and no issues, rather than failing, when issues is a string", async () => {
-    // A payload the contract doesn't promise: `issues` as a plain string
-    // instead of an array. A bare `?? []` null guard lets this through, and
-    // issues.length is truthy for a non-empty string, so issues.map() would
-    // throw -- caught by the surrounding try/catch, which then reports a
-    // failure even though a usable summary already arrived.
-    vi.mocked(waitForJob).mockResolvedValue({
-      status: "completed",
-      result: { summary: "Looks mostly fine.", issues: "Check clause 3." },
-    } as never)
-
-    const wrapper = mountReview()
-    await uploadFile(wrapper)
-
-    expect(wrapper.text()).toContain("Looks mostly fine.")
-    expect(wrapper.text()).not.toContain("Initial review failed")
-    expect(wrapper.text()).not.toContain("Issues found")
-  })
-
-  it("falls back to a plain message, rather than throwing, when summary is not a string", async () => {
-    vi.mocked(waitForJob).mockResolvedValue({
-      status: "completed",
-      result: { summary: { unexpected: "shape" }, issues: [] },
-    } as never)
-
-    const wrapper = mountReview()
-    await uploadFile(wrapper)
-
-    expect(wrapper.text()).toContain("Review complete.")
-    expect(wrapper.text()).not.toContain("Initial review failed")
-  })
 })
 
 describe("DocumentReviewView issue rendering (#49)", () => {
