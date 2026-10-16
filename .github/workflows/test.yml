@@ -26,6 +26,7 @@ jobs:
 
       - run: pnpm install
       - run: pnpm vitest run
+      - run: pnpm typecheck:e2e
 
   python:
     name: Python (pytest)
