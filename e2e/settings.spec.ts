@@ -1,10 +1,11 @@
 // ABOUTME: E2e tests for the Settings view.
 // ABOUTME: Validates tab navigation, provider management, appearance, and sync controls.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("Settings", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
   });
 
   test("renders page heading", async ({ page }) => {

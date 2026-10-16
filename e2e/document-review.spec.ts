@@ -1,10 +1,11 @@
 // ABOUTME: E2e tests for the Document Review view.
 // ABOUTME: Validates file upload UI, session list, chat interface, and workflow display.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("Document Review", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
   });
 
   test("renders page heading and description", async ({ page }) => {

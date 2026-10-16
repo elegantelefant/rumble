@@ -1,6 +1,7 @@
 // ABOUTME: Deep UX audit — tests interactions that were missed in prior walkthrough.
 // ABOUTME: Covers file upload, toasts, focus management, keyboard nav, and edge cases.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
@@ -27,7 +28,7 @@ test.describe("1. Login Page (bypass auth stub)", () => {
   test("1a. see the actual login page UI", async ({ page }) => {
     // The router guard always returns true, so /login redirects.
     // But we can still verify the redirect behavior is correct.
-    await page.goto("/login");
+    await gotoRoute(page, "/login");
     await page.screenshot({ path: S("01a-login-or-redirect"), fullPage: true });
     // Since isAuthenticated=true, we should be at /review
     await expect(page).toHaveURL(/\/review/);
@@ -40,7 +41,7 @@ test.describe("1. Login Page (bypass auth stub)", () => {
 
 test.describe("2. File Upload", () => {
   test("2a. upload a file via file input", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
 
     // Get the hidden file input and set files on it
     const fileInput = page.locator('input[type="file"]');
@@ -54,7 +55,7 @@ test.describe("2. File Upload", () => {
   });
 
   test("2b. uploaded file shows review status", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const fileInput = page.locator('input[type="file"]');
     await fileInput.setInputFiles(TEST_FILE_PATH);
     await page.waitForTimeout(500);
@@ -66,7 +67,7 @@ test.describe("2. File Upload", () => {
   });
 
   test("2c. browse button triggers file picker", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     // The Browse button should trigger the hidden input
     const fileChooserPromise = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: "Browse Files" }).click();
@@ -84,7 +85,7 @@ test.describe("3. Toast Notifications", () => {
   // Playwright runs against Vite with no Tauri host, so nothing can be stored:
   // the honest outcome is the failure toast, never a success claim.
   test("3a. settings save without the host reports the failure", async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
     await page.getByRole("button", { name: "Save settings" }).click();
     // Wait for toast to appear
     await page.waitForTimeout(500);
@@ -93,7 +94,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3b. draft export shows info toast", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Export to Word" }).click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: S("03b-toast-export-word"), fullPage: true });
@@ -101,7 +102,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3c. draft export PDF shows info toast", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Export to PDF" }).click();
     await page.waitForTimeout(300);
     await expect(page.getByText("Exported draft as PDF")).toBeVisible();
@@ -109,7 +110,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3d. manage templates shows coming soon toast", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Manage Templates" }).click();
     await page.waitForTimeout(300);
     await expect(page.getByText("Template management coming soon")).toBeVisible();
@@ -117,7 +118,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3e. browse local templates shows coming soon toast", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Browse Local Templates..." }).click();
     await page.waitForTimeout(300);
     await expect(page.getByText("Template browsing coming soon")).toBeVisible();
@@ -125,7 +126,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3f. save provider secret without key shows error toast", async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
     await page.getByLabel("Provider").selectOption("openai");
     // Don't fill the key — just click save
     await page.getByRole("button", { name: "Save secret" }).click();
@@ -135,7 +136,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3g. research prompt shows info toast", async ({ page }) => {
-    await page.goto("/research");
+    await gotoRoute(page, "/research");
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the elements of negligence?");
     await page.getByRole("button", { name: "Start Research" }).click();
@@ -145,7 +146,7 @@ test.describe("3. Toast Notifications", () => {
   });
 
   test("3h. translation generates success toast", async ({ page }) => {
-    await page.goto("/translation");
+    await gotoRoute(page, "/translation");
     await page.getByPlaceholder("Paste or type the passage").fill("This is a test");
     await page.getByRole("button", { name: "Translate" }).click();
     await page.waitForTimeout(500);
@@ -160,7 +161,7 @@ test.describe("3. Toast Notifications", () => {
 
 test.describe("4. Keyboard Navigation", () => {
   test("4a. tab through review page form elements", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     // Tab to Browse Files button
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
@@ -169,7 +170,7 @@ test.describe("4. Keyboard Navigation", () => {
   });
 
   test("4b. command palette keyboard navigation", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     // Arrow down to highlight second item
     await page.keyboard.press("ArrowDown");
@@ -183,7 +184,7 @@ test.describe("4. Keyboard Navigation", () => {
   });
 
   test("4e. Enter submits review question", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const input = page.locator("#document-question");
     await input.fill("Is there a force majeure clause?");
     await input.press("Enter");
@@ -200,7 +201,7 @@ test.describe("4. Keyboard Navigation", () => {
 
 test.describe("5. Edge Cases", () => {
   test("5a. translation same language error", async ({ page }) => {
-    await page.goto("/translation");
+    await gotoRoute(page, "/translation");
     // Set both to English
     await page.getByLabel("Source language").selectOption("en");
     await page.getByLabel("Target language").selectOption("en");
@@ -212,7 +213,7 @@ test.describe("5. Edge Cases", () => {
   });
 
   test("5b. translation empty source text does nothing", async ({ page }) => {
-    await page.goto("/translation");
+    await gotoRoute(page, "/translation");
     // Don't fill any text, just click translate
     await page.getByRole("button", { name: "Translate" }).click();
     // Nothing should happen — no toast, no error, button still enabled
@@ -220,28 +221,28 @@ test.describe("5. Edge Cases", () => {
   });
 
   test("5c. research empty prompt does nothing", async ({ page }) => {
-    await page.goto("/research");
+    await gotoRoute(page, "/research");
     await page.getByRole("button", { name: "Start Research" }).click();
     // Nothing should happen — prompt is empty
     await page.screenshot({ path: S("05c-research-empty-noop"), fullPage: true });
   });
 
   test("5d. review send empty question does nothing", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Send" }).click();
     // No error, no action — empty question guard
     await page.screenshot({ path: S("05d-review-empty-send"), fullPage: true });
   });
 
   test("5e. settings remove all secrets", async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
     // Remove the pre-seeded secret
     await page.getByText("Remove").first().click();
     await page.screenshot({ path: S("05e-settings-no-secrets"), fullPage: true });
   });
 
   test("5f. draft validation clears when switching templates", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     // Trigger validation on employment
     await page.getByRole("button", { name: "Generate Draft" }).click();
     await expect(page.getByText("Employee name is required")).toBeVisible();
@@ -268,7 +269,7 @@ test.describe("6. Mobile Views", () => {
   for (const p of mobilePages) {
     test(`6-mobile-${p.name}`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
-      await page.goto(p.path);
+      await gotoRoute(page, p.path);
       await page.screenshot({ path: S(`06-mobile-${p.name}`), fullPage: true });
     });
   }
@@ -280,19 +281,19 @@ test.describe("6. Mobile Views", () => {
 
 test.describe("7. Focus States", () => {
   test("7a. input focus ring visible", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByPlaceholder("Full name").focus();
     await page.screenshot({ path: S("07a-input-focus-ring"), fullPage: true });
   });
 
   test("7b. button focus ring visible", async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Generate Draft" }).focus();
     await page.screenshot({ path: S("07b-button-focus-ring"), fullPage: true });
   });
 
   test("7c. select focus ring visible", async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
     await page.getByRole("button", { name: "Appearance" }).click();
     await page.getByLabel("Theme").focus();
     await page.screenshot({ path: S("07c-select-focus-ring"), fullPage: true });

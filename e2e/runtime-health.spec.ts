@@ -1,6 +1,7 @@
 // ABOUTME: Runtime health checks for console errors and page stability.
 // ABOUTME: Verifies no JavaScript errors on any route during navigation.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 const routes = [
   { path: "/review", name: "Document Review" },
@@ -18,7 +19,7 @@ for (const route of routes) {
       if (msg.type() === "error") errors.push(msg.text());
     });
 
-    await page.goto(route.path);
+    await gotoRoute(page, route.path);
     await page.waitForLoadState("networkidle");
 
     // Filter out known benign errors (Tauri IPC not available in browser)
@@ -32,18 +33,18 @@ for (const route of routes) {
 test("login page is accessible when not authenticated", async ({ page }) => {
   // Auth is currently stubbed to true, so /login redirects to /review
   // Verify the redirect works correctly
-  await page.goto("/login");
+  await gotoRoute(page, "/login");
   await expect(page).toHaveURL(/\/(review|login)/);
 });
 
 test("command palette opens via shortcuts button", async ({ page }) => {
-  await page.goto("/review");
+  await gotoRoute(page, "/review");
   await page.getByRole("button", { name: "Open shortcuts" }).click();
   await expect(page.getByPlaceholder(/Search shortcuts/)).toBeVisible();
 });
 
 test("sidebar toggle works on desktop", async ({ page }) => {
-  await page.goto("/review");
+  await gotoRoute(page, "/review");
   const sidebar = page.locator("aside.sidebar");
   await expect(sidebar).toBeVisible();
 });
