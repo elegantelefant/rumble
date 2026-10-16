@@ -182,7 +182,7 @@ Configure AI providers, manage templates, and adjust how the app looks and feels
 ## Uninstalling
 
 ### macOS
-Drag **Elefant - Rumble** from Applications to the Trash. To also remove data: delete `~/Library/Application Support/com.ielegante.rumble/`
+Drag **Elefant - Rumble** from Applications to the Trash. To also remove data: delete `~/Library/Application Support/legal.elefant.rumble/`
 
 ### Windows
 Open Settings → Apps → find "Elefant - Rumble" → click Uninstall
