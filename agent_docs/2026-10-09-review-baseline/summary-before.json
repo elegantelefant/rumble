@@ -1,0 +1,334 @@
+[
+  {
+    "run": 1,
+    "job_id": "3f22c042-ae80-4705-87c2-b2f938574271",
+    "elapsed_seconds": 24.22,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 4,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "missing",
+      "other",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 4
+  },
+  {
+    "run": 2,
+    "job_id": "c84c9868-6c61-4a7c-b2ce-ae2e0abb0ecf",
+    "elapsed_seconds": 26.16,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 3,
+    "job_id": "8055a6e5-8d16-4dda-8fb3-bb2204b6ec00",
+    "elapsed_seconds": 22.14,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 5,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "risk|ambiguity",
+      "style"
+    ],
+    "kind_values_outside_contract": [
+      "risk|ambiguity"
+    ],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 5
+  },
+  {
+    "run": 4,
+    "job_id": "6241bc93-92ca-4169-bf48-6f9e0be75812",
+    "elapsed_seconds": 24.16,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 7,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "other",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 7
+  },
+  {
+    "run": 5,
+    "job_id": "2c126c2e-3b28-43f2-b92b-7e9d0228f62a",
+    "elapsed_seconds": 26.22,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 6,
+    "job_id": "cc04fdb6-64d5-4b66-bf8b-c1c68d9a69bd",
+    "elapsed_seconds": 30.45,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 7,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "risk|ambiguity|missing|style|other",
+      "style|other"
+    ],
+    "kind_values_outside_contract": [
+      "risk|ambiguity|missing|style|other",
+      "style|other"
+    ],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 7
+  },
+  {
+    "run": 7,
+    "job_id": "db863db1-9348-477a-9892-827c375fa3b8",
+    "elapsed_seconds": 30.17,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "other",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  },
+  {
+    "run": 8,
+    "job_id": "811b326e-5550-48ef-8edf-82061a1984ae",
+    "elapsed_seconds": 38.83,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 8,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "rhetorical error",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [
+      "rhetorical error"
+    ],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 8
+  },
+  {
+    "run": 9,
+    "job_id": "ffc8eb1f-3503-4366-ad34-2d1a0567e996",
+    "elapsed_seconds": 26.41,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 4,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 4
+  },
+  {
+    "run": 10,
+    "job_id": "ff7e30b4-d8a6-40df-a3a1-0eb8e97543a5",
+    "elapsed_seconds": 26.25,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "missing",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  },
+  {
+    "run": 11,
+    "job_id": "1aca5998-49a2-49ae-a784-36fa5d72f441",
+    "elapsed_seconds": 22.24,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 12,
+    "job_id": "d60efc2f-273b-4605-9861-f6c7e34ea81c",
+    "elapsed_seconds": 22.32,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 4,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 4
+  },
+  {
+    "run": 13,
+    "job_id": "a3c5f0d5-1c81-49c2-af3e-f2231a9bb168",
+    "elapsed_seconds": 18.26,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 14,
+    "job_id": "83145e4e-c7cd-4721-b881-64ff805f4241",
+    "elapsed_seconds": 28.6,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "other",
+      "risk",
+      "risks",
+      "style"
+    ],
+    "kind_values_outside_contract": [
+      "risks"
+    ],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  },
+  {
+    "run": 15,
+    "job_id": "79949c11-496d-47d0-ba4e-868c80e1a7aa",
+    "elapsed_seconds": 32.41,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "other",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  },
+  {
+    "run": 16,
+    "job_id": "5a6cace5-3ce1-47b9-aef0-3789ededba0e",
+    "elapsed_seconds": 28.26,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  },
+  {
+    "run": 17,
+    "job_id": "e261022d-1ed5-4ba2-aba2-4f2966a8808e",
+    "elapsed_seconds": 34.78,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 5,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 5
+  },
+  {
+    "run": 18,
+    "job_id": "e73a7c5e-e28a-46e4-9c5e-6ff42cf3743d",
+    "elapsed_seconds": 28.16,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 19,
+    "job_id": "291bc94f-9a14-4be4-9ade-cfd9b2d267de",
+    "elapsed_seconds": 44.37,
+    "job_status": "failed",
+    "job_error": null,
+    "raw_issue_count": null,
+    "raw_issues_is_list": null,
+    "kind_values_seen": [],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": null,
+    "surviving_issue_count": null
+  },
+  {
+    "run": 20,
+    "job_id": "d7e5b45a-4ca0-4a67-8c25-08d36c633322",
+    "elapsed_seconds": 30.38,
+    "job_status": "completed",
+    "job_error": null,
+    "raw_issue_count": 6,
+    "raw_issues_is_list": true,
+    "kind_values_seen": [
+      "ambiguity",
+      "missing",
+      "other",
+      "risk",
+      "style"
+    ],
+    "kind_values_outside_contract": [],
+    "survives_safe_construct": true,
+    "surviving_issue_count": 6
+  }
+]
