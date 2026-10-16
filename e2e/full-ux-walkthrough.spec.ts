@@ -308,7 +308,7 @@ test.describe("5. Document Draft", () => {
     await page.screenshot({ path: S("05g-draft-service-template"), fullPage: true });
   });
 
-  test("5h. fill NDA and generate draft", async ({ page }) => {
+  test("5h. NDA generate draft without an Effective Date shows a validation error", async ({ page }) => {
     await page.getByText("Non-Disclosure Agreement").click();
     await page.getByPlaceholder("Company or person").first().fill("Acme Corp");
     await page.getByPlaceholder("Company or person").last().fill("Beta Inc");
@@ -441,7 +441,7 @@ test.describe("7. Translation", () => {
     await page.screenshot({ path: S("07d-translation-german-src"), fullPage: true });
   });
 
-  test("7e. type source text and translate", async ({ page }) => {
+  test("7e. translate without a host surfaces an error toast", async ({ page }) => {
     await page.getByPlaceholder("Paste or type the passage").fill("Der Vertrag tritt am 1. Januar in Kraft.");
     await page.screenshot({ path: S("07e-translation-typing"), fullPage: true });
     await page.getByRole("button", { name: "Translate" }).click();
@@ -518,7 +518,7 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08e-settings-ollama-config"), fullPage: true });
   });
 
-  test("8f. providers tab — save secret button", async ({ page }) => {
+  test("8f. providers tab — save secret reports a keychain failure without a host", async ({ page }) => {
     await page.getByRole("combobox", { name: "Provider" }).selectOption("anthropic");
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Claude key");
     await page.getByPlaceholder("sk-...").fill("sk-ant-test");
@@ -582,7 +582,7 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
   });
 
-  test("8o. save settings button", async ({ page }) => {
+  test("8o. save settings reports the failure without a host", async ({ page }) => {
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByText("Couldn't save settings")).toBeVisible();
     await page.screenshot({ path: S("08o-settings-saved"), fullPage: true });

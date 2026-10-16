@@ -161,7 +161,7 @@ test.describe("3. Toast Notifications", () => {
 // ═══════════════════════════════════════
 
 test.describe("4. Keyboard Navigation", () => {
-  test("4a. tab through review page form elements", async ({ page }) => {
+  test("4a. tab order reaches the sidebar's Research item, not a review form field", async ({ page }) => {
     await gotoRoute(page, "/review");
     // Click a non-interactive element first to set the sequential focus
     // navigation start point — without it, Tab never leaves <body> in
