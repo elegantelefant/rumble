@@ -46,7 +46,7 @@ GitHub Actions is billing-gated and currently runs zero steps in every job. It i
 
 ```sh
 git fetch origin refs/pull/<N>/merge && git checkout -q FETCH_HEAD
-pnpm install && pnpm build && pnpm test
+pnpm install && pnpm build && pnpm typecheck:e2e && pnpm test
 (cd src-tauri/sidecar && uv sync && uv run pytest -q)
 (cd src-tauri && cargo test)                    # with the stub binary above
 pnpm generate:api && pnpm generate:models && git diff --exit-code -- src/api/models src-tauri/sidecar/models/generated.py
