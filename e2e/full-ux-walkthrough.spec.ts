@@ -82,6 +82,7 @@ test.describe("2. Sidebar Navigation", () => {
     await gotoRoute(page, "/review");
     const firstNavItem = page.locator("aside.sidebar nav > div").first();
     await firstNavItem.hover();
+    await expect(firstNavItem.locator("div.opacity-0")).toHaveCSS("opacity", "1");
     await page.screenshot({ path: S("02e-sidebar-hover-arrows"), fullPage: true });
   });
 
@@ -96,8 +97,10 @@ test.describe("2. Sidebar Navigation", () => {
   test("2g. mobile hamburger opens sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await gotoRoute(page, "/review");
+    const sidebar = page.locator("aside.sidebar");
     const hamburger = page.getByRole("button", { name: "Toggle navigation" });
     await hamburger.click();
+    await expect(sidebar).toBeInViewport();
     await page.screenshot({ path: S("02g-mobile-sidebar-open"), fullPage: true });
   });
 });
@@ -268,10 +271,18 @@ test.describe("5. Document Draft", () => {
   });
 
   test("5d. fill out employment form", async ({ page }) => {
-    await page.getByPlaceholder("Full name").fill("Jane Smith");
-    await page.getByPlaceholder("$100,000").fill("$150,000");
-    await page.getByPlaceholder("Role").fill("Senior Associate");
-    await page.getByPlaceholder("Enter additional clauses").fill("90-day probation period with quarterly reviews.");
+    const name = page.getByPlaceholder("Full name");
+    const salary = page.getByPlaceholder("$100,000");
+    const role = page.getByPlaceholder("Role");
+    const terms = page.getByPlaceholder("Enter additional clauses");
+    await name.fill("Jane Smith");
+    await salary.fill("$150,000");
+    await role.fill("Senior Associate");
+    await terms.fill("90-day probation period with quarterly reviews.");
+    await expect(name).toHaveValue("Jane Smith");
+    await expect(salary).toHaveValue("$150,000");
+    await expect(role).toHaveValue("Senior Associate");
+    await expect(terms).toHaveValue("90-day probation period with quarterly reviews.");
     await page.screenshot({ path: S("05d-draft-form-filled"), fullPage: true });
   });
 
@@ -303,6 +314,10 @@ test.describe("5. Document Draft", () => {
     await page.getByPlaceholder("Company or person").last().fill("Beta Inc");
     await page.getByPlaceholder("e.g. 2 years").fill("3 years");
     await page.getByRole("button", { name: "Generate Draft" }).click();
+    // Effective Date is left blank here, so validateForm() blocks generation
+    // before it ever reaches the sidecar — the same guard as 5e, on the NDA
+    // template's own required field.
+    await expect(page.getByText("Effective date is required")).toBeVisible();
     await page.screenshot({ path: S("05h-draft-generating"), fullPage: true });
   });
 
@@ -324,6 +339,7 @@ test.describe("5. Document Draft", () => {
 
   test("5k. browse templates button shows toast", async ({ page }) => {
     await page.getByRole("button", { name: "Browse Local Templates..." }).click();
+    await expect(page.getByText("Template browsing coming soon.")).toBeVisible();
     await page.screenshot({ path: S("05k-draft-browse-toast"), fullPage: true });
   });
 });
@@ -379,6 +395,7 @@ test.describe("6. Research Assistant", () => {
 
   test("6h. API surface toggle", async ({ page }) => {
     await page.getByRole("button", { name: /API surface/ }).click();
+    await expect(page.getByText("Backend expectations")).toBeVisible();
     await page.screenshot({ path: S("06h-research-api-surface"), fullPage: true });
   });
 
@@ -418,7 +435,9 @@ test.describe("7. Translation", () => {
   });
 
   test("7d. change source language to German", async ({ page }) => {
-    await page.getByLabel("Source language").selectOption("de");
+    const source = page.getByLabel("Source language");
+    await source.selectOption("de");
+    await expect(source).toHaveValue("de");
     await page.screenshot({ path: S("07d-translation-german-src"), fullPage: true });
   });
 
@@ -426,6 +445,11 @@ test.describe("7. Translation", () => {
     await page.getByPlaceholder("Paste or type the passage").fill("Der Vertrag tritt am 1. Januar in Kraft.");
     await page.screenshot({ path: S("07e-translation-typing"), fullPage: true });
     await page.getByRole("button", { name: "Translate" }).click();
+    // No sidecar host in e2e, so runTranslation() always rejects. Assert a
+    // toast appears rather than pinning its wording: the current message is
+    // the raw TypeError from invoke() with no Tauri host, not production
+    // copy (see CLAUDE.md's invoke-rejects-a-string note).
+    await expect(page.locator('[role="status"] > div')).toBeVisible();
     await page.screenshot({ path: S("07f-translation-submitted"), fullPage: true });
   });
 
@@ -440,6 +464,7 @@ test.describe("7. Translation", () => {
 
   test("7i. API surface toggle", async ({ page }) => {
     await page.getByRole("button", { name: /API surface/ }).click();
+    await expect(page.getByText("Backend expectations")).toBeVisible();
     await page.screenshot({ path: S("07i-translation-api-surface"), fullPage: true });
   });
 });
@@ -469,8 +494,12 @@ test.describe("8. Settings", () => {
   });
 
   test("8c. providers tab — add secret form", async ({ page }) => {
-    await page.getByRole("combobox", { name: "Provider" }).selectOption("openai");
-    await page.getByPlaceholder("e.g. Drafting primary key").fill("Research key");
+    const provider = page.getByRole("combobox", { name: "Provider" });
+    const label = page.getByPlaceholder("e.g. Drafting primary key");
+    await provider.selectOption("openai");
+    await label.fill("Research key");
+    await expect(provider).toHaveValue("openai");
+    await expect(label).toHaveValue("Research key");
     await page.screenshot({ path: S("08c-settings-add-openai"), fullPage: true });
   });
 
@@ -494,6 +523,10 @@ test.describe("8. Settings", () => {
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Claude key");
     await page.getByPlaceholder("sk-...").fill("sk-ant-test");
     await page.getByRole("button", { name: "Save secret" }).click();
+    // store_api_key rejects with no Tauri host, and the keychain readback
+    // used to confirm a save-then-restart failure also fails — addSecret()
+    // reports the store failure rather than silently keeping the secret.
+    await expect(page.getByText(/Failed to store API key/)).toBeVisible();
     await page.screenshot({ path: S("08f-settings-secret-saved"), fullPage: true });
   });
 
@@ -543,12 +576,15 @@ test.describe("8. Settings", () => {
 
   test("8k. appearance tab — change theme", async ({ page }) => {
     await page.getByRole("button", { name: "Appearance" }).click();
-    await page.getByLabel("Theme").selectOption("dark");
+    const theme = page.getByLabel("Theme");
+    await theme.selectOption("dark");
+    await expect(theme).toHaveValue("dark");
     await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
   });
 
   test("8o. save settings button", async ({ page }) => {
     await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Couldn't save settings")).toBeVisible();
     await page.screenshot({ path: S("08o-settings-saved"), fullPage: true });
   });
 });
