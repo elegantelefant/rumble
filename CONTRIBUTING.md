@@ -4,7 +4,7 @@ Thanks for helping. This file is the short version; `CLAUDE.md` and `docs/agents
 
 ## Run it locally
 
-Prerequisites: Node 20+ with pnpm 9, Rust stable, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and [Ollama](https://ollama.com/) running.
+Prerequisites: Node 20+ with pnpm 10.20.0, Rust stable, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and [Ollama](https://ollama.com/) running.
 
 ```sh
 pnpm install
