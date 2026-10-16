@@ -483,15 +483,15 @@ test.describe("7. Translation", () => {
     await page.screenshot({ path: S("07d-translation-german-src"), fullPage: true });
   });
 
-  test("7e. translate without a host surfaces an error toast", async ({ page }) => {
+  test("7e. type source text and translate", async ({ page }) => {
+    await mockTauri(page);
+    // beforeEach already navigated to /translation; reload so the init script registered
+    // above actually takes effect on a fresh document.
+    await page.reload();
     await page.getByPlaceholder("Paste or type the passage").fill("Der Vertrag tritt am 1. Januar in Kraft.");
     await page.screenshot({ path: S("07e-translation-typing"), fullPage: true });
     await page.getByRole("button", { name: "Translate" }).click();
-    // No sidecar host in e2e, so runTranslation() always rejects. Assert a
-    // toast appears rather than pinning its wording: the current message is
-    // the raw TypeError from invoke() with no Tauri host, not production
-    // copy (see CLAUDE.md's invoke-rejects-a-string note).
-    await expect(page.locator('[role="status"] > div')).toBeVisible();
+    await expect(page.getByText("Translation complete.")).toBeVisible();
     await page.screenshot({ path: S("07f-translation-submitted"), fullPage: true });
   });
 
@@ -559,15 +559,18 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08e-settings-ollama-config"), fullPage: true });
   });
 
-  test("8f. providers tab — save secret reports a keychain failure without a host", async ({ page }) => {
+  test("8f. providers tab — save secret button", async ({ page }) => {
+    await mockTauri(page);
+    // beforeEach already navigated to /settings; reload (not gotoRoute to the same URL again)
+    // so the init script registered above actually takes effect on a fresh document.
+    await page.reload();
     await page.getByRole("combobox", { name: "Provider" }).selectOption("anthropic");
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Claude key");
     await page.getByPlaceholder("sk-...").fill("sk-ant-test");
     await page.getByRole("button", { name: "Save secret" }).click();
-    // store_api_key rejects with no Tauri host, and the keychain readback
-    // used to confirm a save-then-restart failure also fails — addSecret()
-    // reports the store failure rather than silently keeping the secret.
-    await expect(page.getByText(/Failed to store API key/)).toBeVisible();
+    await expect(
+      page.getByText("Secret saved locally. Remember: hosted providers process data off-device."),
+    ).toBeVisible();
     await page.screenshot({ path: S("08f-settings-secret-saved"), fullPage: true });
   });
 
@@ -651,9 +654,14 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08n-settings-test-connection"), fullPage: true });
   });
 
-  test("8o. save settings reports the failure without a host", async ({ page }) => {
+  test("8o. save settings button", async ({ page }) => {
+    await mockTauri(page);
+    // beforeEach already navigated to /settings; reload so the init script registered above
+    // actually takes effect, and so onMounted's load_settings call resolves before saveSettings()
+    // is allowed to run (it no-ops until isLoaded is true).
+    await page.reload();
     await page.getByRole("button", { name: "Save settings" }).click();
-    await expect(page.getByText("Couldn't save settings")).toBeVisible();
+    await expect(page.getByText("Settings saved on this device.")).toBeVisible();
     await page.screenshot({ path: S("08o-settings-saved"), fullPage: true });
   });
 });
