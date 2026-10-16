@@ -46,7 +46,7 @@ GitHub Actions runs the repository checks; the local gate is the full suite on t
 
 ```sh
 git fetch origin refs/pull/<N>/merge && git checkout -q FETCH_HEAD
-pnpm install && pnpm build && pnpm test
+pnpm install && pnpm build && pnpm typecheck:e2e && pnpm test
 (cd src-tauri/sidecar && uv sync && uv run pytest -q)
 mkdir -p src-tauri/binaries && touch src-tauri/binaries/rumble-sidecar-$(rustc -vV | sed -n 's/^host: //p')
 (cd src-tauri && cargo test)
