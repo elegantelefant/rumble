@@ -77,6 +77,10 @@ async def test_review_completes(client):
         # Already-valid values pass through unchanged.
         ("risk", "risk"),
         ("other", "other"),
+        # Stray case and spacing (Ask 1, #91 review):
+        (" Risk ", "risk"),
+        ("RISKS", "risk"),
+        ("risk | ambiguity", "risk"),
     ],
 )
 def test_normalise_issue_kind_baseline_values(raw, expected):

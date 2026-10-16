@@ -102,21 +102,26 @@ _VALID_ISSUE_KINDS = {"risk", "ambiguity", "missing", "style", "other"}
 
 def _normalise_issue_kind(kind: object) -> object:
     """A model asked for one of five kinds sometimes hands back several of
-    them joined with "|" (e.g. "risk|ambiguity"), or a near-miss like the
-    plural "risks" (#49's review baseline: 4 of 14 parseable runs had a
-    kind outside the five). Recover a valid kind where there's an obvious
-    one; otherwise leave the value as-is for _safe_construct's enum
-    validation to reset to the field's own default ("other") -- this never
-    needs to invent a kind the model didn't effectively already suggest."""
+    them joined with "|" (e.g. "risk|ambiguity"), a near-miss like the
+    plural "risks", or one with stray case/whitespace ("RISKS", " Risk ")
+    (#49's review baseline: 4 of 14 parseable runs had a kind outside the
+    five). Recover a valid kind where there's an obvious one; otherwise
+    leave the value as-is for _safe_construct's enum validation to reset
+    to the field's own default ("other") -- this never needs to invent a
+    kind the model didn't effectively already suggest."""
     if not isinstance(kind, str):
         return kind
-    if "|" in kind:
-        for part in kind.split("|"):
+    cleaned = kind.strip().lower()
+    if "|" in cleaned:
+        for part in cleaned.split("|"):
+            part = part.strip()
             if part in _VALID_ISSUE_KINDS:
                 return part
         return kind
-    if kind not in _VALID_ISSUE_KINDS and kind.endswith("s") and kind[:-1] in _VALID_ISSUE_KINDS:
-        return kind[:-1]
+    if cleaned in _VALID_ISSUE_KINDS:
+        return cleaned
+    if cleaned.endswith("s") and cleaned[:-1] in _VALID_ISSUE_KINDS:
+        return cleaned[:-1]
     return kind
 
 
