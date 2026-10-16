@@ -96,20 +96,20 @@ test.describe("3. Toast Notifications", () => {
   test("3b. draft export shows info toast", async ({ page }) => {
     await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Export to Word" }).click();
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: S("03b-toast-export-word"), fullPage: true });
     await expect(page.getByText("Generate a draft before exporting.")).toBeVisible();
+    await page.screenshot({ path: S("03b-toast-export-word"), fullPage: true });
   });
 
   // No draft is generated here: that needs createDraftJob/waitForJob, which
   // goes through Tauri invoke to the sidecar, and e2e runs against plain
   // Vite with no sidecar host (see 3a). So this only reaches the no-draft
   // guard, same as 3b — "PDF export is coming soon" (the PDF-specific
-  // branch past that guard) isn't reachable until there's a backend.
-  test("3c. draft export PDF shows info toast", async ({ page }) => {
+  // branch past that guard) isn't reachable until the IPC mock in #97 can
+  // answer /draft with a generated job. #97 will add that handler and
+  // un-fixme this.
+  test.fixme("3c. draft export PDF shows info toast — needs IPC mock to answer /draft (#97)", async ({ page }) => {
     await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Export to PDF" }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Generate a draft before exporting.")).toBeVisible();
     await page.screenshot({ path: S("03c-toast-export-pdf"), fullPage: true });
   });
@@ -117,7 +117,6 @@ test.describe("3. Toast Notifications", () => {
   test("3d. manage templates shows coming soon toast", async ({ page }) => {
     await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Manage Templates" }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Template management coming soon")).toBeVisible();
     await page.screenshot({ path: S("03d-toast-manage-templates"), fullPage: true });
   });
@@ -125,7 +124,6 @@ test.describe("3. Toast Notifications", () => {
   test("3e. browse local templates shows coming soon toast", async ({ page }) => {
     await gotoRoute(page, "/draft");
     await page.getByRole("button", { name: "Browse Local Templates..." }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Template browsing coming soon")).toBeVisible();
     await page.screenshot({ path: S("03e-toast-browse-templates"), fullPage: true });
   });
@@ -135,7 +133,6 @@ test.describe("3. Toast Notifications", () => {
     await page.getByRole("combobox", { name: "Provider" }).selectOption("openai");
     // Don't fill the key — just click save
     await page.getByRole("button", { name: "Save secret" }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Enter the provider key")).toBeVisible();
     await page.screenshot({ path: S("03f-toast-secret-error"), fullPage: true });
   });
@@ -145,7 +142,6 @@ test.describe("3. Toast Notifications", () => {
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the elements of negligence?");
     await page.getByRole("button", { name: "Start Research" }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Research request sent")).toBeVisible();
     await page.screenshot({ path: S("03g-toast-research-sent"), fullPage: true });
   });
@@ -167,10 +163,18 @@ test.describe("3. Toast Notifications", () => {
 test.describe("4. Keyboard Navigation", () => {
   test("4a. tab through review page form elements", async ({ page }) => {
     await gotoRoute(page, "/review");
-    // Tab to Browse Files button
+    // Click a non-interactive element first to set the sequential focus
+    // navigation start point — without it, Tab never leaves <body> in
+    // headless Chromium. Click the sidebar itself (not main content) so
+    // the start point precedes the sidebar's own nav buttons.
+    await page.locator("aside.sidebar").click({ position: { x: 5, y: 5 } });
+    // Three tabs land on the sidebar's "Research" item, not "Browse Files":
+    // each reorderable nav item contributes its own up/down arrow stop
+    // before the next item's button.
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Research", exact: true })).toBeFocused();
     await page.screenshot({ path: S("04a-tab-focus-review"), fullPage: true });
   });
 
@@ -179,12 +183,16 @@ test.describe("4. Keyboard Navigation", () => {
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     // Arrow down to highlight second item
     await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("option", { name: "Upload documents" })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: S("04b-palette-arrow-down"), fullPage: true });
     // Arrow down again
     await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("option", { name: "Start a new draft" })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: S("04c-palette-arrow-down-2"), fullPage: true });
     // Press Enter to navigate
     await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/draft/);
+    await expect(page.getByRole("dialog", { name: "Command palette" })).not.toBeVisible();
     await page.screenshot({ path: S("04d-palette-enter-navigate"), fullPage: true });
   });
 
@@ -194,7 +202,6 @@ test.describe("4. Keyboard Navigation", () => {
     await input.fill("Is there a force majeure clause?");
     await input.press("Enter");
     // Form should submit — question appears in chat
-    await page.waitForTimeout(300);
     await expect(page.getByText("Is there a force majeure clause?", { exact: true })).toBeVisible();
     await page.screenshot({ path: S("04e-enter-submit-question"), fullPage: true });
   });
@@ -212,7 +219,6 @@ test.describe("5. Edge Cases", () => {
     await page.getByLabel("Target language").selectOption("en");
     await page.getByPlaceholder("Paste or type the passage").fill("Test text");
     await page.getByRole("button", { name: "Translate" }).click();
-    await page.waitForTimeout(300);
     await expect(page.getByText("Source and target languages are the same")).toBeVisible();
     await page.screenshot({ path: S("05a-same-language-error"), fullPage: true });
   });
@@ -221,14 +227,18 @@ test.describe("5. Edge Cases", () => {
     await gotoRoute(page, "/translation");
     // Don't fill any text, just click translate
     await page.getByRole("button", { name: "Translate" }).click();
-    // Nothing should happen — no toast, no error, button still enabled
+    // runTranslation()'s empty-input guard returns before setting
+    // isTranslating — if it fired, the button stays enabled synchronously.
+    await expect(page.getByRole("button", { name: "Translate" })).toBeEnabled();
     await page.screenshot({ path: S("05b-translate-empty-noop"), fullPage: true });
   });
 
   test("5c. research empty prompt does nothing", async ({ page }) => {
     await gotoRoute(page, "/research");
     await page.getByRole("button", { name: "Start Research" }).click();
-    // Nothing should happen — prompt is empty
+    // submitPrompt()'s empty-prompt guard returns before setting
+    // isResearching — if it fired, the button stays enabled synchronously.
+    await expect(page.getByRole("button", { name: "Start Research" })).toBeEnabled();
     await page.screenshot({ path: S("05c-research-empty-noop"), fullPage: true });
   });
 
@@ -282,17 +292,18 @@ test.describe("5. Edge Cases", () => {
 
 test.describe("6. Mobile Views", () => {
   const mobilePages = [
-    { path: "/review", name: "review" },
-    { path: "/draft", name: "draft" },
-    { path: "/research", name: "research" },
-    { path: "/translation", name: "translation" },
-    { path: "/settings", name: "settings" },
+    { path: "/review", name: "review", heading: "Document Review" },
+    { path: "/draft", name: "draft", heading: "Document Draft" },
+    { path: "/research", name: "research", heading: "Research Assistant" },
+    { path: "/translation", name: "translation", heading: "Translation" },
+    { path: "/settings", name: "settings", heading: "Settings" },
   ];
 
   for (const p of mobilePages) {
     test(`6-mobile-${p.name}`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
       await gotoRoute(page, p.path);
+      await expect(page.getByRole("heading", { name: p.heading, exact: true }).first()).toBeVisible();
       await page.screenshot({ path: S(`06-mobile-${p.name}`), fullPage: true });
     });
   }
@@ -305,20 +316,26 @@ test.describe("6. Mobile Views", () => {
 test.describe("7. Focus States", () => {
   test("7a. input focus ring visible", async ({ page }) => {
     await gotoRoute(page, "/draft");
-    await page.getByPlaceholder("Full name").focus();
+    const input = page.getByPlaceholder("Full name");
+    await input.focus();
+    await expect(input).toBeFocused();
     await page.screenshot({ path: S("07a-input-focus-ring"), fullPage: true });
   });
 
   test("7b. button focus ring visible", async ({ page }) => {
     await gotoRoute(page, "/draft");
-    await page.getByRole("button", { name: "Generate Draft" }).focus();
+    const button = page.getByRole("button", { name: "Generate Draft" });
+    await button.focus();
+    await expect(button).toBeFocused();
     await page.screenshot({ path: S("07b-button-focus-ring"), fullPage: true });
   });
 
   test("7c. select focus ring visible", async ({ page }) => {
     await gotoRoute(page, "/settings");
     await page.getByRole("button", { name: "Appearance" }).click();
-    await page.getByLabel("Theme").focus();
+    const select = page.getByLabel("Theme");
+    await select.focus();
+    await expect(select).toBeFocused();
     await page.screenshot({ path: S("07c-select-focus-ring"), fullPage: true });
   });
 });
