@@ -94,17 +94,19 @@ test.describe("3. Toast Notifications", () => {
     await page.screenshot({ path: S("03b-toast-export-word"), fullPage: true });
   });
 
-  // No draft is generated here: that needs createDraftJob/waitForJob, which
-  // goes through Tauri invoke to the sidecar, and e2e runs against plain
-  // Vite with no sidecar host (see 3a). So this only reaches the no-draft
-  // guard, same as 3b — "PDF export is coming soon" (the PDF-specific
-  // branch past that guard) isn't reachable until the IPC mock in #97 can
-  // answer /draft with a generated job. #97 will add that handler and
-  // un-fixme this.
-  test.fixme("3c. draft export PDF shows info toast — needs IPC mock to answer /draft (#97)", async ({ page }) => {
+  // Needs createDraftJob/waitForJob to resolve a non-empty draft before the PDF-specific branch
+  // past the no-draft guard is reachable — the mocked IPC bridge's /draft handler (#97) does that.
+  test("3c. draft export PDF shows info toast", async ({ page }) => {
+    await mockTauri(page);
     await gotoRoute(page, "/draft");
+    await page.getByLabel("Employee Name").fill("Jane Doe");
+    await page.getByLabel("Start Date").fill("2026-01-01");
+    await page.getByLabel("Salary").fill("$100,000");
+    await page.getByLabel("Position").fill("Associate");
+    await page.getByRole("button", { name: "Generate Draft" }).click();
+    await expect(page.getByText("Draft prepared. Review before sharing with clients.")).toBeVisible();
     await page.getByRole("button", { name: "Export to PDF" }).click();
-    await expect(page.getByText("Generate a draft before exporting.")).toBeVisible();
+    await expect(page.getByText("PDF export is coming soon.")).toBeVisible();
     await page.screenshot({ path: S("03c-toast-export-pdf"), fullPage: true });
   });
 

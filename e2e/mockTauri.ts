@@ -39,6 +39,8 @@ export type MockTauriOptions = {
   reviewSummary?: string;
   /** The research job's result text, once "completed". */
   researchResult?: string;
+  /** The draft job's generated text, once "completed". */
+  draftResult?: string;
   /** translate()'s translated_text. */
   translatedText?: string;
   /** The assistant's reply streamed back by stream_message (one delta, then done). */
@@ -59,6 +61,7 @@ type ResolvedMockTauriOptions = {
   extractedText: string;
   reviewSummary: string;
   researchResult: string;
+  draftResult: string;
   translatedText?: string;
   streamReply?: string;
   deleteApiKey?: boolean;
@@ -85,6 +88,7 @@ export async function mockTauri(page: Page, options: MockTauriOptions = {}): Pro
     extractedText: options.extractedText ?? "This is a mocked extracted document body for e2e.",
     reviewSummary: options.reviewSummary ?? "Mocked review summary: no material risks found.",
     researchResult: options.researchResult ?? "Mocked research result.",
+    draftResult: options.draftResult ?? "Mocked draft text.",
     translatedText: options.translatedText,
     streamReply: options.streamReply,
     deleteApiKey: options.deleteApiKey,
@@ -146,6 +150,18 @@ export async function mockTauri(page: Page, options: MockTauriOptions = {}): Pro
         };
         return res;
       }
+      if (path === "/draft" && method === "POST") {
+        const res: JobCreatedResponse = { job_id: randomId("draft-job"), poll_url: "" };
+        return res;
+      }
+      if (/^\/draft\/[^/]+\/result$/.test(path)) {
+        const res: JobResultResponse = {
+          id: randomId("draft-job"),
+          status: "completed",
+          result: { draft: opts.draftResult, warnings: [] },
+        };
+        return res;
+      }
       if (path === "/translate" && method === "POST") {
         const res: TranslateResponse = {
           translated_text: opts.translatedText ?? `[translated] ${String(json.text ?? "")}`,
@@ -171,10 +187,16 @@ export async function mockTauri(page: Page, options: MockTauriOptions = {}): Pro
           case "stream_message": {
             const text = opts.streamReply ?? "Mocked assistant reply.";
             const onEvent = args.onEvent as { onmessage: (e: { type: string; value: string }) => void };
-            onEvent.onmessage({ type: "delta", value: text });
-            onEvent.onmessage({ type: "done", value: text });
+            // The real host streams these after invoke() resolves, not before — deferring with
+            // setTimeout keeps this mock from hiding ordering bugs in the view.
+            setTimeout(() => onEvent.onmessage({ type: "delta", value: text }), 0);
+            setTimeout(() => onEvent.onmessage({ type: "done", value: text }), 0);
             return null;
           }
+          case "load_settings":
+            return null;
+          case "save_settings":
+            return null;
           case "get_api_key":
             // Both this and delete_api_key need to be unavailable to reproduce the real no-host
             // failure: removeSecret() falls back to this call when delete_api_key rejects, and
