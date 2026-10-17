@@ -6,9 +6,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-logger = logging.getLogger(__name__)
-
 from models.generated import (
+    DraftField,
     DraftRequest,
     DraftResponse,
     JobCreatedResponse,
@@ -21,6 +20,8 @@ from models.generated import (
 )
 from routes.ai import _parse_llm_json, _safe_construct
 from services import db, draft_substitution, jobs, llm, prompts
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_job_json(raw: str) -> dict:
@@ -35,6 +36,24 @@ router = APIRouter(tags=["jobs"])
 
 
 # --- Draft ---
+
+def _draft_warnings(draft: str, fields: list[DraftField], missing_keys: list[str]) -> list[str]:
+    """Tells the user what's still blank, rather than an unqualified "Draft
+    prepared" over a draft with gaps in it (rumble#46 review, Ask 1): the
+    still-missing field labels (not keys -- "employeeName" means nothing to
+    a lawyer, "Employee Name" does) and the count of brackets left
+    unresolved in the final text, whether or not they ever matched a known
+    field (the model's own "[YEARS NOT PROVIDED]"-style flags included)."""
+    warnings: list[str] = []
+    if missing_keys:
+        label_by_key = {f.key: f.label for f in fields}
+        missing_labels = [label_by_key.get(key, key) for key in missing_keys]
+        warnings.append(f"Missing: {', '.join(missing_labels)}")
+    unresolved = len(draft_substitution.BRACKET_RE.findall(draft))
+    if unresolved:
+        warnings.append(f"{unresolved} unresolved placeholder{'s' if unresolved != 1 else ''} left in the draft")
+    return warnings
+
 
 async def _run_draft(request: DraftRequest) -> dict:
     context_parts = []
@@ -57,6 +76,7 @@ async def _run_draft(request: DraftRequest) -> dict:
     fields = request.fields or []
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
     draft, _ = draft_substitution.apply(raw, fields)
+    missing_keys: list[str] = []
 
     if fields:
         presence = draft_substitution.all_present(draft, fields)
@@ -70,15 +90,26 @@ async def _run_draft(request: DraftRequest) -> dict:
             # content (an employee's name, a client's address), and a log
             # line is not where that belongs.
             logger.warning("Draft retry: missing field(s) %s after substitution", missing_keys)
-            raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-            draft, _ = draft_substitution.apply(raw, fields)
+            retry_raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
+            retry_draft, _ = draft_substitution.apply(retry_raw, fields)
+            retry_missing = [
+                key for key, present in draft_substitution.all_present(retry_draft, fields).items() if not present
+            ]
+            # The retry regenerates the whole draft, so it isn't strictly an
+            # improvement just because it ran second -- keep whichever
+            # attempt actually left fewer fields missing.
+            if len(retry_missing) < len(missing_keys):
+                draft, missing_keys = retry_draft, retry_missing
 
     # The model sometimes wraps clause headings in markdown ("**1. TERM**",
     # "## Heading"), which would otherwise show up literally in the draft
     # panel and the Word export rather than as styling.
     draft = draft_substitution.strip_markdown(draft)
 
-    return {"draft": draft, "warnings": []}
+    if not draft.strip():
+        raise ValueError("Draft generation produced no content.")
+
+    return {"draft": draft, "warnings": _draft_warnings(draft, fields, missing_keys)}
 
 
 @router.post("/draft", response_model=JobCreatedResponse)

@@ -82,6 +82,93 @@ async def test_draft_strips_markdown_from_the_final_draft(client):
     assert draft == "SERVICE AGREEMENT\n\n1. TERM\nThis agreement begins on the Start Date."
 
 
+async def test_draft_warns_about_an_unresolvable_bracket(client):
+    """An unresolved placeholder the model invents itself -- not tied to any
+    known field, e.g. its own "[YEARS NOT PROVIDED]" -- still needs to reach
+    the user. "Draft prepared" over a draft with a stray bracket in it is
+    dishonest (#46 review, Ask 1); DocumentDraftView.vue already renders
+    warnings, so the route just needs to populate it."""
+    from unittest.mock import AsyncMock, patch
+
+    raw = "This Agreement is entered into on September 19, [YEARS NOT PROVIDED]."
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/draft", json={"prompt": "Draft an agreement"})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    warnings = result.json()["result"]["warnings"]
+    assert warnings != []
+    assert any("unresolved placeholder" in w for w in warnings)
+
+
+async def test_draft_warns_with_the_missing_fields_label_not_its_key(client):
+    """A still-missing field is named by its label in the warning, not its
+    programmatic key -- "employeeName" means nothing to a lawyer, "Employee
+    Name" does (#46 review, Ask 1)."""
+    from unittest.mock import AsyncMock, patch
+
+    raw = "A draft that never mentions the employee by name."
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        resp = await client.post("/draft", json={
+            "prompt": "Draft an agreement",
+            "fields": [{"key": "employeeName", "label": "Employee Name", "value": "Tester"}],
+        })
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    warnings = result.json()["result"]["warnings"]
+    assert any("Employee Name" in w for w in warnings)
+    assert not any("employeeName" in w for w in warnings)
+
+
+async def test_draft_keeps_whichever_attempt_has_fewer_missing_fields(client):
+    """The retry regenerates the whole draft -- it isn't automatically
+    better just because it ran second. Keep whichever attempt actually left
+    fewer fields missing (#46 review, Ask 2), not attempt 2 unconditionally."""
+    from unittest.mock import AsyncMock, patch
+
+    first_attempt = "A draft naming Tester as the employee, with no mention of the role."
+    second_attempt = "A draft that names neither the employee nor the role."
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(side_effect=[first_attempt, second_attempt])):
+        resp = await client.post("/draft", json={
+            "prompt": "Draft an agreement",
+            "fields": [
+                {"key": "employeeName", "label": "Employee Name", "value": "Tester"},
+                {"key": "position", "label": "Position", "value": "Engineer"},
+            ],
+        })
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    # First attempt has 1 missing field (position); the retry has 2
+    # (employeeName, position). The first attempt must survive.
+    assert result.json()["result"]["draft"] == first_attempt
+
+
+async def test_draft_fails_the_job_when_the_final_draft_is_blank(client):
+    """A blank raw used to complete the job with {"draft": ""} -- an info
+    toast instead of the error path, and without fields there was no retry
+    to recover it. Blank output must fail the job like any other drafting
+    failure (#46 review, Ask 4)."""
+    from unittest.mock import AsyncMock, patch
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value="   ")):
+        resp = await client.post("/draft", json={"prompt": "Draft an agreement"})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    data = result.json()
+    assert data["status"] == "failed"
+    assert "no content" in data["result"]["error"].lower()
+
+
 # --- Review ---
 
 async def test_review_creates_job(client):
