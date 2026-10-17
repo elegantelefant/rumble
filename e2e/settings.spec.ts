@@ -1,5 +1,5 @@
 // ABOUTME: E2e tests for the Settings view.
-// ABOUTME: Validates tab navigation, provider management, appearance, and sync controls.
+// ABOUTME: Validates tab navigation, provider management, and appearance controls.
 import { expect, test } from "@playwright/test";
 import { gotoRoute } from "./helpers";
 
@@ -17,7 +17,8 @@ test.describe("Settings", () => {
     await expect(page.getByRole("button", { name: "Providers & API keys" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Templates & workspace storage" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Appearance" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
+    // Sync has no tab at all now (#87 review, Ask 3) -- hidden, not disabled.
+    await expect(page.getByRole("button", { name: "Sync" })).not.toBeVisible();
   });
 
   test("providers tab shows configured secrets", async ({ page }) => {
@@ -41,13 +42,6 @@ test.describe("Settings", () => {
     await expect(page.getByText("Layout preferences")).toBeVisible();
     await expect(page.getByLabel("Navigation sidebar")).toBeVisible();
     await expect(page.getByLabel("Theme")).toBeVisible();
-  });
-
-  test("switching to sync tab shows sync config", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable sync")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Test connection" })).toBeVisible();
   });
 
   test("save settings button is present", async ({ page }) => {

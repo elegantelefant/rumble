@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
 import {
@@ -20,7 +19,6 @@ const tabs = [
   { id: "providers", label: "Providers & API keys" },
   { id: "storage", label: "Templates & workspace storage" },
   { id: "appearance", label: "Appearance" },
-  { id: "sync", label: "Sync" },
 ];
 
 const activeTab = ref("providers");
@@ -176,14 +174,6 @@ const appearanceSettings = reactive({
   showChatSidebarByDefault: true,
 });
 
-const syncSettings = reactive({
-  enabled: false,
-  teamCode: "",
-  server: "",
-  useCustom: false,
-  customServer: "",
-});
-
 const isSaving = ref(false);
 // Save stays disabled until saved settings have loaded (or failed to), so an
 // edit or a save can't race the load and write defaults over the saved file.
@@ -320,7 +310,6 @@ onMounted(async () => {
     if (isRecord(saved)) {
       mergeSaved(appearanceSettings, saved.appearance);
       mergeSaved(workspaceStorage, saved.workspace);
-      mergeSaved(syncSettings, saved.sync);
       mergeSaved(localConfig, saved.localConfig);
     }
   } catch (error) {
@@ -342,7 +331,6 @@ async function saveSettings() {
           briefcases: [...workspaceStorage.briefcases],
           attachableResources: [...workspaceStorage.attachableResources],
         },
-        sync: { ...syncSettings },
         localConfig: { ...localConfig },
       },
     });
@@ -371,28 +359,6 @@ async function deleteAllLocalData() {
     toast.addToast(typeof error === "string" ? error : String(error), "error");
   } finally {
     isDeletingData.value = false;
-  }
-}
-
-async function testSync() {
-  const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
-  try {
-    new URL(url);
-  } catch {
-    toast.addToast("Invalid server URL.", "error");
-    return;
-  }
-  if (!url.startsWith("https://")) {
-    toast.addToast("Sync server must use HTTPS.", "error");
-    return;
-  }
-  toast.addToast("Pinging sync server health endpoint...", "info");
-  try {
-    const result = await mockTestSync(url);
-    toast.addToast(result.ok ? "Sync server reachable." : (result.message ?? "Sync server unreachable."), result.ok ? "success" : "error");
-  } catch (error) {
-    console.error(error);
-    toast.addToast("Failed to reach sync server.", "error");
   }
 }
 
@@ -606,7 +572,7 @@ const selectedProviderDetails = computed(() =>
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'appearance'" class="space-y-5">
+      <section v-else class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Layout preferences</h2>
           <p class="text-xs text-[var(--primary-500)]">
@@ -644,42 +610,6 @@ const selectedProviderDetails = computed(() =>
         <p class="text-xs text-[var(--primary-500)]">
           When both sidebars use the same side, Rumble collapses the contextual pane until a chat is active.
         </p>
-      </section>
-
-      <section v-else class="space-y-5">
-        <div>
-          <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
-          <p class="text-xs text-[var(--primary-500)]">{{ UNAVAILABLE }}</p>
-        </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
-          <input type="checkbox" v-model="syncSettings.enabled" disabled />
-          Enable sync
-        </label>
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
-            Team code
-            <input v-model="syncSettings.teamCode" class="input mt-1" disabled />
-            <span class="text-xs text-[var(--primary-500)]">Share this with colleagues to join your workspace.</span>
-          </label>
-          <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
-            Default Elefant server
-            <input v-model="syncSettings.server" class="input mt-1" disabled />
-            <span class="text-xs text-[var(--primary-500)]">
-              Default server for workspace sync.
-            </span>
-          </label>
-        </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)] opacity-50">
-          <input type="checkbox" v-model="syncSettings.useCustom" disabled />
-          Use custom sync server
-        </label>
-        <label class="text-sm font-medium text-[var(--primary-700)] opacity-50">
-          Custom server URL
-          <input v-model="syncSettings.customServer" disabled class="input mt-1" placeholder="https://sync.myfirm.com" />
-        </label>
-        <div class="flex justify-end">
-          <button class="btn-secondary opacity-50" type="button" @click="testSync" disabled>Test connection</button>
-        </div>
       </section>
 
       <div class="flex items-center justify-between gap-3">

@@ -4,7 +4,6 @@
 import {
   backendRegistry,
   mockEvalsRun,
-  mockTestSync,
 } from "../src/modules/backend/backendClient"
 
 beforeEach(() => {
@@ -45,15 +44,5 @@ describe("mockEvalsRun", () => {
     expect(result.benchmarkId).toBeTruthy()
     expect(result.status).toBe("completed")
     expect(result.startedAt).toBeTruthy()
-  })
-})
-
-describe("mockTestSync", () => {
-  it("returns ok with message referencing URL", async () => {
-    const promise = mockTestSync("https://sync.example.com")
-    await vi.advanceTimersByTimeAsync(200)
-    const result = await promise
-    expect(result.ok).toBe(true)
-    expect(result.message).toContain("sync.example.com")
   })
 })
