@@ -5,6 +5,7 @@
  * Legal AI platform API. Provides search, drafting, review, research, translation, citation checking, and conversational AI for legal professionals.
  * OpenAPI spec version: 0.1.0
  */
+import type { DraftField } from './draftField.ts';
 import type { DraftRequestContext } from './draftRequestContext.ts';
 import type { DraftRequestDocumentTerms } from './draftRequestDocumentTerms.ts';
 import type { DraftRequestPartiesItem } from './draftRequestPartiesItem.ts';
@@ -36,4 +37,6 @@ export interface DraftRequest {
   model?: string;
   /** Export formats to generate (e.g. ['docx', 'pdf']). Empty = markdown only. */
   publish_formats?: string[];
+  /** The template's fields as filled in: key, label, type, value, aliases. Drives placeholder substitution after drafting; absent means no substitution. */
+  fields?: DraftField[];
 }
