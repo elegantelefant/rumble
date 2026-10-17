@@ -112,14 +112,16 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     """Return the field a bracket should be substituted with, or None to leave it.
 
     Checked in order:
-      1. The bracket exactly equals a field's label or one of its aliases.
-      4. "<field's label/alias> Name" (possessive or not) -- "[Provider
-         Name]" means serviceProvider, not a separate, unprovided field.
-      3. "[Label: anything]" -- the label alone decides; whatever follows the
-         colon is discarded in favour of the field's own value.
-      0. The bracket is just the field's own provided value (optionally with
-         a "name" suffix, for name-like fields).
-      2. The bracket is "<another field's value> <this field's label/alias>".
+      label: the bracket exactly equals a field's label or one of its aliases.
+      label + "Name": "<field's label/alias> Name" (possessive or not) --
+        "[Provider Name]" means serviceProvider, not a separate, unprovided
+        field.
+      label:colon: "[Label: anything]" -- the label alone decides; whatever
+        follows the colon is discarded in favour of the field's own value.
+      value echo: the bracket is just the field's own provided value
+        (optionally with a "name" suffix, for name-like fields).
+      value + label: the bracket is "<another field's value> <this field's
+        label/alias>".
     Every rule is an EXACT match on the normalised bracket text against a
     precomputed candidate set, never a substring test -- so "[Tester's
     Address]" (employee name "Tester", no address field) never collides
@@ -137,24 +139,29 @@ def classify_bracket(inner: str, fields: list[DraftField]) -> DraftField | None:
     fields = [f for f in fields if f.value and f.value.strip()]
     norm = _normalise(_strip_instruction_prefix(inner))
 
+    # label: exact match against a field's label or one of its aliases.
     for field in fields:
         if norm in _label_set(field):
             return field
 
+    # label + "Name": "[Provider Name]" means the field itself.
     for field in fields:
         if norm in _label_name_candidates(field):
             return field
 
+    # label:colon: "[Label: anything]" -- the label alone decides.
     if ":" in norm:
         label_part = norm.split(":", 1)[0].strip()
         for field in fields:
             if label_part in _label_set(field):
                 return field
 
+    # value echo: the bracket is just the field's own provided value.
     for field in fields:
         if norm in _value_literal_candidates(field):
             return field
 
+    # value + label: "<another field's value> <this field's label/alias>".
     for value_field in fields:
         for label_field in fields:
             if value_field is label_field:

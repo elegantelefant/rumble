@@ -9,27 +9,27 @@ def field(key, label, value, type=None, aliases=None):
     return DraftField(key=key, label=label, value=value, type=type, aliases=aliases)
 
 
-# --- Rule 1: bracket matches a field's label or alias, exactly ---
+# --- label: bracket matches a field's label or alias, exactly ---
 
-def test_rule1_matches_field_label():
+def test_label_matches_field_label():
     f = field("employeeName", "Employee Name", "Tester")
     assert sub.classify_bracket("Employee Name", [f]) is f
 
 
-def test_rule1_matches_an_alias_identically_to_the_label():
+def test_label_matches_an_alias_identically_to_the_label():
     f = field("position", "Position", "Role", aliases=["Role", "Job Title", "Employee Title"])
     assert sub.classify_bracket("Employee Title", [f]) is f
     assert sub.classify_bracket("JOB TITLE", [f]) is f
 
 
-def test_rule1_does_not_match_a_longer_descriptive_phrase():
+def test_label_does_not_match_a_longer_descriptive_phrase():
     f = field("position", "Position", "Role", aliases=["Role"])
     assert sub.classify_bracket("Detailed description of primary role", [f]) is None
 
 
-# --- Rule 4: "<field's label/alias> Name" means the field itself ---
+# --- label + "Name": "<field's label/alias> Name" means the field itself ---
 
-def test_rule4_label_plus_name_matches_the_field():
+def test_label_name_matches_the_field():
     """"[Provider Name]" stands in for serviceProvider's own value -- it is
     not a separate, unprovided field. Caught #46's actual regression: these
     were wrongly scored as honest blanks."""
@@ -39,20 +39,20 @@ def test_rule4_label_plus_name_matches_the_field():
     assert sub.classify_bracket("Contractor Name", [f]) is f
 
 
-def test_rule4_possessive_label_plus_name_matches_too():
+def test_label_name_possessive_form_matches_too():
     f = field("disclosingParty", "Disclosing Party", "Acme Innovations Inc.", aliases=["Discloser"])
     assert sub.classify_bracket("Disclosing Party's Name", [f]) is f
     assert sub.classify_bracket("Discloser Name", [f]) is f
 
 
-def test_rule4_does_not_match_an_unrelated_label_plus_name():
+def test_label_name_does_not_match_an_unrelated_label_plus_name():
     """"[Employer Name]" must stay None when no field is labelled or
-    aliased "Employer" -- Rule 4 only fires off a REAL label/alias."""
+    aliased "Employer" -- the label + "Name" rule only fires off a REAL label/alias."""
     f = field("serviceProvider", "Service Provider", "Bright Path Consulting", aliases=["Provider"])
     assert sub.classify_bracket("Employer Name", [f]) is None
 
 
-def test_rule4_does_not_match_label_plus_a_different_attribute():
+def test_label_name_does_not_match_label_plus_a_different_attribute():
     f = field("disclosingParty", "Disclosing Party", "Acme Innovations Inc.", aliases=["Discloser"])
     assert sub.classify_bracket("Disclosing Party's Address", [f]) is None
 
@@ -73,26 +73,26 @@ def test_possessive_value_still_matches_alongside_the_no_apostrophe_form():
     assert sub.classify_bracket("Testers Name", [f]) is f  # model dropped the apostrophe itself
 
 
-# --- Rule 3: "[Label: anything]" -- the label alone decides ---
+# --- label:colon: "[Label: anything]" -- the label alone decides ---
 
-def test_rule3_label_colon_value_matches_on_the_label_alone():
+def test_label_colon_value_matches_on_the_label_alone():
     f = field("startDate", "Start Date", "2026-09-19", type="date")
     assert sub.classify_bracket("Start Date: 2026-09-19", [f]) is f
 
 
-def test_rule3_ignores_an_unrelated_label_before_the_colon():
+def test_label_colon_ignores_an_unrelated_label_before_the_colon():
     f = field("startDate", "Start Date", "2026-09-19", type="date")
     assert sub.classify_bracket("SUBJECT: EMPLOYMENT AGREEMENT", [f]) is None
 
 
-# --- Rule 0: bracket is just the field's own value ---
+# --- value echo: bracket is just the field's own value ---
 
-def test_rule0_matches_the_bare_value():
+def test_value_echo_matches_the_bare_value():
     f = field("employeeName", "Employee Name", "Tester")
     assert sub.classify_bracket("Tester", [f]) is f
 
 
-def test_rule0_name_suffix_only_applies_to_name_like_labels():
+def test_value_echo_name_suffix_only_applies_to_name_like_labels():
     name_field = field("employeeName", "Employee Name", "Tester")
     assert sub.classify_bracket("Tester's Name", [name_field]) is name_field
 
@@ -102,22 +102,22 @@ def test_rule0_name_suffix_only_applies_to_name_like_labels():
     assert sub.classify_bracket("2 years Name", [duration_field]) is None
 
 
-# --- Rule 2: "<another field's value> <this field's label/alias>" ---
+# --- value + label: "<another field's value> <this field's label/alias>" ---
 
-def test_rule2_value_plus_another_fields_label():
+def test_value_plus_label_another_fields_label():
     name = field("employeeName", "Employee Name", "Tester")
     position = field("position", "Position", "Role")
     assert sub.classify_bracket("Tester Position", [name, position]) is position
 
 
-def test_rule2_value_plus_another_fields_alias():
+def test_value_plus_label_another_fields_alias():
     provider = field("serviceProvider", "Service Provider", "Acme Consulting")
     scope = field("scopeOfWork", "Scope of Work", "Website redesign", type="freetext", aliases=["Scope", "Services"])
     assert sub.classify_bracket("Acme Consulting Scope", [provider, scope]) is scope
 
 
-def test_rule2_does_not_pair_a_field_with_its_own_label():
-    """"[Tester Employee Name]" isn't employeeName qualifying itself -- Rule 2
+def test_value_plus_label_does_not_pair_a_field_with_its_own_label():
+    """"[Tester Employee Name]" isn't employeeName qualifying itself -- the value + label rule
     only pairs a value with a DIFFERENT field's label."""
     name = field("employeeName", "Employee Name", "Tester")
     assert sub.classify_bracket("Tester Employee Name", [name]) is None
