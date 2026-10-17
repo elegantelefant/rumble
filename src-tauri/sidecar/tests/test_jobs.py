@@ -84,8 +84,39 @@ async def test_review_retries_once_when_still_unparseable_after_repair(client, c
         result = await client.get(f"/review/{job_id}/result")
 
     assert result.json()["result"]["summary"] == "Recovered on retry."
+    # The second attempt parsed cleanly with plain json.loads -- no repair
+    # fired for the result actually returned.
+    assert result.json()["result"]["repaired"] is False
     retry_logs = [r.message for r in caplog.records if "Review retry" in r.message]
     assert len(retry_logs) == 1
+
+
+async def test_review_retries_on_truncated_output_too(client, caplog):
+    """Truncated output (no closing brace/bracket) takes the same retry path
+    as genuinely garbled output -- repair is skipped outright, not attempted
+    and failed."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock, patch
+
+    import routes.jobs as jobs_module
+
+    truncated = (Path(__file__).parent / "fixtures" / "review-parse-truncated.txt").read_text()
+    second_attempt = '{"summary": "Recovered on retry.", "issues": []}'
+
+    with (
+        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=[truncated, second_attempt])),
+        caplog.at_level("WARNING", logger=jobs_module.__name__),
+    ):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["result"]["summary"] == "Recovered on retry."
+    retry_logs = [r.message for r in caplog.records if "Review retry" in r.message]
+    assert len(retry_logs) == 1
+    # Truncation must skip repair outright -- it never even attempts it.
+    assert not any("Repaired malformed LLM JSON" in r.message for r in caplog.records)
 
 
 async def test_review_does_not_retry_when_repair_alone_fixes_it(client):
@@ -105,6 +136,9 @@ async def test_review_does_not_retry_when_repair_alone_fixes_it(client):
 
     assert result.json()["status"] == "completed"
     assert mock_llm.call_count == 1
+    # rumble#90 Ask 2: the result says it was repaired, rather than looking
+    # indistinguishable from a clean generation.
+    assert result.json()["result"]["repaired"] is True
 
 
 async def test_review_fails_after_retry_also_unparseable(client):

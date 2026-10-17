@@ -31,8 +31,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ai"])
 
 
-def _parse_llm_json(raw: str) -> dict:
-    """Parse LLM output as JSON, stripping thinking tags and markdown fences."""
+def _parse_llm_json(raw: str, *, allow_repair: bool = False, info: dict | None = None) -> dict:
+    """Parse LLM output as JSON, stripping thinking tags and markdown fences.
+
+    allow_repair=True additionally falls back to json-repair on a parse
+    failure (rumble#90) -- scoped to the review job path, the only one
+    measured for it. Every other caller (translate, clarify, chat_title,
+    the three summaries, and draft/research via _parse_job_json) gets
+    plain parsing only, so a malformed output there 502s honestly instead
+    of a repaired -- possibly partial -- result silently returning 200.
+
+    info, if given, is set with info["repaired"] = True when repair
+    actually fired, so a caller (the review job) can record that fact on
+    its result without this function's return type changing for everyone
+    else.
+    """
     text = raw.strip()
     # Strip <think>...</think> blocks (reasoning models like DeepSeek-R1)
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
@@ -50,6 +63,15 @@ def _parse_llm_json(raw: str) -> dict:
     try:
         return json.loads(text)
     except (json.JSONDecodeError, ValueError) as exc:
+        if not allow_repair:
+            raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
+        # Output with no closing brace/bracket after stripping means the
+        # model ran out of tokens mid-structure, not that it made a syntax
+        # slip -- json-repair would still produce *valid* JSON by inventing
+        # a close, not by recovering content that was never generated.
+        # Skip repair and let the caller's retry regenerate instead.
+        if not text.endswith(("}", "]")):
+            raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
         # rumble#90: a live baseline found most of the model's own JSON
         # breakages (trailing commas, bad escapes, stray control characters,
         # missing delimiters) are mechanically repairable without a retry.
@@ -58,11 +80,16 @@ def _parse_llm_json(raw: str) -> dict:
         # payload to begin with, and the original error is the honest one.
         try:
             repaired = json_repair.loads(text, skip_json_loads=True)
-        except Exception:
+        except Exception as repair_exc:
+            # Log only the exception's type -- never its message or the
+            # content, both of which are the user's own document text.
+            logger.warning("JSON repair itself raised %s", type(repair_exc).__name__)
             repaired = None
         if isinstance(repaired, dict):
             # Never log the content -- it's the user's own document text.
             logger.warning("Repaired malformed LLM JSON output (%s)", type(exc).__name__)
+            if info is not None:
+                info["repaired"] = True
             return repaired
         raise HTTPException(status_code=502, detail=f"LLM returned unparseable output: {exc}") from exc
 
