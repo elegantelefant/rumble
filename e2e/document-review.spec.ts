@@ -12,8 +12,10 @@ test.describe("Document Review", () => {
     await expect(page.getByText("Review and chat with your documents")).toBeVisible();
   });
 
-  test("shows local-only trust badge", async ({ page }) => {
-    await expect(page.getByText("Local-only")).toBeVisible();
+  test("shows a confidentiality trust badge", async ({ page }) => {
+    // Text varies with the backend mode (honest per #56); e2e has no real
+    // Tauri host, so it reads "Mode unavailable" — the badge itself is what's asserted.
+    await expect(page.locator(".badge-trust")).toBeVisible();
   });
 
   test("displays file upload area with browse button", async ({ page }) => {

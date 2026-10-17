@@ -1,5 +1,5 @@
 // ABOUTME: Tests for SettingsView.vue component.
-// ABOUTME: Covers tab switching, secret management, settings persistence, form interactions, sync settings.
+// ABOUTME: Covers tab switching, secret management, settings persistence, form interactions.
 
 import { mount } from "@vue/test-utils"
 import { invoke } from "@tauri-apps/api/core"
@@ -44,12 +44,18 @@ describe("SettingsView", () => {
     expect(wrapper.find("h1").text()).toBe("Settings")
   })
 
-  it("renders all four tabs", () => {
+  it("renders all three tabs", () => {
     const wrapper = mountSettings()
     expect(wrapper.text()).toContain("Providers & API keys")
     expect(wrapper.text()).toContain("Templates & workspace storage")
     expect(wrapper.text()).toContain("Appearance")
-    expect(wrapper.text()).toContain("Sync")
+  })
+
+  // Sync has no tab at all now (#87 review, Ask 3): hidden, not disabled --
+  // a disabled tab still made claims about a service that doesn't exist.
+  it("has no Sync tab", () => {
+    const wrapper = mountSettings()
+    expect(wrapper.findAll("button").some((b) => b.text() === "Sync")).toBe(false)
   })
 
   it("defaults to providers tab", () => {
@@ -69,13 +75,6 @@ describe("SettingsView", () => {
     const tabs = wrapper.findAll("button").filter((b) => b.text().includes("Templates"))
     await tabs[0].trigger("click")
     expect(wrapper.text()).toContain("Template library")
-  })
-
-  it("switches to sync tab on click", async () => {
-    const wrapper = mountSettings()
-    const tabs = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await tabs[0].trigger("click")
-    expect(wrapper.text()).toContain("Workspace sync")
   })
 
   // Adds a local-provider secret through the real UI flow, so removal tests
@@ -170,7 +169,6 @@ describe("SettingsView", () => {
     const saved = {
       appearance: { theme: "dark", navigationSidebar: "right" },
       workspace: { templatesPath: "/firm/templates", briefcases: ["Matter A"] },
-      sync: { teamCode: "TEAM-42", useCustom: true },
       localConfig: { model: "llama3.2" },
     }
 
@@ -217,13 +215,6 @@ describe("SettingsView", () => {
       expect(wrapper.text()).toContain("Matter A")
     })
 
-    it("fills sync settings from the saved file", async () => {
-      mockCommands({ load_settings: () => saved })
-      const wrapper = await mountAndLoad()
-      await openTab(wrapper, "Sync")
-      expect(inputByValue(wrapper, "TEAM-42")).toBeDefined()
-    })
-
     it("fills the local runtime config from the saved file", async () => {
       mockCommands({ load_settings: () => saved })
       const wrapper = await mountAndLoad()
@@ -243,7 +234,6 @@ describe("SettingsView", () => {
       mockCommands({
         load_settings: () => ({
           workspace: { briefcases: "Matter A" },
-          sync: "xy",
           appearance: { theme: 3 },
         }),
         save_settings: () => null,
@@ -251,7 +241,6 @@ describe("SettingsView", () => {
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(savedPayload().workspace.briefcases).toEqual([])
-      expect(savedPayload().sync.teamCode).toBe("")
       expect(savedPayload().appearance.theme).toBe("system")
     })
 
@@ -294,11 +283,11 @@ describe("SettingsView", () => {
     })
 
     it("merges the groups a file has when it lacks others", async () => {
-      mockCommands({ load_settings: () => ({ sync: { teamCode: "TEAM-42" } }), save_settings: () => null })
+      mockCommands({ load_settings: () => ({ localConfig: { model: "llama3.2" } }), save_settings: () => null })
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "error")
-      expect(savedPayload().sync.teamCode).toBe("TEAM-42")
+      expect(savedPayload().localConfig.model).toBe("llama3.2")
     })
 
     it("ignores a saved list that holds anything but strings", async () => {
@@ -338,7 +327,7 @@ describe("SettingsView", () => {
       expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "save_settings")).toBe(false)
     })
 
-    it("saves all four groups, including unsaved edits", async () => {
+    it("saves all three groups, including unsaved edits", async () => {
       mockCommands({ load_settings: () => saved, save_settings: () => null })
       const wrapper = await mountAndLoad()
       await openTab(wrapper, "Templates")
@@ -346,16 +335,9 @@ describe("SettingsView", () => {
       await wrapper.findAll("button").find((b) => b.text() === "Add briefcase")!.trigger("click")
       await submit(wrapper)
       const settings = savedPayload()
-      expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "sync", "workspace"])
+      expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "workspace"])
       expect(settings.workspace.briefcases).toEqual(["Matter A", "Matter B"])
       expect(settings.appearance.theme).toBe("dark")
-    })
-
-    it("saves the loaded sync settings", async () => {
-      mockCommands({ load_settings: () => saved, save_settings: () => null })
-      const wrapper = await mountAndLoad()
-      await submit(wrapper)
-      expect(savedPayload().sync).toMatchObject({ teamCode: "TEAM-42", useCustom: true })
     })
 
     it("saves the loaded local runtime config", async () => {
@@ -394,55 +376,19 @@ describe("SettingsView", () => {
     })
   })
 
-  it("sync tab shows test connection button", async () => {
+  // Sync isn't available in this version. Superseding #56's original default
+  // (disabled controls that still claimed a service, e.g. "Share this with
+  // colleagues to join your workspace"), the tab and every one of its
+  // controls are gone outright (#87 review, Ask 3) rather than shown and
+  // disabled.
+  it("has no sync tab, controls, or claims about a sync service", () => {
     const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-    expect(wrapper.text()).toContain("Test connection")
-  })
-
-  it("test connection rejects an empty server URL", async () => {
-    const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
-    await testBtn!.trigger("click")
-    expect(mockAddToast).toHaveBeenCalledWith("Invalid server URL.", "error")
-  })
-
-  it("test connection fires toast once a server is set", async () => {
-    const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-
-    const serverInput = wrapper
-      .findAll("input")
-      .find((i) => i.attributes("placeholder") === "https://sync.myfirm.com")
-    // The default server field is disabled, so drive the custom one instead.
-    const customToggle = wrapper
-      .findAll('input[type="checkbox"]')
-      .find((c) => c.element.parentElement?.textContent?.includes("custom sync server"))
-    await customToggle!.setValue(true)
-    await serverInput!.setValue("https://sync.example.com")
-
-    const testBtn = wrapper.findAll("button").find((b) => b.text() === "Test connection")
-    await testBtn!.trigger("click")
-    expect(mockAddToast).toHaveBeenCalledWith(
-      expect.stringContaining("Pinging"),
-      "info",
-    )
-  })
-
-  it("sync tab custom server toggle enables input", async () => {
-    const wrapper = mountSettings()
-    const syncTab = wrapper.findAll("button").filter((b) => b.text() === "Sync")
-    await syncTab[0].trigger("click")
-    // Find the custom server checkbox
-    const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    const customCheckbox = checkboxes.find(
-      (cb) => cb.element.closest("label")?.textContent?.includes("custom sync"),
-    )
-    expect(customCheckbox).toBeDefined()
+    expect(wrapper.findAll("button").some((b) => b.text() === "Sync")).toBe(false)
+    expect(wrapper.text()).not.toContain("Workspace sync")
+    expect(wrapper.text()).not.toContain("Enable sync")
+    expect(wrapper.text()).not.toContain("Test connection")
+    expect(wrapper.text()).not.toContain("Share this with colleagues to join your workspace")
+    expect(wrapper.text()).not.toContain("Default Elefant server")
   })
 
   it("addSecret calls invoke store_api_key for hosted provider", async () => {

@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
+import { backendMode, CONFIDENTIALITY, confidentialityOf, loadBackendMode } from "../composables/backendMode";
 
 const toasts = useToast();
+
+// Hidden until the mode is known rather than showing the unknown-state text
+// while it's still loading.
+const modeKnown = computed(() => backendMode.value !== null);
+const confidentialityNotice = computed(() => CONFIDENTIALITY[confidentialityOf(backendMode.value)].notice);
+onMounted(loadBackendMode);
 
 type FieldConfig = { key: string; label: string; type?: string; placeholder?: string };
 
@@ -196,7 +203,7 @@ async function exportDraft(format: "word" | "pdf") {
             class="input h-32 resize-none"
             placeholder="Enter additional clauses or notes"
           />
-          <p class="text-xs text-[var(--primary-500)]">Sensitive data stays local; nothing leaves your machine.</p>
+          <p v-if="modeKnown" class="text-xs text-[var(--primary-500)]">{{ confidentialityNotice }}</p>
         </div>
 
         <div class="flex flex-wrap gap-3 pt-2">

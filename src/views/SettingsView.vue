@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { mockTestSync } from "../modules/backend/backendClient";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
 import {
@@ -10,6 +9,7 @@ import {
   loadBackendMode,
   MODE_TO_STATE,
   setBackendMode,
+  STORAGE_NOTICES,
   type BackendMode,
 } from "../composables/backendMode";
 
@@ -19,7 +19,6 @@ const tabs = [
   { id: "providers", label: "Providers & API keys" },
   { id: "storage", label: "Templates & workspace storage" },
   { id: "appearance", label: "Appearance" },
-  { id: "sync", label: "Sync" },
 ];
 
 const activeTab = ref("providers");
@@ -175,14 +174,6 @@ const appearanceSettings = reactive({
   showChatSidebarByDefault: true,
 });
 
-const syncSettings = reactive({
-  enabled: true,
-  teamCode: "",
-  server: "",
-  useCustom: false,
-  customServer: "",
-});
-
 const isSaving = ref(false);
 // Save stays disabled until saved settings have loaded (or failed to), so an
 // edit or a save can't race the load and write defaults over the saved file.
@@ -319,7 +310,6 @@ onMounted(async () => {
     if (isRecord(saved)) {
       mergeSaved(appearanceSettings, saved.appearance);
       mergeSaved(workspaceStorage, saved.workspace);
-      mergeSaved(syncSettings, saved.sync);
       mergeSaved(localConfig, saved.localConfig);
     }
   } catch (error) {
@@ -341,14 +331,13 @@ async function saveSettings() {
           briefcases: [...workspaceStorage.briefcases],
           attachableResources: [...workspaceStorage.attachableResources],
         },
-        sync: { ...syncSettings },
         localConfig: { ...localConfig },
       },
     });
     toast.addToast(
       aside
-        ? `Settings saved on this device. The unreadable settings file was kept as ${aside}.`
-        : "Settings saved on this device.",
+        ? `${STORAGE_NOTICES.savedToast} The unreadable settings file was kept as ${aside}.`
+        : STORAGE_NOTICES.savedToast,
       "success",
     );
   } catch (error) {
@@ -373,28 +362,6 @@ async function deleteAllLocalData() {
   }
 }
 
-async function testSync() {
-  const url = syncSettings.useCustom ? syncSettings.customServer : syncSettings.server;
-  try {
-    new URL(url);
-  } catch {
-    toast.addToast("Invalid server URL.", "error");
-    return;
-  }
-  if (!url.startsWith("https://")) {
-    toast.addToast("Sync server must use HTTPS.", "error");
-    return;
-  }
-  toast.addToast("Pinging sync server health endpoint...", "info");
-  try {
-    const result = await mockTestSync(url);
-    toast.addToast(result.ok ? "Sync server reachable." : (result.message ?? "Sync server unreachable."), result.ok ? "success" : "error");
-  } catch (error) {
-    console.error(error);
-    toast.addToast("Failed to reach sync server.", "error");
-  }
-}
-
 const selectedProviderDetails = computed(() =>
   newSecret.provider ? providerOptions.find((option) => option.id === newSecret.provider) ?? null : null,
 );
@@ -405,7 +372,7 @@ const selectedProviderDetails = computed(() =>
     <header>
       <h1 class="h1">Settings</h1>
       <p class="body-muted">
-        Manage provider credentials, local storage, appearance, and sync endpoints. Secrets stay encrypted on-device.
+        Manage provider credentials, local storage, appearance, and sync endpoints. API keys are stored in your system keychain.
       </p>
     </header>
 
@@ -453,7 +420,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Configured secrets</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Local storage uses SQLCipher for encryption. Hosted providers transmit prompts and outputs to their APIs.
+            Hosted providers transmit prompts and outputs to their APIs.
           </p>
         </div>
 
@@ -521,7 +488,7 @@ const selectedProviderDetails = computed(() =>
             </label>
           </div>
           <p class="text-xs text-[var(--primary-500)]">
-            Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.
+            {{ STORAGE_NOTICES.providersHint }}
           </p>
           <div class="flex justify-end">
             <button class="btn-primary" type="button" @click="addSecret">Save secret</button>
@@ -546,9 +513,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h3 class="text-base font-semibold text-[var(--primary-800)]">Workspace data</h3>
           <p class="text-xs text-[var(--primary-500)]">
-            Chats, messages and document review, draft and research jobs, including the document text, are kept in a
-            database in this device's local app data folder, not in the workspace path below. Jobs are deleted the next
-            time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.
+            {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">
@@ -607,7 +572,7 @@ const selectedProviderDetails = computed(() =>
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'appearance'" class="space-y-5">
+      <section v-else class="space-y-5">
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Layout preferences</h2>
           <p class="text-xs text-[var(--primary-500)]">
@@ -645,47 +610,6 @@ const selectedProviderDetails = computed(() =>
         <p class="text-xs text-[var(--primary-500)]">
           When both sidebars use the same side, Rumble collapses the contextual pane until a chat is active.
         </p>
-      </section>
-
-      <section v-else class="space-y-5">
-        <div>
-          <h2 class="text-base font-semibold text-[var(--primary-800)]">Workspace sync</h2>
-          <p class="text-xs text-[var(--primary-500)]">
-            Use the Elefant sync service or supply your own server built from our open-source reference implementation.
-          </p>
-        </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.enabled" />
-          Enable secure sync
-        </label>
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="text-sm font-medium text-[var(--primary-700)]">
-            Team code
-            <input v-model="syncSettings.teamCode" class="input mt-1" />
-            <span class="text-xs text-[var(--primary-500)]">Share this with colleagues to join your workspace.</span>
-          </label>
-          <label class="text-sm font-medium text-[var(--primary-700)]">
-            Default Elefant server
-            <input v-model="syncSettings.server" class="input mt-1" disabled />
-            <span class="text-xs text-[var(--primary-500)]">
-              Hosted by Elefant. Data is encrypted in transit and at rest.
-            </span>
-          </label>
-        </div>
-        <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
-          <input type="checkbox" v-model="syncSettings.useCustom" />
-          Use custom sync server
-        </label>
-        <label class="text-sm font-medium text-[var(--primary-700)]" :class="{ 'opacity-50': !syncSettings.useCustom }">
-          Custom server URL
-          <input v-model="syncSettings.customServer" :disabled="!syncSettings.useCustom" class="input mt-1" placeholder="https://sync.myfirm.com" />
-          <span class="text-xs text-[var(--primary-500)]">
-            Build your own server using our reference repo: github.com/ielegante/rumble-sync
-          </span>
-        </label>
-        <div class="flex justify-end">
-          <button class="btn-secondary" type="button" @click="testSync">Test connection</button>
-        </div>
       </section>
 
       <div class="flex items-center justify-between gap-3">
