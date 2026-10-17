@@ -2,8 +2,11 @@
 # ABOUTME: POST creates a job and spawns background work; GET polls for results.
 
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from models.generated import (
     DraftRequest,
@@ -20,11 +23,11 @@ from routes.ai import _parse_llm_json, _safe_construct
 from services import db, jobs, llm, prompts
 
 
-def _parse_job_json(raw: str) -> dict:
+def _parse_job_json(raw: str, *, allow_repair: bool = False, info: dict | None = None) -> dict:
     """Parse LLM output as JSON for background jobs. Raises ValueError, not HTTPException."""
     from fastapi import HTTPException
     try:
-        return _parse_llm_json(raw)
+        return _parse_llm_json(raw, allow_repair=allow_repair, info=info)
     except HTTPException as exc:
         raise ValueError(exc.detail) from exc
 
@@ -83,7 +86,23 @@ async def _run_review(request: ReviewRequest) -> dict:
     user_text = "\n".join([request.text, *context_parts]) if context_parts else request.text
 
     raw = await llm.run_single_turn(user_text, prompts.REVIEW)
-    return _parse_job_json(raw)
+    info: dict = {}
+    try:
+        result = _parse_job_json(raw, allow_repair=True, info=info)
+    except ValueError:
+        # rumble#90: _parse_llm_json already tried a repair pass (or skipped
+        # it outright for truncated output); this is only reached when that
+        # also failed. One regeneration, not an open-ended loop -- a model
+        # that garbles the structure once tends to again.
+        logger.warning("Review retry: parsing failed even after repair, regenerating once")
+        raw = await llm.run_single_turn(user_text, prompts.REVIEW)
+        info = {}
+        result = _parse_job_json(raw, allow_repair=True, info=info)
+    # rumble#90 Ask 2: flags when this result came back through json-repair
+    # rather than a clean parse, so the caller can stay honest about a
+    # result that was guessed at rather than generated whole.
+    result["repaired"] = info.get("repaired", False)
+    return result
 
 
 @router.post("/review", response_model=JobCreatedResponse)

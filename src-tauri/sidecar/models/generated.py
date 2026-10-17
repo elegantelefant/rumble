@@ -1875,6 +1875,7 @@ class ReviewResponse(BaseModel):
     )
     summary: str = Field(..., title='Summary')
     issues: list[ReviewIssue] | None = Field(None, title='Issues')
+    repaired: bool | None = Field(False, title='Repaired')
 
 
 class Grade(StrEnum):
