@@ -24,12 +24,6 @@ test("draft validation inline errors", async ({ page }) => {
   await page.screenshot({ path: "screenshots/draft-validation.png", fullPage: true });
 });
 
-test("settings sync tab with test connection", async ({ page }) => {
-  await page.goto("/settings");
-  await page.getByRole("button", { name: "Sync" }).click();
-  await page.screenshot({ path: "screenshots/settings-sync.png", fullPage: true });
-});
-
 test("settings appearance tab", async ({ page }) => {
   await page.goto("/settings");
   await page.getByRole("button", { name: "Appearance" }).click();

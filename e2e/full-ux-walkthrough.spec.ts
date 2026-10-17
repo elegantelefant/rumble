@@ -455,7 +455,8 @@ test.describe("8. Settings", () => {
     await expect(page.getByRole("button", { name: "Providers & API keys" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Templates & workspace storage" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Appearance" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
+    // Sync has no tab at all now (#87 review, Ask 3) -- hidden, not disabled.
+    await expect(page.getByRole("button", { name: "Sync" })).not.toBeVisible();
     await page.screenshot({ path: S("08a-settings-tabs"), fullPage: true });
   });
 
@@ -524,26 +525,6 @@ test.describe("8. Settings", () => {
     await page.getByRole("button", { name: "Appearance" }).click();
     await page.getByLabel("Theme").selectOption("dark");
     await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
-  });
-
-  test("8l. sync tab", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable sync")).toBeVisible();
-    await page.screenshot({ path: S("08l-settings-sync"), fullPage: true });
-  });
-
-  test("8m. sync tab — custom server toggle", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await page.getByText("Use custom sync server").click();
-    await page.getByPlaceholder("https://sync.myfirm.com").fill("https://sync.mylaw.com");
-    await page.screenshot({ path: S("08m-settings-custom-sync"), fullPage: true });
-  });
-
-  test("8n. sync tab — test connection button", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await page.getByRole("button", { name: "Test connection" }).click();
-    await page.screenshot({ path: S("08n-settings-test-connection"), fullPage: true });
   });
 
   test("8o. save settings button", async ({ page }) => {

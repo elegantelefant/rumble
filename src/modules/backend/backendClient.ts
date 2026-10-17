@@ -109,11 +109,3 @@ export async function mockEvalsRun(_benchmarkKey: string, _models: string[]): Pr
     startedAt: new Date().toISOString(),
   };
 }
-
-export async function mockTestSync(url: string): Promise<{ ok: boolean; message?: string }> {
-  await delay(180);
-  return {
-    ok: true,
-    message: `Mocked connection successful to ${url}`,
-  };
-}
