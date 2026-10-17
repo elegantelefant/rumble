@@ -21288,6 +21288,11 @@
             },
             "type": "array",
             "title": "Issues"
+          },
+          "repaired": {
+            "type": "boolean",
+            "title": "Repaired",
+            "default": false
           }
         },
         "additionalProperties": false,
