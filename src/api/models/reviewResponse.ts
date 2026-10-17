@@ -10,4 +10,5 @@ import type { ReviewIssue } from './reviewIssue.ts';
 export interface ReviewResponse {
   summary: string;
   issues?: ReviewIssue[];
+  repaired?: boolean;
 }
