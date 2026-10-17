@@ -23,6 +23,9 @@ const router = useRouter();
 // read would go stale after a switch in Settings.
 const confidentiality = computed(() => CONFIDENTIALITY[confidentialityOf(backendMode.value)]);
 const isLocalMode = computed(() => confidentialityOf(backendMode.value) === "local");
+// Hidden until the mode is known rather than flashing "Mode unavailable"
+// while it's still loading -- the same gate as SidebarNav's tagline.
+const modeKnown = computed(() => backendMode.value !== null);
 onMounted(loadBackendMode);
 
 type ReviewStatus = "idle" | "running" | "ready";
@@ -372,7 +375,7 @@ const workflowSteps = [
         <p class="body-muted">Review and chat with your documents.</p>
       </div>
       <div class="flex items-start gap-3 md:items-center">
-        <span class="badge-trust">{{ confidentiality.label }}</span>
+        <span v-if="modeKnown" class="badge-trust">{{ confidentiality.label }}</span>
         <button
           class="btn-secondary flex items-center gap-2 text-xs"
           type="button"

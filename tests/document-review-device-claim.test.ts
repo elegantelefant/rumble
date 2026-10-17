@@ -78,3 +78,20 @@ describe("DocumentReviewView device claim", () => {
     expect(wrapper.text()).not.toContain(DEVICE_CLAIM)
   })
 })
+
+describe("DocumentReviewView confidentiality badge (#87 review, Ask 2)", () => {
+  it('stays hidden while the mode is still loading, rather than flashing "Mode unavailable"', async () => {
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}))
+    const wrapper = mount(DocumentReviewView, {
+      global: { provide: { [TOAST_KEY as symbol]: { addToast: vi.fn() } } },
+    })
+    await flushPromises()
+    expect(wrapper.find(".badge-trust").exists()).toBe(false)
+    expect(wrapper.text()).not.toContain("Mode unavailable")
+  })
+
+  it("shows the badge once the mode resolves", async () => {
+    const wrapper = await mountInMode("ollama")
+    expect(wrapper.find(".badge-trust").text()).toBe("Local & Confidential")
+  })
+})
