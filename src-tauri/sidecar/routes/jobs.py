@@ -6,8 +6,6 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-logger = logging.getLogger(__name__)
-
 from models.generated import (
     DraftField,
     DraftRequest,
