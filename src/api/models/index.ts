@@ -201,6 +201,7 @@ export * from './documentUpdateRequest.ts';
 export * from './documentUpdateRequest';
 export * from './documentUpdateRequestContent.ts';
 export * from './documentUpdateRequestContent';
+export * from './draftField.ts';
 export * from './draftRequest.ts';
 export * from './draftRequest';
 export * from './draftRequestContext.ts';

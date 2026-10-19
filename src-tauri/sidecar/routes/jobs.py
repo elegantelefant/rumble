@@ -2,10 +2,12 @@
 # ABOUTME: POST creates a job and spawns background work; GET polls for results.
 
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
 
 from models.generated import (
+    DraftField,
     DraftRequest,
     DraftResponse,
     JobCreatedResponse,
@@ -17,7 +19,9 @@ from models.generated import (
     ReviewResponse,
 )
 from routes.ai import _parse_llm_json, _safe_construct
-from services import db, jobs, llm, prompts
+from services import db, draft_substitution, jobs, llm, prompts
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_job_json(raw: str) -> dict:
@@ -33,6 +37,24 @@ router = APIRouter(tags=["jobs"])
 
 # --- Draft ---
 
+def _draft_warnings(draft: str, fields: list[DraftField], missing_keys: list[str]) -> list[str]:
+    """Tells the user what's still blank, rather than an unqualified "Draft
+    prepared" over a draft with gaps in it (rumble#46 review, Ask 1): the
+    still-missing field labels (not keys -- "employeeName" means nothing to
+    a lawyer, "Employee Name" does) and the count of brackets left
+    unresolved in the final text, whether or not they ever matched a known
+    field (the model's own "[YEARS NOT PROVIDED]"-style flags included)."""
+    warnings: list[str] = []
+    if missing_keys:
+        label_by_key = {f.key: f.label for f in fields}
+        missing_labels = [label_by_key.get(key, key) for key in missing_keys]
+        warnings.append(f"Missing: {', '.join(missing_labels)}")
+    unresolved = len(draft_substitution.BRACKET_RE.findall(draft))
+    if unresolved:
+        warnings.append(f"{unresolved} unresolved placeholder{'s' if unresolved != 1 else ''} left in the draft")
+    return warnings
+
+
 async def _run_draft(request: DraftRequest) -> dict:
     context_parts = []
     if request.document_type:
@@ -45,8 +67,49 @@ async def _run_draft(request: DraftRequest) -> dict:
         context_parts.append(f"Terms: {json.dumps(request.document_terms)}")
     user_text = "\n".join([request.prompt, *context_parts]) if context_parts else request.prompt
 
+    # Plain prose, not JSON (rumble#46, services/prompts.py's DRAFT comment):
+    # the model's raw text IS the draft, substituted against the form's own
+    # fields rather than parsed as a contract the model has to get exactly
+    # right. One retry if a provided value is still missing afterwards --
+    # not retried indefinitely, since a model that omits it once tends to
+    # omit it again, and the job should still resolve.
+    fields = request.fields or []
     raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
-    return _parse_job_json(raw)
+    draft, _ = draft_substitution.apply(raw, fields)
+    missing_keys: list[str] = []
+
+    if fields:
+        presence = draft_substitution.all_present(draft, fields)
+        missing_keys = [key for key, present in presence.items() if not present]
+        if missing_keys:
+            # warning, not info: uvicorn's log_level="warning" (main.py) sets
+            # the root logger's effective level, so info() here would be
+            # silently dropped and never visible without changing the
+            # deployed log level.
+            # Keys only, never values: a value is the user's own document
+            # content (an employee's name, a client's address), and a log
+            # line is not where that belongs.
+            logger.warning("Draft retry: missing field(s) %s after substitution", missing_keys)
+            retry_raw = await llm.run_single_turn(user_text, prompts.DRAFT, model_name=request.model or None)
+            retry_draft, _ = draft_substitution.apply(retry_raw, fields)
+            retry_missing = [
+                key for key, present in draft_substitution.all_present(retry_draft, fields).items() if not present
+            ]
+            # The retry regenerates the whole draft, so it isn't strictly an
+            # improvement just because it ran second -- keep whichever
+            # attempt actually left fewer fields missing.
+            if len(retry_missing) < len(missing_keys):
+                draft, missing_keys = retry_draft, retry_missing
+
+    # The model sometimes wraps clause headings in markdown ("**1. TERM**",
+    # "## Heading"), which would otherwise show up literally in the draft
+    # panel and the Word export rather than as styling.
+    draft = draft_substitution.strip_markdown(draft)
+
+    if not draft.strip():
+        raise ValueError("Draft generation produced no content.")
+
+    return {"draft": draft, "warnings": _draft_warnings(draft, fields, missing_keys)}
 
 
 @router.post("/draft", response_model=JobCreatedResponse)
