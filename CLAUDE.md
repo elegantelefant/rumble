@@ -24,7 +24,7 @@ Routing in one line: the frontend never `fetch`es; HTTP calls go through `invoke
 ## Commands (from `package.json`, `pyproject.toml`, CI; nothing else exists)
 
 ```sh
-pnpm install                                     # pnpm 9 / Node 20 in CI
+pnpm install                                     # pnpm 10.20.0 (packageManager pin, #85) / Node 20 in CI
 cd src-tauri/sidecar && uv sync                  # Python 3.12
 pnpm tauri dev                                   # the app; spawns the sidecar BINARY — build it once (README)
 pnpm dev:sidecar                                 # sidecar from source on :11435
