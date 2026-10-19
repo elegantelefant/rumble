@@ -1,15 +1,16 @@
 // ABOUTME: E2e tests for app navigation, sidebar, and route accessibility.
 // ABOUTME: Verifies every active route renders its heading and the sidebar links work.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("App Shell & Navigation", () => {
   test("root redirects to /review", async ({ page }) => {
-    await page.goto("/");
+    await gotoRoute(page, "/");
     await expect(page).toHaveURL(/\/review/);
   });
 
   test("sidebar shows all navigation tools", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const sidebar = page.locator("aside.sidebar");
     await expect(sidebar).toBeVisible();
     await expect(sidebar.getByText("Document Review")).toBeVisible();
@@ -20,19 +21,19 @@ test.describe("App Shell & Navigation", () => {
   });
 
   test("sidebar shows user info and version", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const sidebar = page.locator("aside.sidebar");
     await expect(sidebar.getByText("Local User")).toBeVisible();
     await expect(sidebar.getByText("Rumble", { exact: true })).toBeVisible();
   });
 
   test("Evidence Review shows Coming Soon badge", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await expect(page.getByText("Coming Soon")).toBeVisible();
   });
 
   test("unknown routes redirect to /review", async ({ page }) => {
-    await page.goto("/nonexistent-page");
+    await gotoRoute(page, "/nonexistent-page");
     await expect(page).toHaveURL(/\/review/);
     await expect(page.getByRole("heading", { name: "Document Review" })).toBeVisible();
   });
@@ -49,7 +50,7 @@ test.describe("Route Navigation via Sidebar", () => {
 
   for (const route of routes) {
     test(`navigates to ${route.path} via sidebar`, async ({ page }) => {
-      await page.goto("/review");
+      await gotoRoute(page, "/review");
       const sidebar = page.locator("aside.sidebar");
       await sidebar.getByText(route.link, { exact: true }).first().click();
       await expect(page).toHaveURL(new RegExp(route.path));

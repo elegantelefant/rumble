@@ -1,6 +1,7 @@
 // ABOUTME: Full interactive UX walkthrough — acts as a new user.
 // ABOUTME: Screenshots every page and exercises every clickable/typable interaction.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 const S = (name: string) => `screenshots/${name}.png`;
 
@@ -10,20 +11,20 @@ const S = (name: string) => `screenshots/${name}.png`;
 
 test.describe("1. First Launch", () => {
   test("1a. login page (auth stubbed — redirects to review)", async ({ page }) => {
-    await page.goto("/login");
+    await gotoRoute(page, "/login");
     await page.screenshot({ path: S("01a-login-redirect"), fullPage: true });
     // Auth is stubbed true, so /login redirects to /review
     await expect(page).toHaveURL(/\/(review|login)/);
   });
 
   test("1b. root URL redirects to review", async ({ page }) => {
-    await page.goto("/");
+    await gotoRoute(page, "/");
     await expect(page).toHaveURL(/\/review/);
     await page.screenshot({ path: S("01b-root-redirect"), fullPage: true });
   });
 
   test("1c. unknown URL redirects gracefully", async ({ page }) => {
-    await page.goto("/nonexistent-page-xyz");
+    await gotoRoute(page, "/nonexistent-page-xyz");
     await expect(page).toHaveURL(/\/review/);
   });
 });
@@ -34,7 +35,7 @@ test.describe("1. First Launch", () => {
 
 test.describe("2. Sidebar Navigation", () => {
   test("2a. sidebar visible on desktop with all tools", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const sidebar = page.locator("aside.sidebar");
     await expect(sidebar).toBeVisible();
     await page.screenshot({ path: S("02a-sidebar-desktop"), fullPage: true });
@@ -49,14 +50,14 @@ test.describe("2. Sidebar Navigation", () => {
   });
 
   test("2b. sidebar shows user info", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const sidebar = page.locator("aside.sidebar");
     await expect(sidebar.getByText("Local User")).toBeVisible();
     await expect(sidebar.getByText("Rumble", { exact: true })).toBeVisible();
   });
 
   test("2c. sidebar Evidence Review is disabled", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await expect(page.getByText("Coming Soon")).toBeVisible();
   });
 
@@ -68,7 +69,7 @@ test.describe("2. Sidebar Navigation", () => {
       { click: "Settings", heading: "Settings", path: "/settings" },
       { click: "Document Review", heading: "Document Review", path: "/review" },
     ];
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     for (const r of routes) {
       await page.locator("aside.sidebar").getByText(r.click, { exact: true }).first().click();
       await expect(page).toHaveURL(new RegExp(r.path));
@@ -78,7 +79,7 @@ test.describe("2. Sidebar Navigation", () => {
   });
 
   test("2e. sidebar reorder arrows appear on hover", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const firstNavItem = page.locator("aside.sidebar nav > div").first();
     await firstNavItem.hover();
     await page.screenshot({ path: S("02e-sidebar-hover-arrows"), fullPage: true });
@@ -86,7 +87,7 @@ test.describe("2. Sidebar Navigation", () => {
 
   test("2f. mobile sidebar hidden by default", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.screenshot({ path: S("02f-mobile-sidebar-hidden"), fullPage: true });
     const sidebar = page.locator("aside.sidebar");
     await expect(sidebar).not.toBeInViewport();
@@ -94,7 +95,7 @@ test.describe("2. Sidebar Navigation", () => {
 
   test("2g. mobile hamburger opens sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     const hamburger = page.getByRole("button", { name: "Toggle navigation" });
     await hamburger.click();
     await page.screenshot({ path: S("02g-mobile-sidebar-open"), fullPage: true });
@@ -107,14 +108,14 @@ test.describe("2. Sidebar Navigation", () => {
 
 test.describe("3. Top Bar", () => {
   test("3a. top bar shows confidentiality badge and user info", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await expect(page.getByText("Mode unavailable")).toBeVisible();
     await expect(page.getByLabel("Current user").getByText("Local User")).toBeVisible();
     await page.screenshot({ path: S("03a-topbar"), fullPage: true });
   });
 
   test("3b. command palette opens via button", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     await page.screenshot({ path: S("03b-command-palette-open"), fullPage: true });
     await expect(page.getByPlaceholder(/Search shortcuts/)).toBeVisible();
@@ -124,7 +125,7 @@ test.describe("3. Top Bar", () => {
   });
 
   test("3c. command palette filters on typing", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     await page.getByPlaceholder(/Search shortcuts/).fill("draft");
     await page.screenshot({ path: S("03c-palette-filtered"), fullPage: true });
@@ -132,7 +133,7 @@ test.describe("3. Top Bar", () => {
   });
 
   test("3d. command palette navigate via click", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     await page.getByText("Start a new draft").click();
     await expect(page).toHaveURL(/\/draft/);
@@ -140,7 +141,7 @@ test.describe("3. Top Bar", () => {
   });
 
   test("3e. command palette close on escape", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     await expect(page.getByPlaceholder(/Search shortcuts/)).toBeVisible();
     await page.keyboard.press("Escape");
@@ -148,7 +149,7 @@ test.describe("3. Top Bar", () => {
   });
 
   test("3f. command palette no matches state", async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
     await page.getByPlaceholder(/Search shortcuts/).fill("xyznonexistent");
     await page.screenshot({ path: S("03f-palette-no-matches"), fullPage: true });
@@ -162,7 +163,7 @@ test.describe("3. Top Bar", () => {
 
 test.describe("4. Document Review", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/review");
+    await gotoRoute(page, "/review");
   });
 
   test("4a. page heading and trust badge", async ({ page }) => {
@@ -236,7 +237,7 @@ test.describe("4. Document Review", () => {
 
 test.describe("5. Document Draft", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/draft");
+    await gotoRoute(page, "/draft");
   });
 
   test("5a. page heading and manage templates button", async ({ page }) => {
@@ -323,7 +324,7 @@ test.describe("5. Document Draft", () => {
 
 test.describe("6. Research Assistant", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/research");
+    await gotoRoute(page, "/research");
   });
 
   test("6a. page heading and pre-seeded threads", async ({ page }) => {
@@ -384,7 +385,7 @@ test.describe("6. Research Assistant", () => {
 
 test.describe("7. Translation", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/translation");
+    await gotoRoute(page, "/translation");
   });
 
   test("7a. page heading and draft quality badge", async ({ page }) => {
@@ -439,7 +440,7 @@ test.describe("7. Translation", () => {
 
 test.describe("8. Settings", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/settings");
+    await gotoRoute(page, "/settings");
   });
 
   test("8a. page heading and tabs", async ({ page }) => {
@@ -558,7 +559,7 @@ test.describe("9. Runtime Health", () => {
       page.on("console", (msg) => {
         if (msg.type() === "error") errors.push(msg.text());
       });
-      await page.goto(path);
+      await gotoRoute(page, path);
       await page.waitForLoadState("networkidle");
       const real = errors.filter(
         (e) => !e.includes("__TAURI__") && !e.includes("tauri") && !e.includes("invoke"),

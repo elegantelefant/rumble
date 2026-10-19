@@ -1,10 +1,11 @@
 // ABOUTME: E2e tests for the Translation view.
 // ABOUTME: Validates language selection, translation history, model picker, and translate action.
 import { expect, test } from "@playwright/test";
+import { gotoRoute } from "./helpers";
 
 test.describe("Translation", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/translation");
+    await gotoRoute(page, "/translation");
   });
 
   test("renders page heading and draft quality badge", async ({ page }) => {
