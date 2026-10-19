@@ -203,7 +203,15 @@ export async function pollResearchResult(
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_ATTEMPTS = 120; // 3 minutes max
+// The sidecar's own job timeout is 300s (services/jobs.py's
+// JOB_TIMEOUT_SECONDS) -- wait at least that long plus a margin, so the
+// client never gives up before the server would have told us the job
+// failed on its own. A retried draft on a slow template has been measured
+// past 200s (rumble#46 validation), well past the old 120-attempt/3-minute
+// limit.
+const SERVER_JOB_TIMEOUT_MS = 300_000;
+const POLL_MARGIN_MS = 30_000;
+const MAX_POLL_ATTEMPTS = Math.ceil((SERVER_JOB_TIMEOUT_MS + POLL_MARGIN_MS) / POLL_INTERVAL_MS); // 220, ~5.5 min
 
 export async function waitForJob(
   type: "draft" | "review",
@@ -216,7 +224,13 @@ export async function waitForJob(
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  throw new Error(`Job ${jobId} did not complete within polling timeout`);
+  // No job ID in either message: it's an internal detail the user can't
+  // act on, and a user-facing error shouldn't read like a stack trace.
+  throw new Error(
+    type === "draft"
+      ? "Drafting took too long. Please try again."
+      : "Review took too long. Please try again.",
+  );
 }
 
 export async function waitForResearch(
