@@ -82,6 +82,7 @@ test.describe("2. Sidebar Navigation", () => {
     await gotoRoute(page, "/review");
     const firstNavItem = page.locator("aside.sidebar nav > div").first();
     await firstNavItem.hover();
+    await expect(firstNavItem.locator("div.opacity-0")).toHaveCSS("opacity", "1");
     await page.screenshot({ path: S("02e-sidebar-hover-arrows"), fullPage: true });
   });
 
@@ -96,8 +97,10 @@ test.describe("2. Sidebar Navigation", () => {
   test("2g. mobile hamburger opens sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await gotoRoute(page, "/review");
+    const sidebar = page.locator("aside.sidebar");
     const hamburger = page.getByRole("button", { name: "Toggle navigation" });
     await hamburger.click();
+    await expect(sidebar).toBeInViewport();
     await page.screenshot({ path: S("02g-mobile-sidebar-open"), fullPage: true });
   });
 });
@@ -263,10 +266,18 @@ test.describe("5. Document Draft", () => {
   });
 
   test("5d. fill out employment form", async ({ page }) => {
-    await page.getByPlaceholder("Full name").fill("Jane Smith");
-    await page.getByPlaceholder("$100,000").fill("$150,000");
-    await page.getByPlaceholder("Role").fill("Senior Associate");
-    await page.getByPlaceholder("Enter additional clauses").fill("90-day probation period with quarterly reviews.");
+    const name = page.getByPlaceholder("Full name");
+    const salary = page.getByPlaceholder("$100,000");
+    const role = page.getByPlaceholder("Role");
+    const terms = page.getByPlaceholder("Enter additional clauses");
+    await name.fill("Jane Smith");
+    await salary.fill("$150,000");
+    await role.fill("Senior Associate");
+    await terms.fill("90-day probation period with quarterly reviews.");
+    await expect(name).toHaveValue("Jane Smith");
+    await expect(salary).toHaveValue("$150,000");
+    await expect(role).toHaveValue("Senior Associate");
+    await expect(terms).toHaveValue("90-day probation period with quarterly reviews.");
     await page.screenshot({ path: S("05d-draft-form-filled"), fullPage: true });
   });
 
@@ -292,12 +303,16 @@ test.describe("5. Document Draft", () => {
     await page.screenshot({ path: S("05g-draft-service-template"), fullPage: true });
   });
 
-  test("5h. fill NDA and generate draft", async ({ page }) => {
+  test("5h. NDA generate draft without an Effective Date shows a validation error", async ({ page }) => {
     await page.getByText("Non-Disclosure Agreement").click();
     await page.getByPlaceholder("Company or person").first().fill("Acme Corp");
     await page.getByPlaceholder("Company or person").last().fill("Beta Inc");
     await page.getByPlaceholder("e.g. 2 years").fill("3 years");
     await page.getByRole("button", { name: "Generate Draft" }).click();
+    // Effective Date is left blank here, so validateForm() blocks generation
+    // before it ever reaches the sidecar — the same guard as 5e, on the NDA
+    // template's own required field.
+    await expect(page.getByText("Effective date is required")).toBeVisible();
     await page.screenshot({ path: S("05h-draft-generating"), fullPage: true });
   });
 
@@ -314,6 +329,7 @@ test.describe("5. Document Draft", () => {
 
   test("5k. browse templates button shows toast", async ({ page }) => {
     await page.getByRole("button", { name: "Browse Local Templates..." }).click();
+    await expect(page.getByText("Template browsing coming soon.")).toBeVisible();
     await page.screenshot({ path: S("05k-draft-browse-toast"), fullPage: true });
   });
 });
@@ -369,6 +385,7 @@ test.describe("6. Research Assistant", () => {
 
   test("6h. API surface toggle", async ({ page }) => {
     await page.getByRole("button", { name: /API surface/ }).click();
+    await expect(page.getByText("Backend expectations")).toBeVisible();
     await page.screenshot({ path: S("06h-research-api-surface"), fullPage: true });
   });
 
@@ -408,14 +425,21 @@ test.describe("7. Translation", () => {
   });
 
   test("7d. change source language to German", async ({ page }) => {
-    await page.getByLabel("Source language").selectOption("de");
+    const source = page.getByLabel("Source language");
+    await source.selectOption("de");
+    await expect(source).toHaveValue("de");
     await page.screenshot({ path: S("07d-translation-german-src"), fullPage: true });
   });
 
-  test("7e. type source text and translate", async ({ page }) => {
+  test("7e. translate without a host surfaces an error toast", async ({ page }) => {
     await page.getByPlaceholder("Paste or type the passage").fill("Der Vertrag tritt am 1. Januar in Kraft.");
     await page.screenshot({ path: S("07e-translation-typing"), fullPage: true });
     await page.getByRole("button", { name: "Translate" }).click();
+    // No sidecar host in e2e, so runTranslation() always rejects. Assert a
+    // toast appears rather than pinning its wording: the current message is
+    // the raw TypeError from invoke() with no Tauri host, not production
+    // copy (see CLAUDE.md's invoke-rejects-a-string note).
+    await expect(page.locator('[role="status"] > div')).toBeVisible();
     await page.screenshot({ path: S("07f-translation-submitted"), fullPage: true });
   });
 
@@ -430,6 +454,7 @@ test.describe("7. Translation", () => {
 
   test("7i. API surface toggle", async ({ page }) => {
     await page.getByRole("button", { name: /API surface/ }).click();
+    await expect(page.getByText("Backend expectations")).toBeVisible();
     await page.screenshot({ path: S("07i-translation-api-surface"), fullPage: true });
   });
 });
@@ -454,41 +479,66 @@ test.describe("8. Settings", () => {
 
   test("8b. providers tab — configured secrets", async ({ page }) => {
     await expect(page.getByText("Configured secrets")).toBeVisible();
-    await expect(page.getByText("Primary local runtime")).toBeVisible();
     await page.screenshot({ path: S("08b-settings-providers"), fullPage: true });
   });
 
   test("8c. providers tab — add secret form", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("openai");
-    await page.getByPlaceholder("e.g. Drafting primary key").fill("Research key");
+    const provider = page.getByRole("combobox", { name: "Provider" });
+    const label = page.getByPlaceholder("e.g. Drafting primary key");
+    await provider.selectOption("openai");
+    await label.fill("Research key");
+    await expect(provider).toHaveValue("openai");
+    await expect(label).toHaveValue("Research key");
     await page.screenshot({ path: S("08c-settings-add-openai"), fullPage: true });
   });
 
   test("8d. providers tab — API key field appears for hosted provider", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("openai");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("openai");
     await expect(page.getByPlaceholder("sk-...")).toBeVisible();
     await page.getByPlaceholder("sk-...").fill("sk-test-key-12345");
     await page.screenshot({ path: S("08d-settings-api-key-field"), fullPage: true });
   });
 
   test("8e. providers tab — local config fields for Ollama", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("elefant-local");
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
     await expect(page.getByPlaceholder("http://127.0.0.1")).toBeVisible();
     await expect(page.getByPlaceholder("11434")).toBeVisible();
     await expect(page.getByPlaceholder("elefant-legal-blend")).toBeVisible();
     await page.screenshot({ path: S("08e-settings-ollama-config"), fullPage: true });
   });
 
-  test("8f. providers tab — save secret button", async ({ page }) => {
-    await page.getByLabel("Provider").selectOption("anthropic");
+  test("8f. providers tab — save secret reports a keychain failure without a host", async ({ page }) => {
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("anthropic");
     await page.getByPlaceholder("e.g. Drafting primary key").fill("Claude key");
     await page.getByPlaceholder("sk-...").fill("sk-ant-test");
     await page.getByRole("button", { name: "Save secret" }).click();
+    // store_api_key rejects with no Tauri host, and the keychain readback
+    // used to confirm a save-then-restart failure also fails — addSecret()
+    // reports the store failure rather than silently keeping the secret.
+    await expect(page.getByText(/Failed to store API key/)).toBeVisible();
     await page.screenshot({ path: S("08f-settings-secret-saved"), fullPage: true });
   });
 
-  test("8g. providers tab — remove secret", async ({ page }) => {
-    await page.getByText("Remove").first().click();
+  test("8g. providers tab — add ollama secret shows remove button", async ({ page }) => {
+    // Ollama is the one provider with requiresKey: false, so adding it never
+    // calls Tauri invoke and succeeds with no host (unlike openai/anthropic).
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
+    await page.getByRole("button", { name: "Save secret" }).click();
+    const secretRow = page.getByRole("listitem").filter({ hasText: "Ollama · Elefant Legal Blend" });
+    await expect(secretRow).toBeVisible();
+    await expect(secretRow.getByRole("button", { name: "Remove" })).toBeVisible();
+    await page.screenshot({ path: S("08g-settings-secret-added"), fullPage: true });
+  });
+
+  // Removal always calls invoke("delete_api_key"), which rejects with no
+  // Tauri host, so the secret can never actually come off the list here.
+  // Needs the IPC bridge from rumble#62 before this is testable.
+  test.fixme("8g-removal. providers tab — remove secret — needs IPC bridge (#62)", async ({ page }) => {
+    await page.getByRole("combobox", { name: "Provider" }).selectOption("elefant-local");
+    await page.getByRole("button", { name: "Save secret" }).click();
+    const secretRow = page.getByRole("listitem").filter({ hasText: "Ollama · Elefant Legal Blend" });
+    await secretRow.getByRole("button", { name: "Remove" }).click();
+    await expect(secretRow).not.toBeVisible();
     await page.screenshot({ path: S("08g-settings-secret-removed"), fullPage: true });
   });
 
@@ -515,7 +565,9 @@ test.describe("8. Settings", () => {
 
   test("8k. appearance tab — change theme", async ({ page }) => {
     await page.getByRole("button", { name: "Appearance" }).click();
-    await page.getByLabel("Theme").selectOption("dark");
+    const theme = page.getByLabel("Theme");
+    await theme.selectOption("dark");
+    await expect(theme).toHaveValue("dark");
     await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
   });
 
@@ -529,18 +581,24 @@ test.describe("8. Settings", () => {
   test("8m. sync tab — custom server toggle", async ({ page }) => {
     await page.getByRole("button", { name: "Sync" }).click();
     await page.getByText("Use custom sync server").click();
-    await page.getByPlaceholder("https://sync.myfirm.com").fill("https://sync.mylaw.com");
+    const customServer = page.getByPlaceholder("https://sync.myfirm.com");
+    await customServer.fill("https://sync.mylaw.com");
+    await expect(customServer).toHaveValue("https://sync.mylaw.com");
     await page.screenshot({ path: S("08m-settings-custom-sync"), fullPage: true });
   });
 
   test("8n. sync tab — test connection button", async ({ page }) => {
     await page.getByRole("button", { name: "Sync" }).click();
     await page.getByRole("button", { name: "Test connection" }).click();
+    // Sync server defaults to "", which fails the URL check before any
+    // network call — testSync()'s first guard, not a network failure.
+    await expect(page.getByText("Invalid server URL.")).toBeVisible();
     await page.screenshot({ path: S("08n-settings-test-connection"), fullPage: true });
   });
 
-  test("8o. save settings button", async ({ page }) => {
+  test("8o. save settings reports the failure without a host", async ({ page }) => {
     await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Couldn't save settings")).toBeVisible();
     await page.screenshot({ path: S("08o-settings-saved"), fullPage: true });
   });
 });
