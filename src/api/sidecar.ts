@@ -216,8 +216,11 @@ const MAX_POLL_ATTEMPTS = Math.ceil((SERVER_JOB_TIMEOUT_MS + POLL_MARGIN_MS) / P
 export async function waitForJob(
   type: "draft" | "review",
   jobId: string,
+  onElapsed?: (ms: number) => void,
 ): Promise<JobResultResponse> {
+  const startedAt = Date.now();
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+    onElapsed?.(Date.now() - startedAt);
     const result = await pollJobResult(type, jobId);
     if (result.status === "completed" || result.status === "failed") {
       return result;
