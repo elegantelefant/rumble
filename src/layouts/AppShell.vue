@@ -3,17 +3,26 @@ import { onMounted, onBeforeUnmount, ref } from "vue";
 import { RouterView, useRouter, useRoute } from "vue-router";
 import SidebarNav from "../modules/navigation/SidebarNav.vue";
 import TopBar from "../modules/navigation/TopBar.vue";
+import HelpDialog from "../components/HelpDialog.vue";
 import CommandPalette from "../components/CommandPalette.vue";
 import { currentUser } from "../composables/user";
 import { getVersion } from "@tauri-apps/api/app";
 
 const sidebarOpen = ref(false);
 const paletteOpen = ref(false);
+const helpOpen = ref(false);
 
 const router = useRouter();
 const route = useRoute();
 
+function openHelp() {
+  sidebarOpen.value = false;
+  paletteOpen.value = false;
+  helpOpen.value = true;
+}
+
 const paletteCommands = [
+  { id: "help", label: "Help", action: openHelp },
   {
     id: "review",
     label: "Go to Document Review",
@@ -91,6 +100,7 @@ onBeforeUnmount(() => {
     <SidebarNav
       :open="sidebarOpen"
       :active-path="route.path"
+      @help="openHelp"
       @navigate="handleNavigate"
       @close="sidebarOpen = false"
     />
@@ -114,6 +124,7 @@ onBeforeUnmount(() => {
       aria-hidden="true"
     />
 
+    <HelpDialog v-if="helpOpen" :version="currentUser.version" @close="helpOpen = false" />
     <CommandPalette :open="paletteOpen" :commands="paletteCommands" @close="paletteOpen = false" />
   </div>
 </template>
