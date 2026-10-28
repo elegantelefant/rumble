@@ -2,7 +2,7 @@
 
 A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine.
 
-Runs on **macOS** (Apple Silicon + Intel), **Windows**, and **Linux**.
+Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** and **Linux**.
 
 **End users:** See [Getting Started](agent_docs/2026-03-05-getting-started.md) for installation and usage.
 **Build maintainers:** See [Installation Guide](agent_docs/2026-03-05-installation-guide.md) for CI/CD and build-from-source.
@@ -72,8 +72,12 @@ sudo apt-get install -y \
 
 ### Build Distributable
 
+On an Apple Silicon Mac, run from the root of a clean checkout:
+
 ```bash
+pnpm install
 cd src-tauri/sidecar
+uv sync
 uv run pyinstaller sidecar.spec --noconfirm
 mkdir -p ../binaries
 cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
@@ -81,6 +85,9 @@ cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut 
 cd ../..
 pnpm tauri build
 ```
+
+The macOS installer is `src-tauri/target/release/bundle/dmg/Elefant - Rumble_0.1.0_aarch64.dmg`.
+Builds are unsigned; signing and notarization are tracked in #102.
 
 Or push a version tag to build all platforms via GitHub Actions:
 

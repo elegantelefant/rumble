@@ -1,10 +1,7 @@
 # ABOUTME: PyInstaller spec for building the rumble-sidecar binary.
-# ABOUTME: Bundles FastAPI + Uvicorn + PydanticAI into a one-dir distributable.
+# ABOUTME: Bundles FastAPI + Uvicorn + PydanticAI into a onefile distributable.
 
 # -*- mode: python ; coding: utf-8 -*-
-
-import sys
-from pathlib import Path
 
 from PyInstaller.utils.hooks import copy_metadata
 
@@ -87,6 +84,6 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True,
 )
