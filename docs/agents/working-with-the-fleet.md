@@ -70,7 +70,7 @@ Blocker classes: **DEFECT** = reproduced wrong behaviour; **TEST-GAP** = an unte
 
 ## Merge gate
 
-The gate is the full local suite on the exact merged tree — GitHub's `refs/pull/<N>/merge`, never the PR head, never GitHub Actions (billing-gated; a check there, green or red, is neither evidence nor a blocker).
+The gate is the full local suite on the exact merged tree — GitHub's `refs/pull/<N>/merge`, never the PR head. GitHub Actions runs the repository checks, but its result is supplementary to the local merge-ref evidence.
 
 ```sh
 git fetch origin refs/pull/<N>/merge && git checkout -q FETCH_HEAD
@@ -87,7 +87,7 @@ pnpm test:e2e            # when a view or component changed
 - A failing test is never deleted or skipped; it is raised on the PR.
 - Merge = squash on MERGE by the supervisor or the owner, quoting the four tallies for that merge SHA.
 
-Not yet in place: `scripts/premerge-check.sh` (the block above, one command), lint/format gates in all three languages, the `rust-toolchain.toml` pin on `main`, the five triage labels. Until then the verifier runs the block by hand and quotes it.
+Run `scripts/premerge-check.sh <N>` on macOS or Linux for the block above against `refs/pull/<N>/merge` in a temporary worktree, cleaned up on exit. It prints all four tallies on success and exits non-zero naming the failed suite if any step fails. Run the additional e2e command separately when a view or component changed. Lint/format gates in all three languages, the `rust-toolchain.toml` pin on `main`, and the five triage labels are not yet in place.
 
 ## Release and closure
 
