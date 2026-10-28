@@ -24,7 +24,7 @@ Routing in one line: the frontend never `fetch`es; HTTP calls go through `invoke
 ## Commands (from `package.json`, `pyproject.toml`, CI; nothing else exists)
 
 ```sh
-pnpm install                                     # pnpm 9 / Node 20 in CI
+pnpm install                                     # pnpm 10.20.0 (packageManager pin, #85) / Node 20 in CI
 cd src-tauri/sidecar && uv sync                  # Python 3.12
 pnpm tauri dev                                   # the app; spawns the sidecar BINARY — build it once (README)
 pnpm dev:sidecar                                 # sidecar from source on :11435
@@ -62,7 +62,7 @@ All four tallies quoted in the verdict (`vitest 141 passed`, `pytest 146 passed`
 | `lib.rs` spawn / `resolve_url` / keychain, `capabilities/*.json`, `tauri.conf.json`, `sidecar.spec` | a packaged build (`pnpm tauri build`) smoked by a human — #35 (BYOK unreachable in the packaged app) is invisible to every automated suite |
 | `sidecar-openapi.json` | it is frozen; changing it is a contract decision — ask first (#34 / #42) |
 
-Use `scripts/premerge-check.sh <N>` to run the block above on `refs/pull/<N>/merge`; lint/format gates and the toolchain pin on `main` are not yet in place.
+Use `scripts/premerge-check.sh <N>` on macOS or Linux to run the block above on `refs/pull/<N>/merge` in a temporary worktree, cleaned up on exit. It prints all four tallies on success and exits non-zero naming the failed suite if any step fails. Lint/format gates and the toolchain pin on `main` are not yet in place.
 
 ## Issues, branches, PRs, verdicts
 

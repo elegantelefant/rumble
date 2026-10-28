@@ -44,16 +44,34 @@ SUMMARISE_SEARCH = (
     "Return JSON: {\"summary\": \"...\", \"key_points\": [\"...\"], \"citations\": [\"...\"]}"
 )
 
+# Plain prose, not JSON (rumble#46): asking a small local model to both write
+# a full document AND wrap it in a JSON envelope reliably produces either the
+# form restated as a nested object, or the document written twice -- once as
+# prose, once as an escaped JSON copy that runs out of its own momentum
+# before the closing brace. routes/jobs.py treats the raw output as the
+# draft text directly; services/draft_substitution.py fills in placeholders
+# and routes/jobs.py wraps the result as {draft, warnings: []}.
 DRAFT = (
     "You are a legal document drafter. "
-    "Draft a document based on the provided instructions and context. "
-    "Return JSON: {\"draft\": \"...\", \"warnings\": [\"...\"]}"
+    "Draft the complete agreement as numbered clauses (Section 1, Section 2, Section 3, "
+    "and so on), covering the whole document, not an outline. "
+    "Use every provided detail exactly as given, even if it looks generic or "
+    "placeholder-like itself -- a provided value is never something to invent a "
+    "replacement for. "
+    "Do not restate the input as a list of labels and values -- write prose clauses, "
+    "the way a real agreement reads. "
+    "For any detail the instructions do not provide, use a clearly marked blank in "
+    "square brackets, such as [Employer Name], rather than inventing or omitting it."
 )
 
 REVIEW = (
     "You are a legal document reviewer. "
     "Review the provided text and identify issues, risks, ambiguities, and style problems. "
-    "Return JSON: {\"summary\": \"...\", \"issues\": [{\"kind\": \"risk|ambiguity|missing|style|other\", "
+    "For each issue, choose exactly one kind that best fits: "
+    "risk (a legal or business risk), ambiguity (unclear or undefined language), "
+    "missing (an absent clause or term), style (wording, formatting, or clarity), "
+    "or other (anything that doesn't fit the above). "
+    "Return JSON: {\"summary\": \"...\", \"issues\": [{\"kind\": \"<one of: risk, ambiguity, missing, style, other>\", "
     "\"message\": \"...\", \"location\": \"...\", \"suggestion\": \"...\"}]}"
 )
 

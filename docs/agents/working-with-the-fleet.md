@@ -87,7 +87,7 @@ pnpm test:e2e            # when a view or component changed
 - A failing test is never deleted or skipped; it is raised on the PR.
 - Merge = squash on MERGE by the supervisor or the owner, quoting the four tallies for that merge SHA.
 
-Run `scripts/premerge-check.sh <N>` for the block above against `refs/pull/<N>/merge`; lint/format gates in all three languages, the `rust-toolchain.toml` pin on `main`, and the five triage labels are not yet in place.
+Run `scripts/premerge-check.sh <N>` on macOS or Linux for the block above against `refs/pull/<N>/merge` in a temporary worktree, cleaned up on exit. It prints all four tallies on success and exits non-zero naming the failed suite if any step fails. Run the additional e2e command separately when a view or component changed. Lint/format gates in all three languages, the `rust-toolchain.toml` pin on `main`, and the five triage labels are not yet in place.
 
 ## Release and closure
 

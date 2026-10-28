@@ -2,30 +2,40 @@
 import { computed, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { createDraftJob, waitForJob } from "../api/sidecar";
+import type { DraftField } from "../api/models/draftField";
 import { useToast } from "../composables/toast";
 
 const toasts = useToast();
 
-type FieldConfig = { key: string; label: string; type?: string; placeholder?: string };
+type FieldConfig = {
+  key: string;
+  label: string;
+  type?: string;
+  placeholder?: string;
+  // Alternate labels the drafting model might reasonably use in place of
+  // this field's own label -- substitution (services/draft_substitution.py)
+  // treats an alias exactly like the label.
+  aliases?: string[];
+};
 
 const templateFields: Record<string, FieldConfig[]> = {
   employment: [
-    { key: "employeeName", label: "Employee Name", placeholder: "Full name" },
-    { key: "startDate", label: "Start Date", type: "date" },
-    { key: "salary", label: "Salary", placeholder: "$100,000" },
-    { key: "position", label: "Position", placeholder: "Role" },
+    { key: "employeeName", label: "Employee Name", placeholder: "Full name", aliases: ["Name of Employee", "Full Name"] },
+    { key: "startDate", label: "Start Date", type: "date", aliases: ["Commencement Date"] },
+    { key: "salary", label: "Salary", placeholder: "$100,000", aliases: ["Compensation", "Annual Salary", "Base Salary"] },
+    { key: "position", label: "Position", placeholder: "Role", aliases: ["Role", "Job Title", "Employee Title"] },
   ],
   nda: [
-    { key: "disclosingParty", label: "Disclosing Party", placeholder: "Company or person" },
-    { key: "receivingParty", label: "Receiving Party", placeholder: "Company or person" },
-    { key: "effectiveDate", label: "Effective Date", type: "date" },
-    { key: "duration", label: "Duration", placeholder: "e.g. 2 years" },
+    { key: "disclosingParty", label: "Disclosing Party", placeholder: "Company or person", aliases: ["Discloser"] },
+    { key: "receivingParty", label: "Receiving Party", placeholder: "Company or person", aliases: ["Recipient", "Receiver"] },
+    { key: "effectiveDate", label: "Effective Date", type: "date", aliases: ["Start Date", "Commencement Date"] },
+    { key: "duration", label: "Duration", type: "freetext", placeholder: "e.g. 2 years", aliases: ["Term", "Term Length"] },
   ],
   service: [
-    { key: "serviceProvider", label: "Service Provider", placeholder: "Provider name" },
-    { key: "clientName", label: "Client Name", placeholder: "Client name" },
-    { key: "startDate", label: "Start Date", type: "date" },
-    { key: "scopeOfWork", label: "Scope of Work", placeholder: "Brief description" },
+    { key: "serviceProvider", label: "Service Provider", placeholder: "Provider name", aliases: ["Provider", "Contractor"] },
+    { key: "clientName", label: "Client Name", placeholder: "Client name", aliases: ["Client"] },
+    { key: "startDate", label: "Start Date", type: "date", aliases: ["Commencement Date", "Effective Date"] },
+    { key: "scopeOfWork", label: "Scope of Work", type: "freetext", placeholder: "Brief description", aliases: ["Scope", "Services"] },
   ],
 };
 
@@ -39,6 +49,7 @@ const selectedTemplate = ref("employment");
 const formState = reactive<Record<string, string>>({});
 const errors = reactive<Record<string, string>>({});
 const isGenerating = ref(false);
+const elapsedMs = ref(0);
 const draftResult = ref("");
 const draftWarnings = ref<string[]>([]);
 
@@ -75,6 +86,7 @@ function validateForm() {
 async function generateDraft() {
   if (!validateForm()) return;
   isGenerating.value = true;
+  elapsedMs.value = 0;
   draftResult.value = "";
   draftWarnings.value = [];
   try {
@@ -89,20 +101,44 @@ async function generateDraft() {
       formState.terms?.trim() ? `\nAdditional terms: ${formState.terms.trim()}` : "",
     ].filter(Boolean).join("\n");
 
+    // validateForm() above already guarantees every activeFields value is
+    // non-blank before this point, so there's nothing left to filter out.
+    const fields: DraftField[] = activeFields.value
+      .map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        value: formState[f.key],
+        aliases: f.aliases,
+      }));
+
+    // Additional Terms is global, not per-template, and optional -- only
+    // sent when the user actually wrote something.
+    if (formState.terms?.trim()) {
+      fields.push({ key: "terms", label: "Additional Terms", type: "freetext", value: formState.terms.trim() });
+    }
+
     const jobResponse = await createDraftJob({
       prompt,
       document_type: selectedTemplate.value,
+      fields,
     });
 
-    const result = await waitForJob("draft", jobResponse.job_id);
+    const result = await waitForJob("draft", jobResponse.job_id, (ms) => {
+      elapsedMs.value = ms;
+    });
 
     if (result.status === "failed") {
       throw new Error("Draft generation failed — the AI could not produce a draft.");
     }
 
-    const payload = result.result as { draft?: string; warnings?: string[] } | undefined;
-    draftResult.value = payload?.draft ?? "";
-    draftWarnings.value = payload?.warnings ?? [];
+    // The server's own contract doesn't guarantee these types (#49) -- a
+    // wrong-typed `warnings` would pass a plain `?? []` null guard, and
+    // iterating a string in the template's v-for renders one bullet per
+    // character instead of failing visibly.
+    const payload = result.result as { draft?: unknown; warnings?: unknown } | undefined;
+    draftResult.value = typeof payload?.draft === "string" ? payload.draft : "";
+    draftWarnings.value = Array.isArray(payload?.warnings) ? payload.warnings : [];
 
     if (draftResult.value) {
       toasts.addToast("Draft prepared. Review before sharing with clients.", "success");
@@ -113,6 +149,7 @@ async function generateDraft() {
     const message = error instanceof Error ? error.message : "Failed to generate draft.";
     toasts.addToast(message, "error");
   } finally {
+    elapsedMs.value = 0;
     isGenerating.value = false;
   }
 }
@@ -207,6 +244,10 @@ async function exportDraft(format: "word" | "pdf") {
           <button class="btn-secondary" @click="exportDraft('word')">Export to Word</button>
           <button class="btn-secondary" @click="exportDraft('pdf')">Export to PDF</button>
         </div>
+
+        <p v-if="isGenerating && elapsedMs >= 60_000" role="status" class="body-muted">
+          Still working, about {{ Math.floor(elapsedMs / 60_000) }} min so far.
+        </p>
 
         <div v-if="draftWarnings.length" class="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
           <p class="font-medium">Warnings:</p>

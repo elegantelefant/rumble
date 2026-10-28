@@ -31,18 +31,21 @@ run_suite() {
   local log="$temp_root/$name.log"
 
   echo "== $name =="
-  if ! (cd "$worktree" && "$@") >"$log" 2>&1; then
-    cat "$log"
-    echo "FAILED: $name" >&2
-    exit 1
-  fi
+  trap 'status=$?; cat "$log"; echo "FAILED: $name" >&2; exit "$status"' ERR
+  # A conditional here would disable errexit for every step in the suite.
+  (
+    trap - ERR
+    cd "$worktree"
+    "$@"
+  ) >"$log" 2>&1
+  trap - ERR
   cat "$log"
 }
 
 run_vitest() {
   pnpm install --frozen-lockfile
   pnpm build
-  pnpm test
+  NO_COLOR=1 pnpm test
 }
 
 run_pytest() {
@@ -71,8 +74,13 @@ run_suite cargo run_cargo
 run_suite drift run_drift
 
 echo "TALLIES"
-printf 'vitest: '
-awk '/^      Tests / { print $2 " passed"; exit }' "$temp_root/vitest.log"
+awk '
+  /^[[:space:]]*Tests[[:space:]]/ { count = $2; found = 1; exit }
+  END {
+    if (found) print "vitest: " count " passed"
+    else { print "vitest: summary missing"; exit 1 }
+  }
+' "$temp_root/vitest.log"
 printf 'pytest: '
 awk '/passed/ && /[0-9]+ passed/ { print $1 " passed"; exit }' "$temp_root/pytest.log"
 printf 'cargo: '
