@@ -168,10 +168,12 @@ test.describe("4. Document Review", () => {
     await gotoRoute(page, "/review");
   });
 
-  test("4a. page heading and trust badge", async ({ page }) => {
+  test("4a. page heading, trust badge stays hidden while the mode is unknown", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Document Review" })).toBeVisible();
-    // Text varies with the backend mode (honest per #56); the badge itself is what's asserted.
-    await expect(page.locator(".badge-trust")).toBeVisible();
+    // e2e has no real Tauri host, so backendMode never resolves and modeKnown
+    // stays false — the badge should stay hidden rather than flash stale or
+    // unknown-state text (gated the same way as SidebarNav's tagline).
+    await expect(page.locator(".badge-trust")).not.toBeVisible();
     await page.screenshot({ path: S("04a-review-heading"), fullPage: true });
   });
 
