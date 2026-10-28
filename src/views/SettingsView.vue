@@ -14,6 +14,18 @@ import {
 } from "../composables/backendMode";
 
 const toast = useToast();
+const openingLogs = ref(false);
+
+async function openLogsFolder() {
+  openingLogs.value = true;
+  try {
+    await invoke("open_logs_folder");
+  } catch (error) {
+    toast.addToast(`Could not open logs folder: ${String(error)}`, "error");
+  } finally {
+    openingLogs.value = false;
+  }
+}
 
 const tabs = [
   { id: "providers", label: "Providers & API keys" },
@@ -408,6 +420,13 @@ const selectedProviderDetails = computed(() =>
         Manage provider credentials, local storage, appearance, and sync endpoints. Secrets stay encrypted on-device.
       </p>
     </header>
+
+    <div class="card space-y-2">
+      <p class="text-sm text-[var(--primary-600)]">Diagnostic logs are stored on this device and rotate automatically.</p>
+      <button class="btn-secondary" type="button" :disabled="openingLogs" @click="openLogsFolder">
+        Open logs folder
+      </button>
+    </div>
 
     <div class="flex flex-wrap gap-2">
       <button

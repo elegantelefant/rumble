@@ -2,6 +2,24 @@
 # ABOUTME: Validates request parsing, LLM dispatch, JSON response structure.
 
 
+def test_invalid_model_output_is_not_logged(caplog):
+    from pydantic import BaseModel, Field
+
+    from routes.ai import _drop_invalid_optional_fields
+
+    class ModelOutput(BaseModel):
+        key_points: list[str] = Field(default_factory=list)
+
+    private_text = "private-document-derived-model-output-104"
+    output = {"key_points": ["valid point", {"document": private_text}]}
+    with caplog.at_level("WARNING", logger="routes.ai"):
+        _drop_invalid_optional_fields(ModelOutput, output)
+
+    assert output == {"key_points": ["valid point"]}
+    assert "Dropping invalid item 1 in ModelOutput.key_points" in caplog.text
+    assert private_text not in caplog.text
+
+
 async def test_clarify_returns_structured_response(client):
     resp = await client.post("/clarify", json={"ask": "what is consideration"})
     assert resp.status_code == 200

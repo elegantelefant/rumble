@@ -115,8 +115,8 @@ def _drop_invalid_optional_fields(model_class: type[BaseModel], filtered: dict) 
                         kept.append(item)
                     except ValidationError:
                         logger.warning(
-                            "Dropping invalid item %d in %s.%s: %r",
-                            index, model_class.__name__, name, item,
+                            "Dropping invalid item %d in %s.%s",
+                            index, model_class.__name__, name,
                         )
                 filtered[name] = kept
                 continue

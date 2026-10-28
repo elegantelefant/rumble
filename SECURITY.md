@@ -42,6 +42,11 @@ is "offline after setup", not "offline".
 
 ## Where data lives
 
+| Storage | Location, contents and retention |
+|---|---|
+| Diagnostic logs | `rumble.log` in `~/Library/Logs/legal.elefant.rumble/` (macOS), `%LOCALAPPDATA%\legal.elefant.rumble\logs\` (Windows), or `$XDG_DATA_HOME/legal.elefant.rumble/logs/` (Linux, default `~/.local/share/`). Host and sidecar lifecycle/error diagnostics; HTTP logs record status only, without request/response bodies or headers. The host redacts the sidecar secret from relayed stderr; panic logs omit the payload. INFO level, rotation at 5 MiB with one previous file. Plaintext on this device, no automatic upload; Settings → Open logs folder opens the directory. Delete these files there when no longer needed; Delete all local data only removes the database. |
+
+
 - **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
   directory for identifier `legal.elefant.rumble`: `~/Library/Application Support/legal.elefant.rumble/`
   on macOS, `%APPDATA%\legal.elefant.rumble\` on Windows, `~/.local/share/legal.elefant.rumble/`
@@ -68,8 +73,7 @@ is "offline after setup", not "offline".
     directories already hold a database) rumble uses the local copy and **the roaming copy stays**,
     still subject to roaming — delete it by hand. A crash partway through removing the roaming files
     can also leave its `-wal`/`-shm` files or `sidecar.pid` there; only *Delete all local data* clears
-    them. Rumble reports this on stderr, which release Windows
-    builds discard (`windows_subsystem = "windows"` in `src-tauri/src/main.rs`), so there it is silent.
+    them. Rumble records this in the local diagnostic log, including in release Windows builds.
     On macOS and Linux the two directories are the same, so nothing moves.
   - **Retention.** Jobs older than 30 days are deleted each time the sidecar starts, so a job goes at
     the first start after it turns 30 days old
