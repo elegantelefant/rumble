@@ -49,6 +49,7 @@ const selectedTemplate = ref("employment");
 const formState = reactive<Record<string, string>>({});
 const errors = reactive<Record<string, string>>({});
 const isGenerating = ref(false);
+const elapsedMs = ref(0);
 const draftResult = ref("");
 const draftWarnings = ref<string[]>([]);
 
@@ -85,6 +86,7 @@ function validateForm() {
 async function generateDraft() {
   if (!validateForm()) return;
   isGenerating.value = true;
+  elapsedMs.value = 0;
   draftResult.value = "";
   draftWarnings.value = [];
   try {
@@ -122,7 +124,9 @@ async function generateDraft() {
       fields,
     });
 
-    const result = await waitForJob("draft", jobResponse.job_id);
+    const result = await waitForJob("draft", jobResponse.job_id, (ms) => {
+      elapsedMs.value = ms;
+    });
 
     if (result.status === "failed") {
       throw new Error("Draft generation failed — the AI could not produce a draft.");
@@ -145,6 +149,7 @@ async function generateDraft() {
     const message = error instanceof Error ? error.message : "Failed to generate draft.";
     toasts.addToast(message, "error");
   } finally {
+    elapsedMs.value = 0;
     isGenerating.value = false;
   }
 }
@@ -239,6 +244,10 @@ async function exportDraft(format: "word" | "pdf") {
           <button class="btn-secondary" @click="exportDraft('word')">Export to Word</button>
           <button class="btn-secondary" @click="exportDraft('pdf')">Export to PDF</button>
         </div>
+
+        <p v-if="isGenerating && elapsedMs >= 60_000" role="status" class="body-muted">
+          Still working, about {{ Math.floor(elapsedMs / 60_000) }} min so far.
+        </p>
 
         <div v-if="draftWarnings.length" class="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
           <p class="font-medium">Warnings:</p>

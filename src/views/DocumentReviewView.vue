@@ -36,6 +36,7 @@ type ReviewSession = {
   messages: ChatMessage[];
   summary: string;
   reviewStatus: ReviewStatus;
+  elapsedMs: number;
   chatId: string | null;
   fileText: string;
 };
@@ -95,6 +96,7 @@ async function registerFile(file: File) {
   sessions.value[id] = {
     file: details,
     reviewStatus: "idle",
+    elapsedMs: 0,
     summary: "",
     messages: [],
     chatId: null,
@@ -136,6 +138,7 @@ function beginInitialReview(session: ReviewSession) {
   });
 
   session.reviewStatus = "running";
+  session.elapsedMs = 0;
   session.messages.push({
     id: generateId(),
     role: "assistant",
@@ -206,7 +209,10 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
     if (!session) return;
 
     // 2. Poll until the job completes
-    const result = await waitForJob("review", jobResponse.job_id);
+    const result = await waitForJob("review", jobResponse.job_id, (ms) => {
+      session.elapsedMs = ms;
+    });
+    session.elapsedMs = 0;
 
     if (result.status === "failed") {
       throw new Error("Review failed — the AI could not process this document.");
@@ -264,6 +270,8 @@ async function queueInitialReview(file: UploadedFile, fileText: string) {
     }
     toasts.addToast("Failed to start initial review. Please try again.", "error");
   } finally {
+    const session = sessions.value[file.id];
+    if (session) session.elapsedMs = 0;
     syncingCount.value--;
   }
 }
@@ -527,6 +535,10 @@ const workflowSteps = [
               </button>
             </div>
           </header>
+
+          <p v-if="activeSession.reviewStatus === 'running' && activeSession.elapsedMs >= 60_000" role="status" class="body-muted">
+            Still working, about {{ Math.floor(activeSession.elapsedMs / 60_000) }} min so far.
+          </p>
 
           <section class="rounded-lg border border-[var(--primary-200)] bg-[var(--primary-50)] p-4 text-sm text-[var(--primary-700)]">
             <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--primary-500)]">
