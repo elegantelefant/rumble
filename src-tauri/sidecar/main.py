@@ -2,6 +2,7 @@
 # ABOUTME: Parses --port and --data-dir args, prints PORT:{port} for Rust, runs uvicorn.
 
 import argparse
+import logging
 import os
 import sys
 
@@ -33,6 +34,11 @@ def resolve_secret(flag_value: str | None) -> str | None:
 
 
 def cli(argv: list[str] | None = None):
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(description="Rumble sidecar server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--data-dir", type=str, default=None, help="Directory for SQLite DB")
@@ -46,10 +52,9 @@ def cli(argv: list[str] | None = None):
 
     secret = resolve_secret(args.secret)
     if not secret and not args.dev:
-        print(
+        logging.error(
             "error: no shared secret configured (set RUMBLE_SIDECAR_SECRET, pass --secret, "
             "or pass --dev for local development)",
-            file=sys.stderr,
         )
         sys.exit(1)
 
@@ -62,7 +67,10 @@ def cli(argv: list[str] | None = None):
         app,
         host="127.0.0.1",
         port=args.port,
-        log_level="warning",
+        log_level="info",
+        log_config=None,
+        # Access logs contain user-controlled URLs; lifecycle diagnostics suffice.
+        access_log=False,
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_TIMEOUT_S,
     )
     server = uvicorn.Server(config)

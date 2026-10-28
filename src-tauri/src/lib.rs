@@ -13,12 +13,60 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 use trash::delete;
 use walkdir::WalkDir;
 use docx_rs::{Docx, Paragraph, Run};
 use percent_encoding::percent_decode_str;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
+
+// Keep one rotated file plus the active file, each about 5 MiB.
+const MAX_LOG_FILE_BYTES: u128 = 5 * 1024 * 1024;
+
+fn logging_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri_plugin_log::Builder::new()
+        .targets([tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+            file_name: Some("rumble".into()),
+        })])
+        .level(log::LevelFilter::Info)
+        // Dependencies must not emit HTTP headers, bodies or provider credentials.
+        .filter(|metadata| metadata.target().starts_with("rumble_lib"))
+        .max_file_size(MAX_LOG_FILE_BYTES)
+        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(1))
+        .build()
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        // Panic payloads may include document text or credentials; record location only.
+        if let Some(location) = info.location() {
+            log::error!("host panic at {}:{}", location.file(), location.line());
+        } else {
+            log::error!("host panic (location unavailable)");
+        }
+        log::logger().flush();
+    }));
+}
+
+fn log_sidecar_stderr(bytes: &[u8], secret: &str) {
+    let line = String::from_utf8_lossy(bytes);
+    let safe = if secret.is_empty() {
+        line.into_owned()
+    } else {
+        line.replace(secret, "[REDACTED]")
+    };
+    log::info!("[sidecar] {}", safe.trim());
+}
+
+#[tauri::command]
+fn open_logs_folder(app: AppHandle) -> Result<(), String> {
+    let path = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
 
 const SERVICE_NAME: &str = "elefant-rumble";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
@@ -281,6 +329,7 @@ async fn make_http_request(
 
     let response = builder.send().await.map_err(|e| e.to_string())?;
     let status = response.status();
+    log::info!("HTTP response status {}", status.as_u16());
 
     if status.is_success() {
         let text = response.text().await.map_err(|e| e.to_string())?;
@@ -306,7 +355,7 @@ async fn api_call(
     let target = state.resolve_url(&path)?;
     let (token, secret) = request_credentials(&target, &state.secret, || {
         auth_get_token_inner()
-            .map_err(|e| eprintln!("[keychain] failed to read auth token: {}", e))
+            .map_err(|e| log::error!("[keychain] failed to read auth token: {}", e))
             .ok()
     });
     make_http_request(&state.http, &target.url, &method, body, params, token.as_deref(), secret).await
@@ -815,7 +864,7 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
         tokio::time::sleep(std::time::Duration::from_millis(HEALTH_POLL_INTERVAL_MS)).await;
         match http.get(&url).header(SECRET_HEADER, secret).send().await {
             Ok(resp) if resp.status().is_success() => {
-                println!("[sidecar] healthy on port {} (attempt {})", port, attempt);
+                log::info!("[sidecar] healthy on port {} (attempt {})", port, attempt);
                 return Ok(());
             }
             _ => {
@@ -900,17 +949,17 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                     if !port_confirmed {
                         if let Some(port_str) = trimmed.strip_prefix("PORT:") {
                             if let Ok(p) = port_str.parse::<u16>() {
-                                println!("[sidecar] reported port {}", p);
+                                log::info!("[sidecar] reported port {}", p);
                                 match poll_health(&http_clone, p, &secret_clone).await {
                                     Ok(()) => {
                                         let st = state_handle.state::<AppState>();
                                         if st.set_port_if_current(generation, Some(p)) {
-                                            println!("[sidecar] ready on port {}", p);
+                                            log::info!("[sidecar] ready on port {}", p);
                                         }
                                         port_confirmed = true;
                                     }
                                     Err(e) => {
-                                        eprintln!("[sidecar] health check failed: {}", e);
+                                        log::error!("[sidecar] health check failed: {}", e);
                                     }
                                 }
                             }
@@ -918,11 +967,10 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
-                    let line = String::from_utf8_lossy(&line_bytes);
-                    eprintln!("[sidecar:err] {}", line.trim());
+                    log_sidecar_stderr(&line_bytes, &secret_clone);
                 }
                 CommandEvent::Terminated(payload) => {
-                    println!(
+                    log::info!(
                         "[sidecar] terminated with code {:?}",
                         payload.code
                     );
@@ -934,14 +982,14 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         }
     });
 
-    println!("[sidecar] spawned, waiting for port {} to become healthy", port_clone);
+    log::info!("[sidecar] spawned, waiting for port {} to become healthy", port_clone);
     Ok(())
 }
 
 fn kill_sidecar(state: &AppState) {
     let mut child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(c) = child.take() {
-        println!("[sidecar] shutting down");
+        log::info!("[sidecar] shutting down");
         let _ = c.kill();
     }
     let mut port = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner());
@@ -1076,17 +1124,17 @@ fn sidecar_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     match migrate_data_dir(&old, &new) {
         Ok(Migration::NotNeeded) => {}
         Ok(Migration::Copied { files, left_behind }) => {
-            println!("[data] migrated {:?} from {} to {}", files, old.display(), new.display());
+            log::info!("[data] migrated {:?} from {} to {}", files, old.display(), new.display());
             for e in left_behind {
-                eprintln!("[data] the old copy stays in {}: {}", old.display(), e);
+                log::error!("[data] the old copy stays in {}: {}", old.display(), e);
             }
         }
-        Ok(Migration::BothPresent) => eprintln!(
+        Ok(Migration::BothPresent) => log::error!(
             "[data] databases found in both {} and {}; using the latter, leaving the former untouched",
             old.display(),
             new.display()
         ),
-        Err(e) => eprintln!("[data] migration failed, staying in {}: {}", old.display(), e),
+        Err(e) => log::error!("[data] migration failed, staying in {}: {}", old.display(), e),
     }
     Ok(active_data_dir(&old, &new))
 }
@@ -1200,7 +1248,7 @@ async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
     match (deleted, restarted) {
         (Err(e), _) => Err(e),
         (Ok(()), Err(e)) => {
-            eprintln!("[sidecar] failed to restart after deleting local data: {}", e);
+            log::error!("[sidecar] failed to restart after deleting local data: {}", e);
             Err(SIDECAR_RESTART_FAILED_MESSAGE.to_string())
         }
         (Ok(()), Ok(())) => Ok(true),
@@ -1446,6 +1494,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(logging_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -1458,6 +1507,8 @@ pub fn run() {
             secret: uuid::Uuid::new_v4().to_string(),
         })
         .setup(|app| {
+            install_panic_hook();
+            log::info!("host started");
             let handle = app.handle();
 
             // Tray icon
@@ -1472,7 +1523,7 @@ pub fn run() {
 
             // Spawn sidecar (non-fatal — app works in Premium mode without it)
             if let Err(e) = spawn_sidecar(&handle) {
-                eprintln!("[sidecar] failed to spawn: {}", e);
+                log::error!("[sidecar] failed to spawn: {}", e);
             }
 
             Ok(())
@@ -1502,6 +1553,7 @@ pub fn run() {
             // Settings
             load_settings,
             save_settings,
+            open_logs_folder,
             // Local data lifecycle
             delete_all_local_data,
         ])
@@ -1521,6 +1573,55 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[tokio::test]
+    async fn logs_exclude_request_body_and_sidecar_secret() {
+        struct FileLogger(Mutex<Option<std::fs::File>>);
+        impl log::Log for FileLogger {
+            fn enabled(&self, _: &log::Metadata<'_>) -> bool { true }
+            fn log(&self, record: &log::Record<'_>) {
+                if let Some(file) = self.0.lock().unwrap().as_mut() {
+                    writeln!(file, "{}", record.args()).unwrap();
+                }
+            }
+            fn flush(&self) {
+                if let Some(file) = self.0.lock().unwrap().as_mut() {
+                    file.flush().unwrap();
+                }
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("captured.log");
+        let logger = Box::leak(Box::new(FileLogger(Mutex::new(
+            Some(std::fs::File::create(&path).unwrap()),
+        ))));
+        log::set_logger(logger).unwrap();
+        log::set_max_level(log::LevelFilter::Info);
+
+        let private_text = "private-document-body-104";
+        let secret = "private-sidecar-secret-104";
+        let payload = serde_json::json!({"text": private_text});
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(header(SECRET_HEADER, secret))
+            .and(body_json(&payload))
+            .respond_with(ResponseTemplate::new(500).set_body_string(private_text))
+            .expect(1)
+            .mount(&server).await;
+        let result = make_http_request(
+            &http_client(), &server.uri(), "POST", Some(payload), None, None, Some(secret),
+        ).await;
+        assert!(result.is_err());
+        log_sidecar_stderr(format!("INFO sidecar started {secret}").as_bytes(), secret);
+        log::logger().flush();
+        logger.0.lock().unwrap().take();
+        let logged = std::fs::read_to_string(&path).unwrap();
+        assert!(logged.contains("HTTP response status 500"));
+        assert!(logged.contains("INFO sidecar started [REDACTED]"));
+        assert!(!logged.contains(private_text), "request/response body reached the log");
+        assert!(!logged.contains(secret), "sidecar secret reached the log");
+    }
 
     fn make_state(mode: BackendMode, port: Option<u16>) -> AppState {
         AppState {

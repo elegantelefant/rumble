@@ -51,6 +51,12 @@ outside rumble and outside this table; a whole-machine block covers them too.
 - Sidecar binds `127.0.0.1` only.<!-- src-tauri/sidecar/main.py:61-67 -->
 - Settings' sync "Test connection" is a mock and makes no request.<!-- src/views/SettingsView.vue:264-283; src/modules/backend/backendClient.ts:114-120 -->
 
+## Local diagnostic storage
+
+| Storage | Location and retention | Network |
+|---|---|---|
+| Host and relayed sidecar logs (`src-tauri/src/lib.rs`, `src-tauri/sidecar/main.py`) | `rumble.log` in Tauri's OS app log directory for `legal.elefant.rumble`; rotates at `MAX_LOG_FILE_BYTES` (5 MiB), keeping one previous file. Settings → Open logs folder opens it locally. | Local disk only; no crash reporter, network sink or automatic upload. |
+
 ## Offline model install
 
 For firms whose machines never reach the internet. Both routes are Ollama's, not rumble's; check
