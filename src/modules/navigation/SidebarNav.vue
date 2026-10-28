@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "navigate", path: string): void;
   (e: "close"): void;
+  (e: "help"): void;
 }>();
 
 type ToolDefinition = {
@@ -186,6 +187,13 @@ function handleItemClick(path: string, disabled?: boolean) {
     </div>
 
     <div class="space-y-3 px-5 pb-6 pt-4 text-sm text-[var(--primary-300)]">
+      <button
+        type="button"
+        class="btn-secondary w-full text-left text-white"
+        @click="emit('help')"
+      >
+        Help
+      </button>
       <div class="rounded-lg border border-[color:color-mix(in_srgb,var(--primary-700)_70%,transparent)] bg-[color:color-mix(in_srgb,var(--primary-900)_85%,black_15%)] px-3 py-4">
         <div class="text-xs uppercase text-[var(--primary-500)]">Session</div>
         <div class="mt-1 text-sm font-semibold text-white">{{ userInfo.name }}</div>
