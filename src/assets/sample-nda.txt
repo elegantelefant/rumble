@@ -1,0 +1,77 @@
+SAMPLE DOCUMENT — SYNTHETIC NDA
+All parties, addresses, and project details below are fictional. This document
+is provided solely to demonstrate document review.
+
+MUTUAL NON-DISCLOSURE AGREEMENT
+
+Effective date: 1 October 2026
+Parties: Alder Quay Analytics Ltd. ("Alder") and Bracken Lantern Systems Ltd.
+("Bracken"), together the "Parties".
+
+1. Purpose
+The Parties wish to evaluate a potential collaboration to develop inventory
+forecasting software (the "Purpose"). Each Party may disclose information to
+the other in connection with the Purpose.
+
+2. Confidential Information
+"Confidential Information" means any technical, commercial, financial, or
+other information disclosed by or on behalf of a Party (the "Discloser") to
+the other Party (the "Recipient"), whether in writing, orally, visually, or
+electronically, including source code, customer lists, pricing, prototypes,
+and the existence and terms of the discussions. Information need not be
+marked confidential to receive protection under this Agreement.
+
+3. Recipient Obligations
+The Recipient shall use Confidential Information only for the Purpose and
+protect it with reasonable care, no less than the care used for its own
+confidential information. The Recipient may disclose it to employees,
+contractors, and professional advisers who need to know for the Purpose
+and are bound by confidentiality obligations at least as protective as
+these terms. The Recipient is responsible for their compliance and shall
+promptly notify the Discloser of any unauthorized use or disclosure.
+
+4. Exclusions and Required Disclosure
+These obligations do not apply to information the Recipient can demonstrate
+was publicly available without breach, was lawfully known before disclosure,
+or was lawfully obtained from a third party without a duty of confidence.
+If disclosure is required by law or court order, the Recipient shall, where
+lawful, give advance notice and reasonable assistance in seeking protection,
+and disclose only the portion legally required.
+
+5. Ownership and Disclaimer
+All Confidential Information remains the Discloser's property. No license or
+other intellectual property right is granted except the limited right to use
+the information for the Purpose. Information is provided "as is", without
+warranty of accuracy or completeness. Neither Party must proceed with a
+transaction, and any commercial arrangement requires a separate agreement.
+
+6. Return and Destruction
+Within ten business days after written request, the Recipient shall return
+or destroy all Confidential Information and copies and certify completion.
+One archival copy may be retained to satisfy legal obligations, subject to
+the continuing confidentiality obligations of this Agreement.
+
+7. Term and Survival
+This Agreement continues for two years from the effective date unless either
+Party terminates it on thirty days' written notice. Confidentiality and use
+restrictions survive termination for five years from each disclosure.
+
+8. Remedies and Liability
+The Parties acknowledge that unauthorized disclosure may cause irreparable
+harm and that the Discloser may seek injunctive relief in addition to other
+available remedies. The Recipient shall indemnify the Discloser against all
+losses, costs, and expenses arising from a breach of this Agreement.
+
+9. General
+This Agreement is governed by the laws of England and Wales, whose courts
+have exclusive jurisdiction. Notices shall be sent to each Party's designated
+project contact by email and take effect on acknowledgment of receipt.
+Neither Party may assign this Agreement without the other's written consent.
+This Agreement is the entire agreement concerning its subject matter;
+amendments must be in writing and signed by both Parties.
+
+For Alder Quay Analytics Ltd.: ____________________  Date: __________
+Name and title: Mira Vale, Managing Director
+
+For Bracken Lantern Systems Ltd.: _________________  Date: __________
+Name and title: Rowan Fen, Commercial Director
