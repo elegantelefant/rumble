@@ -1,6 +1,8 @@
 <script setup lang="ts">
 defineOptions({ name: "DocumentReviewView" });
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import sampleNda from "../assets/sample-nda.txt?raw";
 import { backendRegistry } from "../modules/backend/backendClient";
 import { createChat, createReviewJob, extractDocument, sendMessage, streamMessage, waitForJob } from "../api/sidecar";
 import { useToast } from "../composables/toast";
@@ -12,6 +14,7 @@ import type { ReviewIssue } from "../api/models/reviewIssue";
 import type { ReviewIssueKind } from "../api/models/reviewIssueKind";
 
 const toasts = useToast();
+const router = useRouter();
 
 // Only local (Ollama) mode keeps a document on this device; BYOK and Premium
 // send its text to a provider for review. Read the same mode as TopBar's pill
@@ -29,6 +32,7 @@ type UploadedFile = {
   size: number;
   lastReviewedAt: string;
   prompt?: string;
+  isSample?: boolean;
 };
 
 type ReviewSession = {
@@ -70,7 +74,7 @@ function triggerFilePicker() {
   fileInputRef.value?.click();
 }
 
-async function registerFile(file: File) {
+async function registerFile(file: File, isSample = false) {
   let fileText: string;
   try {
     fileText = await extractDocument(file);
@@ -91,6 +95,7 @@ async function registerFile(file: File) {
     size: +(file.size / (1024 * 1024)).toFixed(2),
     lastReviewedAt: new Date().toISOString(),
     prompt: customPrompt.value.trim() || undefined,
+    isSample,
   };
 
   sessions.value[id] = {
@@ -158,6 +163,15 @@ function openSession(id: string) {
   if (!session) return;
   beginInitialReview(session);
 }
+
+// Consume the request so returning to this kept-alive view does not queue it again.
+watch(() => router?.currentRoute.value.query.sample, (sample) => {
+  if (sample !== "nda") return;
+  const query = { ...router.currentRoute.value.query };
+  delete query.sample;
+  void router.replace({ query });
+  void registerFile(new File([sampleNda], "Sample NDA (fictional parties).txt", { type: "text/plain" }), true);
+}, { immediate: true });
 
 // ReviewIssue's actual contract fields (sidecar-openapi.json): kind, message,
 // location, suggestion. "other" is the contract's own default for an
@@ -504,6 +518,9 @@ const workflowSteps = [
               <h2 class="text-lg font-semibold text-[var(--primary-800)]">
                 {{ activeSession.file.name }}
               </h2>
+              <p v-if="activeSession.file.isSample" class="text-sm text-[var(--primary-600)]">
+                Sample document — synthetic NDA with fictional parties.
+              </p>
               <p class="text-xs text-[var(--primary-500)]">
                 {{ activeSession.file.size }} MB • Session since {{ new Date(activeSession.file.lastReviewedAt).toLocaleDateString() }}
               </p>

@@ -61,6 +61,11 @@ function proceed() {
   router.push("/review");
 }
 
+function reviewSample() {
+  setupVerified.value = true;
+  router.push({ path: "/review", query: { sample: "nda" } });
+}
+
 onMounted(checkStatus);
 </script>
 
@@ -208,6 +213,12 @@ onMounted(checkStatus);
 
           <button
             class="w-full rounded-lg bg-[var(--accent-500)] px-4 py-3 font-medium text-white transition hover:bg-[var(--accent-600)]"
+            @click="reviewSample"
+          >
+            Review a sample NDA
+          </button>
+          <button
+            class="w-full rounded-lg border border-[var(--primary-300)] px-4 py-3 font-medium text-[var(--primary-700)] transition hover:bg-[var(--primary-50)]"
             @click="proceed"
           >
             Get started
