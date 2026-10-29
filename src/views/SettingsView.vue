@@ -384,7 +384,7 @@ const selectedProviderDetails = computed(() =>
     <header>
       <h1 class="h1">Settings</h1>
       <p class="body-muted">
-        Manage provider credentials, local storage, appearance, and sync endpoints. API keys are stored in your system keychain.
+        Manage provider credentials, local storage, and appearance. API keys are stored in your system keychain.
       </p>
     </header>
 
