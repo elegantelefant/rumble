@@ -49,6 +49,12 @@ describe("DocumentReviewView device claim", () => {
   it("makes no device claim in BYOK mode", async () => {
     const wrapper = await mountInMode("byok")
     expect(wrapper.text()).not.toContain(DEVICE_CLAIM)
+    // An unconditional notice gate renders BYOK's own notice, so rejecting
+    // only the local sentence would miss that regression.
+    const uploadCaption = wrapper.findAll("p").find((p) =>
+      p.text().startsWith("PDF, DOCX, TXT supported."),
+    )
+    expect(uploadCaption?.text()).toBe("PDF, DOCX, TXT supported.")
   })
 
   it("makes no device claim in Premium mode", async () => {
