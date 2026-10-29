@@ -22,7 +22,6 @@ const router = createRouter({
         { path: "research", component: () => import("./views/ResearchView.vue") },
         { path: "translation", component: () => import("./views/TranslationView.vue") },
         // { path: "evals", component: () => import("./views/EvalsView.vue") },
-        // { path: "briefcases", component: () => import("./views/BriefcasesView.vue") },
         // { path: "plugins", component: () => import("./views/PluginsView.vue") },
         { path: "settings", component: () => import("./views/SettingsView.vue") },
         { path: "", redirect: "/review" },

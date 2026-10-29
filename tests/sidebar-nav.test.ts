@@ -1,12 +1,20 @@
 // ABOUTME: Tests for SidebarNav.vue component.
 // ABOUTME: Covers tool reordering, boundary checks, active highlighting, disabled clicks.
 
-import { mount } from "@vue/test-utils"
+import { mount, flushPromises } from "@vue/test-utils"
 import SidebarNav from "../src/modules/navigation/SidebarNav.vue"
 import { currentUser } from "../src/composables/user"
+import { invoke } from "@tauri-apps/api/core"
+import { backendMode } from "../src/composables/backendMode"
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(invoke).mockResolvedValue("ollama")
+  backendMode.value = null
   currentUser.value.version = "Rumble v1.2.3-test"
 })
 
@@ -114,5 +122,25 @@ describe("SidebarNav", () => {
   it("displays version info", () => {
     const wrapper = mountSidebar()
     expect(wrapper.text()).toContain("Rumble v1.2.3-test")
+  })
+})
+
+describe("SidebarNav confidentiality notice", () => {
+  it("stays hidden while the mode is still loading", async () => {
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}))
+    const wrapper = mountSidebar()
+    await flushPromises()
+    // Checking only the local-mode text would still pass if the gate were
+    // removed: the unknown-state text would render in its place. Asserting
+    // both are absent actually proves the element itself is gone.
+    expect(wrapper.text()).not.toContain("stays on this device")
+    expect(wrapper.text()).not.toContain("Could not determine where your data goes.")
+  })
+
+  it("shows the local-mode notice once ollama resolves", async () => {
+    vi.mocked(invoke).mockResolvedValue("ollama")
+    const wrapper = mountSidebar()
+    await flushPromises()
+    expect(wrapper.text()).toContain("Your data stays on this device.")
   })
 })

@@ -13,8 +13,15 @@ test.describe("Document Review", () => {
     await expect(page.getByText("Review and chat with your documents")).toBeVisible();
   });
 
-  test("shows local-only trust badge", async ({ page }) => {
-    await expect(page.getByText("Local-only")).toBeVisible();
+  test("confidentiality trust badge stays hidden while the backend mode is unknown", async ({ page }) => {
+    // Wait for the view to actually mount first -- otherwise the lazy route
+    // chunk's load gap can satisfy a bare not.toBeVisible() before the badge
+    // ever gets a chance to render.
+    await expect(page.getByRole("heading", { name: "Document Review" })).toBeVisible();
+    // e2e has no real Tauri host, so backendMode never resolves and modeKnown
+    // stays false — the badge should stay hidden rather than flash stale or
+    // unknown-state text (gated the same way as SidebarNav's tagline).
+    await expect(page.locator(".badge-trust")).not.toBeVisible();
   });
 
   test("displays file upload area with browse button", async ({ page }) => {

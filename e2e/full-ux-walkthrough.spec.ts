@@ -109,7 +109,9 @@ test.describe("2. Sidebar Navigation", () => {
 test.describe("3. Top Bar", () => {
   test("3a. top bar shows confidentiality badge and user info", async ({ page }) => {
     await gotoRoute(page, "/review");
-    await expect(page.getByText("Mode unavailable")).toBeVisible();
+    // Scoped by title (unique to the TopBar pill): Document Review's own
+    // trust badge can show the same label text with no title attribute.
+    await expect(page.getByTitle("Could not determine where requests are sent.")).toBeVisible();
     await expect(page.getByLabel("Current user").getByText("Local User")).toBeVisible();
     await page.screenshot({ path: S("03a-topbar"), fullPage: true });
   });
@@ -166,9 +168,12 @@ test.describe("4. Document Review", () => {
     await gotoRoute(page, "/review");
   });
 
-  test("4a. page heading and trust badge", async ({ page }) => {
+  test("4a. page heading, trust badge stays hidden while the mode is unknown", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Document Review" })).toBeVisible();
-    await expect(page.getByText("Local-only")).toBeVisible();
+    // e2e has no real Tauri host, so backendMode never resolves and modeKnown
+    // stays false — the badge should stay hidden rather than flash stale or
+    // unknown-state text (gated the same way as SidebarNav's tagline).
+    await expect(page.locator(".badge-trust")).not.toBeVisible();
     await page.screenshot({ path: S("04a-review-heading"), fullPage: true });
   });
 
@@ -308,8 +313,13 @@ test.describe("5. Document Draft", () => {
     await page.screenshot({ path: S("05i-draft-export-word"), fullPage: true });
   });
 
-  test("5j. privacy notice visible", async ({ page }) => {
-    await expect(page.getByText("Sensitive data stays local")).toBeVisible();
+  test("5j. privacy notice stays hidden until the mode is known", async ({ page }) => {
+    // Only renders once the backend mode is known (honest per #56). e2e has
+    // no real Tauri host, so the read rejects — loadBackendMode's catch resets
+    // the mode to null (same as before any read), so the notice stays hidden
+    // rather than showing unknown-state text. vitest's document-draft-view.test.ts
+    // covers the actual per-mode text once a read succeeds.
+    await expect(page.getByText("Your data stays on this device.")).not.toBeVisible();
   });
 
   test("5k. browse templates button shows toast", async ({ page }) => {
@@ -448,7 +458,8 @@ test.describe("8. Settings", () => {
     await expect(page.getByRole("button", { name: "Providers & API keys" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Templates & workspace storage" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Appearance" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
+    // Sync has no tab at all now (#87 review, Ask 3) -- hidden, not disabled.
+    await expect(page.getByRole("button", { name: "Sync" })).not.toBeVisible();
     await page.screenshot({ path: S("08a-settings-tabs"), fullPage: true });
   });
 
@@ -517,26 +528,6 @@ test.describe("8. Settings", () => {
     await page.getByRole("button", { name: "Appearance" }).click();
     await page.getByLabel("Theme").selectOption("dark");
     await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
-  });
-
-  test("8l. sync tab", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await expect(page.getByText("Workspace sync")).toBeVisible();
-    await expect(page.getByText("Enable secure sync")).toBeVisible();
-    await page.screenshot({ path: S("08l-settings-sync"), fullPage: true });
-  });
-
-  test("8m. sync tab — custom server toggle", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await page.getByText("Use custom sync server").click();
-    await page.getByPlaceholder("https://sync.myfirm.com").fill("https://sync.mylaw.com");
-    await page.screenshot({ path: S("08m-settings-custom-sync"), fullPage: true });
-  });
-
-  test("8n. sync tab — test connection button", async ({ page }) => {
-    await page.getByRole("button", { name: "Sync" }).click();
-    await page.getByRole("button", { name: "Test connection" }).click();
-    await page.screenshot({ path: S("08n-settings-test-connection"), fullPage: true });
   });
 
   test("8o. save settings button", async ({ page }) => {

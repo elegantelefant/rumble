@@ -1,4 +1,4 @@
-// ABOUTME: Tests for DocumentReviewView.vue's "Files never leave this device" copy.
+// ABOUTME: Tests for DocumentReviewView.vue's device-confidentiality notice, read from the mode map.
 // ABOUTME: The claim shows only in local (Ollama) mode, read from get_backend_mode.
 
 import { mount, flushPromises } from "@vue/test-utils"
@@ -20,7 +20,11 @@ vi.mock("../src/api/sidecar", () => ({
   waitForJob: vi.fn(),
 }))
 
-const DEVICE_CLAIM = "Files never leave this device."
+const DEVICE_CLAIM = "Your data stays on this device."
+// Includes the boundary with the preceding sentence: Vue can drop a
+// whitespace-only text node at a v-if boundary, which toContain(DEVICE_CLAIM)
+// alone wouldn't catch since the notice text itself is unaffected either way.
+const FULL_UPLOAD_CAPTION = "PDF, DOCX, TXT supported. Your data stays on this device."
 
 async function mountInMode(mode: string) {
   vi.mocked(invoke).mockResolvedValue(mode)
@@ -37,14 +41,20 @@ beforeEach(() => {
 })
 
 describe("DocumentReviewView device claim", () => {
-  it("says files never leave this device in local mode", async () => {
+  it("shows the confidentiality notice in local mode", async () => {
     const wrapper = await mountInMode("ollama")
-    expect(wrapper.text()).toContain(DEVICE_CLAIM)
+    expect(wrapper.text()).toContain(FULL_UPLOAD_CAPTION)
   })
 
   it("makes no device claim in BYOK mode", async () => {
     const wrapper = await mountInMode("byok")
     expect(wrapper.text()).not.toContain(DEVICE_CLAIM)
+    // An unconditional notice gate renders BYOK's own notice, so rejecting
+    // only the local sentence would miss that regression.
+    const uploadCaption = wrapper.findAll("p").find((p) =>
+      p.text().startsWith("PDF, DOCX, TXT supported."),
+    )
+    expect(uploadCaption?.text()).toBe("PDF, DOCX, TXT supported.")
   })
 
   it("makes no device claim in Premium mode", async () => {
@@ -72,5 +82,22 @@ describe("DocumentReviewView device claim", () => {
     await setBackendMode("byok")
     await flushPromises()
     expect(wrapper.text()).not.toContain(DEVICE_CLAIM)
+  })
+})
+
+describe("DocumentReviewView confidentiality badge (#87 review, Ask 2)", () => {
+  it('stays hidden while the mode is still loading, rather than flashing "Mode unavailable"', async () => {
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}))
+    const wrapper = mount(DocumentReviewView, {
+      global: { provide: { [TOAST_KEY as symbol]: { addToast: vi.fn() } } },
+    })
+    await flushPromises()
+    expect(wrapper.find(".badge-trust").exists()).toBe(false)
+    expect(wrapper.text()).not.toContain("Mode unavailable")
+  })
+
+  it("shows the badge once the mode resolves", async () => {
+    const wrapper = await mountInMode("ollama")
+    expect(wrapper.find(".badge-trust").text()).toBe("Local & Confidential")
   })
 })
