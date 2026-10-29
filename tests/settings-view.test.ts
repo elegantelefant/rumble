@@ -39,6 +39,43 @@ function mountSettings() {
 }
 
 describe("SettingsView", () => {
+  it("opens the logs folder and disables the action until the host finishes", async () => {
+    let finish!: () => void
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "open_logs_folder") {
+        await new Promise<void>((resolve) => { finish = resolve })
+      }
+    })
+    const wrapper = mountSettings()
+    const button = wrapper.findAll("button").find((b) => b.text() === "Open logs folder")!
+    expect(button.attributes("type")).toBe("button")
+    await button.trigger("click")
+    expect(invoke).toHaveBeenCalledWith("open_logs_folder")
+    expect(button.attributes("disabled")).toBeDefined()
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(button.attributes("disabled")).toBeUndefined()
+    expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "error")
+  })
+
+  it("reports a logs folder error and allows retrying", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "open_logs_folder") throw "permission denied"
+    })
+    const wrapper = mountSettings()
+    const button = wrapper.findAll("button").find((b) => b.text() === "Open logs folder")!
+    await button.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockAddToast).toHaveBeenCalledWith(
+      "Could not open logs folder: permission denied",
+      "error",
+    )
+    expect(button.attributes("disabled")).toBeUndefined()
+    await button.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "open_logs_folder")).toHaveLength(2)
+  })
+
   it("renders page title", () => {
     const wrapper = mountSettings()
     expect(wrapper.find("h1").text()).toBe("Settings")

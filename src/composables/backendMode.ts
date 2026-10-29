@@ -43,6 +43,7 @@ export const CONFIDENTIALITY: Record<ConfidentialityState, { label: string; mess
 // per-mode entries. Whole sentences, like CONFIDENTIALITY's: a view renders
 // one of these as-is rather than composing a claim around a bare noun.
 export const STORAGE_NOTICES = {
+  diagnosticLogs: "Diagnostic logs are stored on this device and rotate automatically.",
   savedToast: "Settings saved on this device.",
   providersHint:
     "Remote providers process prompts on their servers. Chats, review and drafting jobs, and these settings are kept on this device.",

@@ -1,8 +1,5 @@
-// ABOUTME: Guards against privacy/security copy drifting back out of the shared mode map.
-// ABOUTME: Scans src/, README.md and the bundle config for claim phrases that must come from
-// ABOUTME: backendMode.ts, not be written inline. Matches inside code comments too, not just
-// ABOUTME: rendered copy -- a comment can misrepresent what the code does just as easily as a
-// ABOUTME: label can (#87 review, Ask 4).
+// ABOUTME: Guards against privacy/security copy drifting out of backendMode.ts, including code comments.
+// ABOUTME: Scans src/, README.md and the bundle config for claim phrases outside the map or explicit allowlist.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
