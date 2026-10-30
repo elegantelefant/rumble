@@ -178,21 +178,48 @@ test.describe("4. Keyboard Navigation", () => {
     await page.screenshot({ path: S("04a-tab-focus-review"), fullPage: true });
   });
 
+  // Destination each non-"Help" command navigates to, keyed by its label —
+  // lets the test confirm Enter activates whichever option ended up
+  // highlighted without hardcoding the palette's item order.
+  const PALETTE_DESTINATIONS: Record<string, RegExp> = {
+    "Go to Document Review": /\/review/,
+    "Upload documents": /\/review/,
+    "Start a new draft": /\/draft/,
+    "Go to Research": /\/research/,
+    "Go to Translation": /\/translation/,
+    "Go to Settings": /\/settings/,
+  };
+
   test("4b. command palette keyboard navigation", async ({ page }) => {
     await gotoRoute(page, "/review");
     await page.getByRole("button", { name: "Open shortcuts" }).click();
-    // Arrow down to highlight second item
+    const options = page.getByRole("option");
+
+    // Highlight starts on the first option; #124 added "Help" as a new
+    // first entry, shifting every later item by one. Walk by position
+    // instead of assuming which command sits at a given index.
+    await expect(options.nth(0)).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("option", { name: "Upload documents" })).toHaveAttribute("aria-selected", "true");
+    await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(options.nth(0)).toHaveAttribute("aria-selected", "false");
     await page.screenshot({ path: S("04b-palette-arrow-down"), fullPage: true });
-    // Arrow down again
+
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("option", { name: "Start a new draft" })).toHaveAttribute("aria-selected", "true");
+    await expect(options.nth(2)).toHaveAttribute("aria-selected", "true");
+    await expect(options.nth(1)).toHaveAttribute("aria-selected", "false");
+    const selectedLabel = (await options.nth(2).textContent())?.trim();
     await page.screenshot({ path: S("04c-palette-arrow-down-2"), fullPage: true });
-    // Press Enter to navigate
+
+    // Enter activates whichever command ended up selected and closes the palette.
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/draft/);
     await expect(page.getByRole("dialog", { name: "Command palette" })).not.toBeVisible();
+    if (selectedLabel === "Help") {
+      await expect(page.getByRole("dialog", { name: "Help" })).toBeVisible();
+    } else {
+      const destination = selectedLabel ? PALETTE_DESTINATIONS[selectedLabel] : undefined;
+      expect(destination, `no known destination for palette item "${selectedLabel}"`).toBeTruthy();
+      await expect(page).toHaveURL(destination!);
+    }
     await page.screenshot({ path: S("04d-palette-enter-navigate"), fullPage: true });
   });
 
