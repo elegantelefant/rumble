@@ -53,7 +53,7 @@ mkdir -p src-tauri/binaries && touch src-tauri/binaries/rumble-sidecar-$(rustc -
 pnpm generate:api && pnpm generate:models && git diff --exit-code -- src/api/models src-tauri/sidecar/models/generated.py
 ```
 
-All four tallies quoted in the verdict (`vitest 141 passed`, `pytest 146 passed`, `cargo 37 passed`, drift clean). What the ARBITER RULE adds by touched area:
+All five tallies quoted in the verdict (`vitest 141 passed`, `typecheck:e2e clean`, `pytest 146 passed`, `cargo 37 passed`, drift clean). What the ARBITER RULE adds by touched area:
 
 | Touched | Also run |
 |---|---|
@@ -62,7 +62,7 @@ All four tallies quoted in the verdict (`vitest 141 passed`, `pytest 146 passed`
 | `lib.rs` spawn / `resolve_url` / keychain, `capabilities/*.json`, `tauri.conf.json`, `sidecar.spec` | a packaged build (`pnpm tauri build`) smoked by a human — #35 (BYOK unreachable in the packaged app) is invisible to every automated suite |
 | `sidecar-openapi.json` | it is frozen; changing it is a contract decision — ask first (#34 / #42) |
 
-Use `scripts/premerge-check.sh <N>` on macOS or Linux to run the block above on `refs/pull/<N>/merge` in a temporary worktree, cleaned up on exit. It prints all four tallies on success and exits non-zero naming the failed suite if any step fails. Lint/format gates and the toolchain pin on `main` are not yet in place.
+Use `scripts/premerge-check.sh <N>` on macOS or Linux to run the block above on `refs/pull/<N>/merge` in a temporary worktree, cleaned up on exit. It prints all five tallies on success and exits non-zero naming the failed suite if any step fails. Lint/format gates and the toolchain pin on `main` are not yet in place.
 
 ## Issues, branches, PRs, verdicts
 
