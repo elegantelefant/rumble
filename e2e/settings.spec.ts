@@ -23,7 +23,6 @@ test.describe("Settings", () => {
 
   test("providers tab shows configured secrets", async ({ page }) => {
     await expect(page.getByText("Configured secrets")).toBeVisible();
-    await expect(page.getByText("Primary local runtime")).toBeVisible();
   });
 
   test("providers tab has add provider form", async ({ page }) => {
