@@ -141,3 +141,16 @@ async def test_translate_llm_failure_returns_502(client):
         resp = await client.post("/translate", json={"text": "Hello", "target_lang": "es"})
     assert resp.status_code == 502
     assert "LLM error" in resp.json()["detail"]
+
+
+async def test_translate_truncated_response_does_not_return_200_with_partial_text(client):
+    """rumble#90 Ask 1: repair is scoped to review jobs only -- translate (and
+    every other stateless AI endpoint) goes back to plain parsing, so a
+    truncated response must 502 honestly rather than json-repair closing the
+    cut-off string and returning a partial translation as if it succeeded."""
+    truncated = '{"translated_text": "Bonjour, ceci est une tradu'
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=truncated)):
+        resp = await client.post("/translate", json={"text": "Hello, this is a translation", "target_lang": "fr"})
+    assert resp.status_code != 200
+    assert resp.status_code == 502
+    assert "unparseable" in resp.json()["detail"]

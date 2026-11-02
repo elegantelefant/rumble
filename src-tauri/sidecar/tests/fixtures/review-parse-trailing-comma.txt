@@ -1,0 +1,32 @@
+{"summary": "Review of Mutual Non-Disclosure Agreement", "issues": [
+    {
+      "kind": "style",
+      "message": "Section 4 Term, should be more specific and include a clear termination date.",
+      "location": "Section 4",
+      "suggestion": "The termination date should be the last day of the three (3)-year term period or a mutually agreed date."
+    },
+    {
+      "kind": "ambiguity",
+      "message": "The phrase \"rightfully received from a third party without restriction\" may be unclear, could a third party be someone involved in the business partner companies?",
+      "location": "Section 2, Exclusions (d)",
+      "suggestion": "Consider adding a clarification stating that this exclusion applies to third-party information received without restriction from any source, not just business partners."
+    },
+    {
+      "kind": "risk",
+      "message": "Lack of enforcement mechanism for breach of confidentiality obligations may lead to difficulties in enforcing the agreement if a party breaches it.",
+      "location": "Section 8, Remedies",
+      "suggestion": "Consider adding a provision outlining specific steps for enforcement, such as formal notice and an opportunity for cure.",
+    },
+    {
+      "kind": "style",
+      "message": "Section 10, Entire Agreement, could use a definition of what is being superseded.",
+      "location": "Section 10",
+      "suggestion": "Consider adding a specific reference to prior agreements, discussions, or documents to clarify what is being superseded."
+    },
+    {
+      "kind": "missing",
+      "message": "Definition of employees and contractors, who have a need to know and are bound by confidentiality obligations.",
+      "location": "Section 3, Obligations",
+      "suggestion": "A clear definition of who is subject to confidentiality obligations needs to be provided to ensure all relevant employees and contractors are aware of their responsibilities."
+    }
+ ]}

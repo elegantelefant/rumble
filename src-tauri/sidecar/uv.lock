@@ -1310,6 +1310,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.64.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/85/bf69dc15a066728bf477b3a3cc16a49f8712acf5a6f9271bf6494f51bb91/json_repair-0.64.0.tar.gz", hash = "sha256:2890be942a7ef20626e4eda4bd91b37485bc5271ac122efe7bb924232fef60ea", size = 53703, upload-time = "2026-10-09T09:10:33.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/10/98f7c8a5039b791e4801f1307f5571688b4fffa2e589eea9e16be6dcf37f/json_repair-0.64.0-py3-none-any.whl", hash = "sha256:3bf14cf14d8ae96f7bc467e6964d8accd52aaad084f973e38ebe4e43f9d051e4", size = 51984, upload-time = "2026-10-09T09:10:31.708Z" },
+]
+
+[[package]]
 name = "jsonref"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2897,6 +2906,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "json-repair" },
     { name = "pydantic-ai" },
     { name = "pypdf", extra = ["crypto"] },
     { name = "python-docx" },
@@ -2918,6 +2928,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
+    { name = "json-repair", specifier = "==0.64.0" },
     { name = "pydantic-ai", specifier = ">=0.1" },
     { name = "pypdf", extras = ["crypto"], specifier = ">=6.18.1" },
     { name = "python-docx", specifier = ">=1.2.0" },

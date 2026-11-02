@@ -1,0 +1,488 @@
+[
+  {
+    "run": 1,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 1 column 1878 (char 1877)",
+    "issues_visible_in_raw": 5,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 1 column 1878 (char 1877)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 1 column 1878 (char 1877)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 1 column 1878 (char 1877)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 1,
+    "attempt": "attempt2",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 18 column 27 (char 690)",
+    "issues_visible_in_raw": 5,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 18 column 27 (char 690)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 18 column 27 (char 690)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 18 column 27 (char 690)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 2,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 19 column 7 (char 988)",
+    "issues_visible_in_raw": 5,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 19 column 7 (char 988)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 19 column 7 (char 988)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 19 column 7 (char 988)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 3,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting value: line 1 column 1 (char 0)",
+    "issues_visible_in_raw": 4,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 8,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting value: line 32 column 21 (char 1395)",
+    "issues_visible_in_raw": 5,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 32 column 21 (char 1395)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting value: line 32 column 21 (char 1395)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 32 column 21 (char 1395)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 16,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 3 column 1 (char 337)",
+    "issues_visible_in_raw": 9,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 3 column 1 (char 337)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 3 column 1 (char 337)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 3 column 1 (char 337)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 9,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 22,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Invalid control character at: line 35 column 18 (char 2061)",
+    "issues_visible_in_raw": 7,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 36 column 5 (char 2066)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 35 column 24 (char 2067)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 35 column 24 (char 2067)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 7,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 27,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Illegal trailing comma before end of object: line 18 column 143 (char 1203)",
+    "issues_visible_in_raw": 5,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Illegal trailing comma before end of object: line 18 column 143 (char 1203)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 5,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 32,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Invalid control character at: line 1 column 334 (char 333)",
+    "issues_visible_in_raw": 7,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Extra data: line 2 column 302 (char 635)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Extra data: line 1 column 637 (char 636)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Extra data: line 1 column 637 (char 636)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": false,
+        "error": "did not produce a dict"
+      }
+    ]
+  },
+  {
+    "run": 34,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 24 column 57 (char 966)",
+    "issues_visible_in_raw": 9,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 24 column 57 (char 966)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 24 column 57 (char 966)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 24 column 57 (char 966)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 9,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 39,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting value: line 1 column 1 (char 0)",
+    "issues_visible_in_raw": 6,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 6,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 40,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting value: line 7 column 19 (char 230)",
+    "issues_visible_in_raw": 4,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 7 column 19 (char 230)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting value: line 7 column 19 (char 230)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 7 column 19 (char 230)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 46,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Invalid control character at: line 6 column 157 (char 554)",
+    "issues_visible_in_raw": 4,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Illegal trailing comma before end of object: line 24 column 116 (char 1599)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 54,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Invalid control character at: line 18 column 122 (char 1449)",
+    "issues_visible_in_raw": 4,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 19 column 8 (char 1457)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 18 column 131 (char 1458)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 18 column 131 (char 1458)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 4,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 56,
+    "attempt": "attempt1",
+    "original_error": "LLM returned unparseable output: Expecting ',' delimiter: line 14 column 42 (char 529)",
+    "issues_visible_in_raw": 7,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 14 column 42 (char 529)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 14 column 42 (char 529)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting ',' delimiter: line 14 column 42 (char 529)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 7,
+        "drops_content": false
+      }
+    ]
+  },
+  {
+    "run": 56,
+    "attempt": "attempt2",
+    "original_error": "LLM returned unparseable output: Expecting value: line 1 column 1181 (char 1180)",
+    "issues_visible_in_raw": 6,
+    "strategies": [
+      {
+        "strategy": "a_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1181 (char 1180)"
+      },
+      {
+        "strategy": "b_narrow_repair",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1181 (char 1180)"
+      },
+      {
+        "strategy": "c_narrow_repair_plus_strict_false",
+        "rescued": false,
+        "error": "Expecting value: line 1 column 1181 (char 1180)"
+      },
+      {
+        "strategy": "d_json_repair_package",
+        "rescued": true,
+        "passes_safe_construct": true,
+        "rescued_issue_count": 6,
+        "drops_content": false
+      }
+    ]
+  }
+]

@@ -1,0 +1,32 @@
+```
+{
+  "summary": "The provided Mutual Non-Disclosure Agreement appears to be well-structured and clear, but some potential issues and suggestions have been identified.",
+  "issues": [
+    {
+      "kind": "style",
+      "message": "Section 3 of the Agreement may consider making the obligation to protect Confidential Information more specific, such as using language from the Model Law on Confidentiality of a Business Relationship (UNIDROIT)",
+      "location": "Section 3",
+      "suggestion": "Consider rephrasing 'shall protect it using at least the same degree of care it uses for its own confidential information' to 'shall treat Confidential Information in the same manner as its own confidential information'."
+    },
+    {
+      "kind": "style",
+      "message": "Section 4's termination provision might be more comprehensive by providing clear details on what would occur upon expiration, such as 'Section 4 shall expire on [Date]',",
+      "location": "Section 4",
+      "suggestion": "Consider rephrasing 'The confidentiality obligations in Section 3 shall survive for a period of five (5) years following the expiration or termination of this Agreement' to 'This Agreement shall terminate on [Date], upon which time Confidential Information obligations shall terminate on [Date].'"
+    },
+    {
+      "kind": "risk",
+      "message": "Lack of specific definitions for terms like 'warehouse robotics systems' and 'data analytics platform',
+      "location": "Purpose",
+      "suggestion": "Consider adding definitions to ensure clarity on what is considered a 'warehouse robotics system' and a 'data analytics platform'."
+    },
+    {
+      "kind": "ambiguity",
+      "message": "Section 8's reference to 'monetary damages' may be too broad;
+      "location": "Section 8",
+      "suggestion": "Consider rephrasing to ensure it aligns with the agreement's intent. For example, use language from the Model Law: The non-breaching party shall be entitled to seek monetary damages only if permitted by applicable law.",
+      "suggestion": "Consider adding details to ensure that 'irreparable harm' is defined clearly, following UNIDROIT's Model Law."
+    }
+  ]
+}
+```

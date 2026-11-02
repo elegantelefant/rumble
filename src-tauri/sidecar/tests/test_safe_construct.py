@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from models.generated import ReviewResponse
 from routes.ai import _safe_construct
 
 
@@ -39,3 +40,18 @@ def test_wrong_type_raises_502():
     with pytest.raises(HTTPException) as exc_info:
         _safe_construct(_SampleModel, {"required_field": {"not": "a string"}})
     assert exc_info.value.status_code == 502
+
+
+def test_review_response_repaired_field_survives_safe_construct():
+    """ReviewResponse's model_config is extra='forbid', so _safe_construct's
+    known-fields filtering drops any key the contract doesn't define (#92
+    follow-up on #91's rebase: get_review_result returns
+    _safe_construct(ReviewResponse, ...).model_dump(), so a "repaired" key
+    not in the contract would be silently stripped there, even though
+    _run_review sets it on every result). "repaired" is now a real
+    ReviewResponse field, so a repaired result's flag must come through."""
+    result = _safe_construct(
+        ReviewResponse,
+        {"summary": "One risk found.", "issues": [], "repaired": True},
+    )
+    assert result.repaired is True

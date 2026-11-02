@@ -1,0 +1,1 @@
+{"summary": "Mutual Non-Disclosure Agreement has a few issues worth flagging before signing, particularly around confidentiality scope and liability exposure.", "issues": [{"kind": "risk", "message": "The liability clause does not cap damages, exposing the receiving party to unlimited liability if a breach

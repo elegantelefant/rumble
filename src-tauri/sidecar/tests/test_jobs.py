@@ -268,6 +268,105 @@ async def test_review_result_normalises_a_pipe_joined_kind_through_the_real_rout
     assert result.json()["result"]["issues"][0]["kind"] == "risk"
 
 
+# --- Review retry-on-unrepairable-failure (#90) ---
+
+async def test_review_retries_once_when_still_unparseable_after_repair(client, caplog):
+    """_parse_llm_json already tries a repair pass; this covers what happens
+    when even that fails -- a real, genuinely garbled fixture from
+    .scratch/90-parse-experiments/ for the first attempt, a clean response
+    for the regenerated second."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock, patch
+
+    import routes.jobs as jobs_module
+
+    unrepairable = (Path(__file__).parent / "fixtures" / "review-parse-unrepairable.txt").read_text()
+    second_attempt = '{"summary": "Recovered on retry.", "issues": []}'
+
+    with (
+        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=[unrepairable, second_attempt])),
+        caplog.at_level("WARNING", logger=jobs_module.__name__),
+    ):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["result"]["summary"] == "Recovered on retry."
+    # The second attempt parsed cleanly with plain json.loads -- no repair
+    # fired for the result actually returned.
+    assert result.json()["result"]["repaired"] is False
+    retry_logs = [r.message for r in caplog.records if "Review retry" in r.message]
+    assert len(retry_logs) == 1
+
+
+async def test_review_retries_on_truncated_output_too(client, caplog):
+    """Truncated output (no closing brace/bracket) takes the same retry path
+    as genuinely garbled output -- repair is skipped outright, not attempted
+    and failed."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock, patch
+
+    import routes.jobs as jobs_module
+
+    truncated = (Path(__file__).parent / "fixtures" / "review-parse-truncated.txt").read_text()
+    second_attempt = '{"summary": "Recovered on retry.", "issues": []}'
+
+    with (
+        patch("services.llm.run_single_turn", new=AsyncMock(side_effect=[truncated, second_attempt])),
+        caplog.at_level("WARNING", logger=jobs_module.__name__),
+    ):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["result"]["summary"] == "Recovered on retry."
+    retry_logs = [r.message for r in caplog.records if "Review retry" in r.message]
+    assert len(retry_logs) == 1
+    # Truncation must skip repair outright -- it never even attempts it.
+    assert not any("Repaired malformed LLM JSON" in r.message for r in caplog.records)
+
+
+async def test_review_does_not_retry_when_repair_alone_fixes_it(client):
+    """A repairable failure (trailing comma, real fixture) should never reach
+    the retry path -- only one model call should happen."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock, patch
+
+    repairable = (Path(__file__).parent / "fixtures" / "review-parse-trailing-comma.txt").read_text()
+    mock_llm = AsyncMock(return_value=repairable)
+
+    with patch("services.llm.run_single_turn", new=mock_llm):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["status"] == "completed"
+    assert mock_llm.call_count == 1
+    # rumble#90 Ask 2: the result says it was repaired, rather than looking
+    # indistinguishable from a clean generation.
+    assert result.json()["result"]["repaired"] is True
+
+
+async def test_review_fails_after_retry_also_unparseable(client):
+    """Two garbled attempts in a row still end the job as failed -- the
+    retry is a single extra try, not a loop."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock, patch
+
+    unrepairable = (Path(__file__).parent / "fixtures" / "review-parse-unrepairable.txt").read_text()
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=unrepairable)):
+        resp = await client.post("/review", json={"text": "Some contract text."})
+        job_id = resp.json()["job_id"]
+        await asyncio.sleep(0.1)
+        result = await client.get(f"/review/{job_id}/result")
+
+    assert result.json()["status"] == "failed"
+
+
 # --- Research ---
 
 async def test_research_creates_job(client):
