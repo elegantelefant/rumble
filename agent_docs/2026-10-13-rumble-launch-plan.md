@@ -1,5 +1,7 @@
 # Rumble launch wrap-up: plan and sequence (2026-10-13)
 
+> Superseded where it conflicts by the owner's 2026-10-30 list on #108: unsigned preview; #79, #58 and signing are not launch-critical; builds run in GitHub Actions (#114).
+
 The owner asked for a plan to wrap up rumble for launch, organised into lanes the agent fleet can run. This plan was read from `main` d5a9e52, the open issues, and the eight open PRs. It builds on the launch round in #75, the program plan `agent_docs/2026-09-22-credible-delightful-local-first-plan.md` (cited below as "the 09-22 plan") and the release gate `agent_docs/2026-09-29-release-gate.md`. Nothing in this plan changes code.
 
 ## 1. What "launch" means
