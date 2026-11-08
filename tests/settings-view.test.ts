@@ -264,7 +264,36 @@ describe("SettingsView", () => {
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(savedPayload().workspace.templatesPath).toBe("/firm/templates")
-      expect(savedPayload().workspace.workspacePath).toBe("~/Library/Application Support/Elefant/Rumble")
+      expect(savedPayload().workspace.briefcases).toEqual(["Matter A"])
+    })
+
+    it("shows the host data directory as non-editable text in the storage tab", async () => {
+      const dataDir = "/Users/test/Library/Application Support/com.elefant.rumble"
+      mockCommands({
+        data_dir: () => dataDir,
+        load_settings: () => ({ workspace: { workspacePath: "/stale/saved/path" } }),
+      })
+      const wrapper = await mountAndLoad()
+      await openTab(wrapper, "Templates")
+      expect(invoke).toHaveBeenCalledWith("data_dir")
+      const path = wrapper.get("#workspace-path")
+      expect(path.text()).toBe(dataDir)
+      expect(path.element.tagName).toBe("P")
+      expect((path.element as HTMLElement).isContentEditable).toBe(false)
+      expect(inputByValue(wrapper, dataDir)).toBeUndefined()
+      expect(wrapper.text()).not.toContain("/stale/saved/path")
+    })
+
+    it("does not send workspacePath to save_settings even when legacy settings contain it", async () => {
+      mockCommands({
+        data_dir: () => "/actual/data",
+        load_settings: () => ({ workspace: { ...saved.workspace, workspacePath: "/legacy/data" } }),
+        save_settings: () => null,
+      })
+      const wrapper = await mountAndLoad()
+      await submit(wrapper)
+      expect(savedPayload().workspace).not.toHaveProperty("workspacePath")
+      expect(savedPayload().workspace.templatesPath).toBe("/firm/templates")
     })
 
     it("ignores saved values whose shape doesn't match the field", async () => {

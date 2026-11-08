@@ -1116,6 +1116,12 @@ fn active_data_dir(old: &Path, new: &Path) -> PathBuf {
     }
 }
 
+#[tauri::command]
+fn data_dir(app: AppHandle) -> Result<String, String> {
+    let (old, new) = data_dirs(&app)?;
+    Ok(active_data_dir(&old, &new).to_string_lossy().into_owned())
+}
+
 /// The data directory the sidecar uses: the local (non-roaming) app data dir,
 /// after migrating a database left in the roaming one by earlier builds (#57).
 /// If the migration fails, the old directory is used so the data isn't orphaned.
@@ -1555,6 +1561,7 @@ pub fn run() {
             save_settings,
             open_logs_folder,
             // Local data lifecycle
+            data_dir,
             delete_all_local_data,
         ])
         .build(tauri::generate_context!())

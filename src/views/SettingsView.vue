@@ -174,9 +174,18 @@ const newSecret = reactive({
 
 const workspaceStorage = reactive({
   templatesPath: "~/Documents/LegalTemplates",
-  workspacePath: "~/Library/Application Support/Elefant/Rumble",
   briefcases: [] as string[],
   attachableResources: [] as string[],
+});
+
+const workspacePath = ref("");
+
+onMounted(async () => {
+  try {
+    workspacePath.value = await invoke<string>("data_dir");
+  } catch (error) {
+    toast.addToast(`Couldn't load workspace path: ${String(error)}`, "error");
+  }
 });
 
 const appearanceSettings = reactive({
@@ -535,10 +544,10 @@ const selectedProviderDetails = computed(() =>
             {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>
-        <label class="text-sm font-medium text-[var(--primary-700)]">
-          Workspace path
-          <input v-model="workspaceStorage.workspacePath" class="input mt-1" />
-        </label>
+        <div class="text-sm font-medium text-[var(--primary-700)]">
+          <span id="workspace-path-label">Workspace path</span>
+          <p id="workspace-path" class="mt-1 break-all" aria-labelledby="workspace-path-label">{{ workspacePath }}</p>
+        </div>
         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--error)] bg-red-50 p-4">
           <p class="text-xs text-[var(--primary-600)]">
             Permanently deletes that database: every chat, message and document job. You'll be asked to confirm.
