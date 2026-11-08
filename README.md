@@ -98,12 +98,12 @@ git tag v0.1.0 && git push origin v0.1.0
 ### Tests
 
 ```bash
-pnpm vitest run                                    # frontend (126 tests)
-pnpm test:e2e                                     # playwright e2e (72+ tests)
-cd src-tauri/sidecar && uv run pytest -q           # python (119 tests)
-cd src-tauri && cargo test                         # rust (37 tests)
+pnpm vitest run
+pnpm test:e2e
+cd src-tauri/sidecar && uv run pytest -q
+cd src-tauri && cargo test
 ```
 
 ## License
 
-Proprietary. All rights reserved.
+Apache-2.0; see LICENSE and NOTICE
