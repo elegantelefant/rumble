@@ -149,9 +149,7 @@ The Settings screen currently claims "Local storage uses SQLCipher for encryptio
 
 ## Build and update integrity
 
-- **Builds are unsigned and unnotarized.** `.github/workflows/build.yml` has no signing step, so
-  macOS Gatekeeper will warn on first launch. A signed, notarized macOS build is pending ([plan](agent_docs/2026-09-22-credible-delightful-local-first-plan.md)
-  §3 R4, gated on Apple Developer enrolment).
+- **macOS preview builds are ad-hoc signed with hardened runtime and unnotarized; Developer ID signing follows ([#102](https://github.com/elegantelefant/rumble/issues/102)).**
 - **No auto-updater.** None is in the build; updates are a manual download.
 - **Supply chain.** CI actions are pinned by tag, not commit SHA; `uv sync` runs without
   `--locked`; releases publish no checksums, SBOM or build provenance. SHA-pinned actions,

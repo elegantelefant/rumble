@@ -31,6 +31,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/rumble-sidecar"]
+    "externalBin": ["binaries/rumble-sidecar"],
+    "macOS": {
+      "hardenedRuntime": true
+    }
   }
 }
