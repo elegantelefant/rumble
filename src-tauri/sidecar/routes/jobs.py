@@ -5,7 +5,6 @@ import json
 import logging
 
 from fastapi import APIRouter, HTTPException
-
 from models.generated import (
     DraftField,
     DraftRequest,
@@ -18,8 +17,9 @@ from models.generated import (
     ReviewRequest,
     ReviewResponse,
 )
-from routes.ai import _parse_llm_json, _safe_construct
 from services import db, draft_substitution, jobs, llm, prompts
+
+from routes.ai import _parse_llm_json, _safe_construct
 
 logger = logging.getLogger(__name__)
 
@@ -310,6 +310,14 @@ async def get_research_result(job_id: str) -> ResearchResultResponse:
 
 
 # --- Shared poll helper ---
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobResultResponse)
+async def cancel_job(job_id: str) -> JobResultResponse:
+    if not await db.get_job(job_id):
+        raise HTTPException(status_code=404, detail="job not found")
+    await jobs.cancel_job(job_id)
+    return await _poll_job(job_id)
+
 
 async def _poll_job(job_id: str) -> JobResultResponse:
     job = await db.get_job(job_id)

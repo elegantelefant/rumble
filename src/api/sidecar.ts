@@ -213,42 +213,60 @@ const SERVER_JOB_TIMEOUT_MS = 300_000;
 const POLL_MARGIN_MS = 30_000;
 const MAX_POLL_ATTEMPTS = Math.ceil((SERVER_JOB_TIMEOUT_MS + POLL_MARGIN_MS) / POLL_INTERVAL_MS); // 220, ~5.5 min
 
+async function cancelAbandonedJob(jobId: string): Promise<void> {
+  try {
+    await apiClient(`/jobs/${jobId}/cancel`, { method: "POST" });
+  } catch {
+    // Preserve the original polling error if the sidecar is unreachable.
+  }
+}
+
 export async function waitForJob(
   type: "draft" | "review",
   jobId: string,
   onElapsed?: (ms: number) => void,
 ): Promise<JobResultResponse> {
-  const startedAt = Date.now();
-  for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    onElapsed?.(Date.now() - startedAt);
-    const result = await pollJobResult(type, jobId);
-    if (result.status === "completed" || result.status === "failed") {
-      return result;
+  try {
+    const startedAt = Date.now();
+    for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+      onElapsed?.(Date.now() - startedAt);
+      const result = await pollJobResult(type, jobId);
+      if (result.status === "completed" || result.status === "failed") {
+        return result;
+      }
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    // No job ID in either message: it's an internal detail the user can't
+    // act on, and a user-facing error shouldn't read like a stack trace.
+    throw new Error(
+      type === "draft"
+        ? "Drafting took too long. Please try again."
+        : "Review took too long. Please try again.",
+    );
+  } catch (error) {
+    await cancelAbandonedJob(jobId);
+    throw error;
   }
-  // No job ID in either message: it's an internal detail the user can't
-  // act on, and a user-facing error shouldn't read like a stack trace.
-  throw new Error(
-    type === "draft"
-      ? "Drafting took too long. Please try again."
-      : "Review took too long. Please try again.",
-  );
 }
 
 export async function waitForResearch(
   jobId: string,
 ): Promise<ResearchResultResponse> {
-  for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    const result = await pollResearchResult(jobId);
-    if (result.status === "completed" || result.status === "failed") {
-      return result;
+  try {
+    for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+      const result = await pollResearchResult(jobId);
+      if (result.status === "completed" || result.status === "failed") {
+        return result;
+      }
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    throw new Error(
+      `Research ${jobId} did not complete within polling timeout`,
+    );
+  } catch (error) {
+    await cancelAbandonedJob(jobId);
+    throw error;
   }
-  throw new Error(
-    `Research ${jobId} did not complete within polling timeout`,
-  );
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,24 @@ async def start_job(job_id: str, coro: Coroutine) -> None:
     """Spawn a background task that runs the coroutine and writes results to the DB."""
     task = asyncio.create_task(_run_job(job_id, coro))
     _tasks[job_id] = task
-    task.add_done_callback(lambda _t: _tasks.pop(job_id, None))
+
+    def cleanup(_task: asyncio.Task) -> None:
+        # Cancellation can arrive before the runner starts awaiting the coroutine.
+        coro.close()
+        _tasks.pop(job_id, None)
+
+    task.add_done_callback(cleanup)
+
+
+async def cancel_job(job_id: str) -> None:
+    """Cancel an abandoned job and wait until its background work has stopped."""
+    task = _tasks.get(job_id)
+    if task is None or task.done():
+        return
+    task.cancel("cancelled")
+    await asyncio.gather(task, return_exceptions=True)
+    # Also covers a task cancelled before _run_job entered its try block.
+    await db.set_job_result(job_id, error="cancelled")
 
 
 async def _run_job(job_id: str, coro: Coroutine) -> None:
@@ -28,12 +45,13 @@ async def _run_job(job_id: str, coro: Coroutine) -> None:
         await db.update_job_status(job_id, "running")
         result = await asyncio.wait_for(coro, timeout=JOB_TIMEOUT_SECONDS)
         await db.set_job_result(job_id, result=json.dumps(result) if isinstance(result, dict) else result)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Job %s timed out after %ds", job_id, JOB_TIMEOUT_SECONDS)
         await db.set_job_result(job_id, error=f"timed out after {JOB_TIMEOUT_SECONDS}s")
-    except asyncio.CancelledError:
-        logger.info("Job %s cancelled during shutdown", job_id)
-        await db.set_job_result(job_id, error="cancelled during shutdown")
+    except asyncio.CancelledError as exc:
+        reason = str(exc) or "cancelled during shutdown"
+        logger.info("Job %s: %s", job_id, reason)
+        await db.set_job_result(job_id, error=reason)
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
         await db.set_job_result(job_id, error=str(exc))

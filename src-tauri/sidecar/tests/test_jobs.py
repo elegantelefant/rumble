@@ -5,9 +5,7 @@ import asyncio
 import json
 
 import pytest
-
 from routes.jobs import _normalise_issue_kind
-
 
 # --- Draft ---
 
@@ -504,3 +502,61 @@ async def test_failed_research_status_includes_error(client):
     data = status.json()
     assert data["status"] == "failed"
     assert "connection refused" in data["error"]
+
+
+@pytest.mark.parametrize("started", [False, True])
+async def test_cancel_marks_the_job_cancelled_and_frees_its_task(client, started):
+    from services import db, jobs
+
+    entered = asyncio.Event()
+    stopped = asyncio.Event()
+
+    async def blocked_work():
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    job = await db.create_job("draft", "{}")
+    await jobs.start_job(job["id"], blocked_work())
+    task = jobs._tasks[job["id"]]
+    try:
+        if started:
+            await asyncio.wait_for(entered.wait(), timeout=1)
+        else:
+            # Exercise cancellation before the runner gets its first turn.
+            await jobs.cancel_job(job["id"])
+        response = await client.post(f"/jobs/{job['id']}/cancel")
+        assert response.status_code == 200
+        assert response.json()["status"] == "failed"
+        assert response.json()["result"] == {"error": "cancelled"}
+        stored = await db.get_job(job["id"])
+        assert stored["error"] == "cancelled"
+        assert task.done()
+        assert job["id"] not in jobs._tasks
+        if started:
+            assert stopped.is_set()
+        # Retrying cancellation must preserve the terminal result.
+        again = await client.post(f"/jobs/{job['id']}/cancel")
+        assert again.json() == response.json()
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_cancel_nonexistent_job(client):
+    response = await client.post("/jobs/no-such-id/cancel")
+    assert response.status_code == 404
+
+
+async def test_cancel_leaves_a_completed_job_unchanged(client):
+    from services import db
+
+    job = await db.create_job("draft", "{}")
+    await db.set_job_result(job["id"], result='{"draft": "Finished."}')
+    response = await client.post(f"/jobs/{job['id']}/cancel")
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["result"] == {"draft": "Finished."}
