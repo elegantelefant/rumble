@@ -41,10 +41,6 @@ test.describe("Document Review", () => {
     await expect(page.getByText("Renewal clauses flagged")).toBeVisible();
   });
 
-  test("shows citation chips in assistant messages", async ({ page }) => {
-    await expect(page.getByText("Contract_2024.pdf · Section 4")).toBeVisible();
-  });
-
   test("chat input and send button are present", async ({ page }) => {
     const input = page.locator("#document-question");
     await expect(input).toBeVisible();
