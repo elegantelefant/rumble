@@ -3,7 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core"
 import { flushPromises, mount } from "@vue/test-utils"
-import { waitForJob } from "../src/api/sidecar"
+import { waitForJob, waitForResearch } from "../src/api/sidecar"
 import DocumentDraftView from "../src/views/DocumentDraftView.vue"
 import DocumentReviewView from "../src/views/DocumentReviewView.vue"
 import { TOAST_KEY } from "../src/composables/toast"
@@ -91,6 +91,46 @@ describe("waitForJob timeout", () => {
     await vi.runAllTimersAsync()
     await assertion
   })
+})
+
+describe("abandoned jobs", () => {
+  for (const kind of ["draft", "review", "research"] as const) {
+    const wait = () => kind === "research"
+      ? waitForResearch("abandoned-job")
+      : waitForJob(kind, "abandoned-job")
+
+    it(`${kind} cancels the job before rejecting on timeout`, async () => {
+      let finishCancel!: () => void
+      vi.mocked(invoke).mockImplementation(async (_command, args) => {
+        if ((args as { path: string }).path === "/jobs/abandoned-job/cancel") {
+          await new Promise<void>((resolve) => { finishCancel = resolve })
+        }
+        return { status: "running" }
+      })
+      let settled = false
+      const promise = wait()
+      const assertion = expect(promise).rejects.toThrow()
+      void promise.catch(() => { settled = true })
+      await vi.runAllTimersAsync()
+      expect(invoke).toHaveBeenLastCalledWith("api_call", expect.objectContaining({
+        path: "/jobs/abandoned-job/cancel", method: "POST",
+      }))
+      expect(settled).toBe(false)
+      finishCancel()
+      await assertion
+    })
+
+    it(`${kind} attempts cancellation when polling fails and preserves the error`, async () => {
+      const pollError = new Error("Polling unavailable")
+      vi.mocked(invoke).mockRejectedValueOnce(pollError)
+        .mockRejectedValueOnce(new Error("Cancellation unavailable"))
+      await expect(wait()).rejects.toBe(pollError)
+      expect(invoke).toHaveBeenCalledTimes(2)
+      expect(invoke).toHaveBeenLastCalledWith("api_call", expect.objectContaining({
+        path: "/jobs/abandoned-job/cancel", method: "POST",
+      }))
+    })
+  }
 })
 
 describe("job progress in views", () => {
