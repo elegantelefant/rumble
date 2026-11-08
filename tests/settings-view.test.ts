@@ -241,7 +241,7 @@ describe("SettingsView", () => {
   describe("persistence", () => {
     const saved = {
       appearance: { theme: "dark", navigationSidebar: "right" },
-      workspace: { templatesPath: "/firm/templates", briefcases: ["Matter A"] },
+      workspace: { templatesPath: "/firm/templates", briefcases: ["Matter A"], attachableResources: ["Thread A"] },
       localConfig: { model: "llama3.2" },
     }
 
@@ -281,11 +281,16 @@ describe("SettingsView", () => {
       expect((theme.element as HTMLSelectElement).value).toBe("dark")
     })
 
-    it("shows saved briefcases", async () => {
+    it("shows no briefcase or resource controls in the Templates tab", async () => {
       mockCommands({ load_settings: () => saved })
       const wrapper = await mountAndLoad()
       await openTab(wrapper, "Templates")
-      expect(wrapper.text()).toContain("Matter A")
+      expect(wrapper.text()).toContain("Template library")
+      expect(wrapper.text()).not.toContain("Add briefcase")
+      expect(wrapper.text()).not.toContain("Attach resource")
+      expect(wrapper.text()).not.toContain("Select threads or chats")
+      expect(wrapper.text()).not.toContain("Matter A")
+      expect(wrapper.text()).not.toContain("Thread A")
     })
 
     it("fills the local runtime config from the saved file", async () => {
@@ -300,7 +305,7 @@ describe("SettingsView", () => {
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(savedPayload().workspace.templatesPath).toBe("/firm/templates")
-      expect(savedPayload().workspace.briefcases).toEqual(["Matter A"])
+      expect(savedPayload().appearance.showChatSidebarByDefault).toBe(true)
     })
 
     it("shows the host data directory as non-editable text in the storage tab", async () => {
@@ -335,14 +340,14 @@ describe("SettingsView", () => {
     it("ignores saved values whose shape doesn't match the field", async () => {
       mockCommands({
         load_settings: () => ({
-          workspace: { briefcases: "Matter A" },
+          workspace: { templatesPath: 3 },
           appearance: { theme: 3 },
         }),
         save_settings: () => null,
       })
       const wrapper = await mountAndLoad()
       await submit(wrapper)
-      expect(savedPayload().workspace.briefcases).toEqual([])
+      expect(savedPayload().workspace.templatesPath).toBe("~/Documents/LegalTemplates")
       expect(savedPayload().appearance.theme).toBe("system")
     })
 
@@ -356,13 +361,12 @@ describe("SettingsView", () => {
       expect(savedPayload().appearance).not.toHaveProperty("legacyColour")
     })
 
-    it("starts from blank lists and no error on first run", async () => {
+    it("starts from defaults and no error on first run", async () => {
       mockCommands({ load_settings: () => null, save_settings: () => null })
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(mockAddToast).not.toHaveBeenCalledWith(expect.anything(), "error")
-      expect(savedPayload().workspace.briefcases).toEqual([])
-      expect(savedPayload().workspace.attachableResources).toEqual([])
+      expect(savedPayload().workspace).toEqual({ templatesPath: "~/Documents/LegalTemplates" })
     })
 
     it("keeps defaults and reports the error when saved settings can't be loaded", async () => {
@@ -392,11 +396,13 @@ describe("SettingsView", () => {
       expect(savedPayload().localConfig.model).toBe("llama3.2")
     })
 
-    it("ignores a saved list that holds anything but strings", async () => {
-      mockCommands({ load_settings: () => ({ workspace: { briefcases: [1, { name: "x" }] } }), save_settings: () => null })
+    it("does not save legacy briefcases or attachable resources back to the file", async () => {
+      mockCommands({ load_settings: () => saved, save_settings: () => null })
       const wrapper = await mountAndLoad()
       await submit(wrapper)
-      expect(savedPayload().workspace.briefcases).toEqual([])
+      expect(savedPayload().workspace).toEqual({ templatesPath: "/firm/templates" })
+      expect(savedPayload().workspace).not.toHaveProperty("briefcases")
+      expect(savedPayload().workspace).not.toHaveProperty("attachableResources")
     })
 
     it("disables saving until saved settings have loaded", async () => {
@@ -433,12 +439,11 @@ describe("SettingsView", () => {
       mockCommands({ load_settings: () => saved, save_settings: () => null })
       const wrapper = await mountAndLoad()
       await openTab(wrapper, "Templates")
-      await wrapper.find('input[placeholder="New briefcase name"]').setValue("Matter B")
-      await wrapper.findAll("button").find((b) => b.text() === "Add briefcase")!.trigger("click")
+      await wrapper.find("input").setValue("/firm/updated-templates")
       await submit(wrapper)
       const settings = savedPayload()
       expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "workspace"])
-      expect(settings.workspace.briefcases).toEqual(["Matter A", "Matter B"])
+      expect(settings.workspace).toEqual({ templatesPath: "/firm/updated-templates" })
       expect(settings.appearance.theme).toBe("dark")
     })
 

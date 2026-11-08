@@ -174,8 +174,6 @@ const newSecret = reactive({
 
 const workspaceStorage = reactive({
   templatesPath: "~/Documents/LegalTemplates",
-  briefcases: [] as string[],
-  attachableResources: [] as string[],
 });
 
 const workspacePath = ref("");
@@ -208,31 +206,6 @@ const isSaving = ref(false);
 // Save stays disabled until saved settings have loaded (or failed to), so an
 // edit or a save can't race the load and write defaults over the saved file.
 const isLoaded = ref(false);
-
-const newBriefcase = ref("");
-const newResource = ref("");
-
-function addBriefcase() {
-  const name = newBriefcase.value.trim();
-  if (!name) return;
-  if (workspaceStorage.briefcases.includes(name)) {
-    toast.addToast("That briefcase already exists.", "error");
-    return;
-  }
-  workspaceStorage.briefcases.push(name);
-  newBriefcase.value = "";
-}
-
-function attachResource() {
-  const name = newResource.value.trim();
-  if (!name) return;
-  if (workspaceStorage.attachableResources.includes(name)) {
-    toast.addToast("That resource is already attached.", "error");
-    return;
-  }
-  workspaceStorage.attachableResources.push(name);
-  newResource.value = "";
-}
 
 async function addSecret() {
   if (!newSecret.provider) return;
@@ -319,14 +292,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function sameShape(current: unknown, saved: unknown): boolean {
-  if (Array.isArray(current)) {
-    return Array.isArray(saved) && saved.every((item) => typeof item === "string");
-  }
   return typeof saved === typeof current;
 }
 
 // Takes only keys the form already has, and only values shaped like the
-// default, so a hand-edited or older file can't turn a list into a string.
+// default, so a hand-edited or older file can't change a field's type.
 function mergeSaved(target: Record<string, unknown>, saved: unknown) {
   if (!isRecord(saved)) return;
   for (const key of Object.keys(target)) {
@@ -356,11 +326,7 @@ async function saveSettings() {
     const aside = await invoke<string | null>("save_settings", {
       settings: {
         appearance: { ...appearanceSettings },
-        workspace: {
-          ...workspaceStorage,
-          briefcases: [...workspaceStorage.briefcases],
-          attachableResources: [...workspaceStorage.attachableResources],
-        },
+        workspace: { ...workspaceStorage },
         localConfig: { ...localConfig },
       },
     });
@@ -569,43 +535,6 @@ const selectedProviderDetails = computed(() =>
           >
             Delete all local data
           </button>
-        </div>
-        <div class="grid gap-3 md:grid-cols-2">
-          <div>
-            <h4 class="text-sm font-semibold text-[var(--primary-700)]">Briefcases</h4>
-            <ul class="mt-2 space-y-1 text-xs text-[var(--primary-600)]">
-              <li v-for="briefcase in workspaceStorage.briefcases" :key="briefcase" class="rounded border border-[var(--primary-200)] bg-white px-3 py-2">
-                {{ briefcase }}
-              </li>
-            </ul>
-            <div class="mt-2 flex gap-2">
-              <input
-                v-model="newBriefcase"
-                class="input text-xs"
-                placeholder="New briefcase name"
-                @keydown.enter.prevent="addBriefcase"
-              />
-              <button class="btn-secondary text-xs" type="button" @click="addBriefcase">Add briefcase</button>
-            </div>
-          </div>
-          <div>
-            <h4 class="text-sm font-semibold text-[var(--primary-700)]">Attach threads to briefcase</h4>
-            <p class="text-xs text-[var(--primary-500)]">Select threads or chats to group them with a matter.</p>
-            <ul class="mt-2 space-y-1 text-xs text-[var(--primary-600)]">
-              <li v-for="resource in workspaceStorage.attachableResources" :key="resource" class="rounded border border-[var(--primary-200)] bg-white px-3 py-2">
-                {{ resource }}
-              </li>
-            </ul>
-            <div class="mt-2 flex gap-2">
-              <input
-                v-model="newResource"
-                class="input text-xs"
-                placeholder="Thread or chat name"
-                @keydown.enter.prevent="attachResource"
-              />
-              <button class="btn-secondary text-xs" type="button" @click="attachResource">Attach resource</button>
-            </div>
-          </div>
         </div>
       </section>
 
