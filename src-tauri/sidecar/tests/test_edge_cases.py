@@ -6,7 +6,6 @@ import json
 
 import pytest
 
-
 # --- Chat edge cases ---
 
 
@@ -194,8 +193,8 @@ async def test_malformed_review_result_returns_502(client):
     assert "malformed result" in resp.json()["detail"]
 
 
-async def test_draft_result_wrong_shape_returns_502(client):
-    """Valid JSON that doesn't match DraftResponse should yield 502 (see #46)."""
+async def test_draft_result_returns_stored_shape(client):
+    """Polling returns stored JSON; DraftResponse validation belongs to the worker."""
     from services import db as svc_db
 
     job = await svc_db.create_job("draft", "{}")
@@ -216,16 +215,13 @@ async def test_draft_result_wrong_shape_returns_502(client):
     )
     await raw_db.commit()
     resp = await client.get(f"/draft/{job['id']}/result")
-    assert resp.status_code == 502
-    assert "expected shape" in resp.json()["detail"]
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "completed"
+    assert resp.json()["result"] == json.loads(payload)
 
 
-async def test_draft_result_with_bad_warnings_returns_200(client):
-    """A wrong-typed optional field (warnings) doesn't 502, and the filtered
-    response drops it entirely rather than passing the wrong-typed value to the
-    client — DocumentDraftView v-for's over warnings, so a string there would
-    render one list item per character instead of failing loudly.
-    """
+async def test_draft_result_returns_stored_warnings(client):
+    """Polling does not filter stored fields; the worker validates before storing."""
     from services import db as svc_db
 
     job = await svc_db.create_job("draft", "{}")
@@ -240,11 +236,12 @@ async def test_draft_result_with_bad_warnings_returns_200(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["result"]["draft"] == "Full contract text."
-    assert data["result"]["warnings"] is None
+    assert data["status"] == "completed"
+    assert data["result"] == json.loads(payload)
 
 
-async def test_review_result_wrong_shape_returns_502(client):
-    """Valid JSON missing the required summary field should yield 502."""
+async def test_review_result_returns_stored_shape(client):
+    """Polling returns stored JSON; ReviewResponse validation belongs to the worker."""
     from services import db as svc_db
 
     job = await svc_db.create_job("review", "{}")
@@ -256,8 +253,9 @@ async def test_review_result_wrong_shape_returns_502(client):
     )
     await raw_db.commit()
     resp = await client.get(f"/review/{job['id']}/result")
-    assert resp.status_code == 502
-    assert "expected shape" in resp.json()["detail"]
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "completed"
+    assert resp.json()["result"] == json.loads(payload)
 
 
 async def test_review_result_with_bad_issues_returns_200(client):

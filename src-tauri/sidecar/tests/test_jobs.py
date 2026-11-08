@@ -195,6 +195,88 @@ async def test_review_completes(client):
     assert data["result"] is not None
 
 
+@pytest.mark.parametrize(
+    "raw,error",
+    [
+        ('[]', "validation failed: expected a JSON object"),
+        ('{"issues": []}', "summary"),
+    ],
+)
+async def test_review_invalid_shape_fails_before_storage(client, raw, error):
+    from unittest.mock import AsyncMock, patch
+
+    from services import db, jobs
+
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        response = await client.post("/review", json={"text": "Some contract text."})
+        job_id = response.json()["job_id"]
+        await asyncio.wait_for(jobs._tasks[job_id], timeout=1)
+
+    stored = await db.get_job(job_id)
+    assert stored["status"] == "failed"
+    assert stored["result"] is None
+    assert error in stored["error"]
+    for _ in range(2):
+        result = await client.get(f"/review/{job_id}/result")
+        assert result.status_code == 200
+        assert result.json()["status"] == "failed"
+        assert error in result.json()["result"]["error"]
+
+
+async def test_review_stores_normalised_validated_result(client):
+    from unittest.mock import AsyncMock, patch
+
+    from services import db, jobs
+
+    raw = json.dumps({
+        "summary": "One risk found.",
+        "issues": [{"kind": "RISKS", "message": "Uncapped liability.", "severity": "High"}],
+    })
+    with patch("services.llm.run_single_turn", new=AsyncMock(return_value=raw)):
+        response = await client.post("/review", json={"text": "Some contract text."})
+        job_id = response.json()["job_id"]
+        await asyncio.wait_for(jobs._tasks[job_id], timeout=1)
+
+    stored = await db.get_job(job_id)
+    assert stored["status"] == "completed"
+    payload = json.loads(stored["result"])
+    assert payload["issues"][0]["kind"] == "risk"
+    assert "severity" not in payload["issues"][0]
+    assert payload["repaired"] is False
+    result = await client.get(f"/review/{job_id}/result")
+    assert result.status_code == 200
+    assert result.json()["result"] == payload
+
+
+async def test_draft_missing_required_field_fails_before_storage(client):
+    from unittest.mock import patch
+
+    from routes.jobs import _safe_construct
+    from services import db, jobs
+
+    def missing_draft(model, data):
+        # Drafts are assembled from prose, so inject a missing required key
+        # at the construction boundary rather than returning JSON from the LLM.
+        data = dict(data)
+        data.pop("draft")
+        return _safe_construct(model, data)
+
+    with patch("routes.jobs._safe_construct", side_effect=missing_draft):
+        response = await client.post("/draft", json={"prompt": "Draft an agreement"})
+        job_id = response.json()["job_id"]
+        await asyncio.wait_for(jobs._tasks[job_id], timeout=1)
+
+    stored = await db.get_job(job_id)
+    assert stored["status"] == "failed"
+    assert stored["result"] is None
+    assert "draft" in stored["error"]
+    assert "Field required" in stored["error"]
+    result = await client.get(f"/draft/{job_id}/result")
+    assert result.status_code == 200
+    assert result.json()["status"] == "failed"
+    assert "Field required" in result.json()["result"]["error"]
+
+
 # --- Review issue kind normalisation (#49) ---
 
 @pytest.mark.parametrize(

@@ -109,7 +109,8 @@ async def _run_draft(request: DraftRequest) -> dict:
     if not draft.strip():
         raise ValueError("Draft generation produced no content.")
 
-    return {"draft": draft, "warnings": _draft_warnings(draft, fields, missing_keys)}
+    result = {"draft": draft, "warnings": _draft_warnings(draft, fields, missing_keys)}
+    return _safe_construct(DraftResponse, result).model_dump()
 
 
 @router.post("/draft", response_model=JobCreatedResponse)
@@ -125,14 +126,7 @@ async def create_draft(body: DraftRequest) -> JobCreatedResponse:
 
 @router.get("/draft/{job_id}/result", response_model=JobResultResponse)
 async def get_draft_result(job_id: str) -> JobResultResponse:
-    response = await _poll_job(job_id)
-    if response.status == "completed" and response.result is not None:
-        # A completed job's result is persisted in SQLite with no re-run path, so
-        # a stored result missing a required field (or {}) 502s here on every poll
-        # from now on. That's deliberate: the result was garbage when it was saved,
-        # and nothing here could fix it in place.
-        response.result = _safe_construct(DraftResponse, response.result).model_dump()
-    return response
+    return await _poll_job(job_id)
 
 
 # --- Review ---
@@ -158,11 +152,15 @@ async def _run_review(request: ReviewRequest) -> dict:
         raw = await llm.run_single_turn(user_text, prompts.REVIEW)
         info = {}
         result = _parse_job_json(raw, allow_repair=True, info=info)
+    if not isinstance(result, dict):
+        # A parsed JSON value with the wrong shape is a validation failure.
+        raise ValueError("Review response validation failed: expected a JSON object.")  # noqa: TRY004
+    _normalise_issue_kinds(result)
     # rumble#90 Ask 2: flags when this result came back through json-repair
     # rather than a clean parse, so the caller can stay honest about a
     # result that was guessed at rather than generated whole.
     result["repaired"] = info.get("repaired", False)
-    return result
+    return _safe_construct(ReviewResponse, result).model_dump()
 
 
 @router.post("/review", response_model=JobCreatedResponse)
@@ -215,14 +213,7 @@ def _normalise_issue_kinds(result: dict) -> None:
 
 @router.get("/review/{job_id}/result", response_model=JobResultResponse)
 async def get_review_result(job_id: str) -> JobResultResponse:
-    response = await _poll_job(job_id)
-    if response.status == "completed" and response.result is not None:
-        # Same permanent-502 caveat as get_draft_result above: a completed
-        # job's result is persisted with no re-run path, so a stored result
-        # missing a required field 502s on every poll from now on.
-        _normalise_issue_kinds(response.result)
-        response.result = _safe_construct(ReviewResponse, response.result).model_dump()
-    return response
+    return await _poll_job(job_id)
 
 
 # --- Research ---
