@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Runs the full local merge gate against a GitHub pull request merge ref.
-# ABOUTME: Fetches an isolated merge worktree, reports four suite tallies, and cleans up on exit.
+# ABOUTME: Fetches an isolated merge worktree, reports five suite tallies, and cleans up on exit.
 
 set -Eeuo pipefail
 
@@ -48,6 +48,10 @@ run_vitest() {
   NO_COLOR=1 pnpm test
 }
 
+run_typecheck_e2e() {
+  pnpm typecheck:e2e
+}
+
 run_pytest() {
   (
     cd src-tauri/sidecar
@@ -69,6 +73,7 @@ run_drift() {
 }
 
 run_suite vitest run_vitest
+run_suite typecheck_e2e run_typecheck_e2e
 run_suite pytest run_pytest
 run_suite cargo run_cargo
 run_suite drift run_drift
@@ -81,6 +86,7 @@ awk '
     else { print "vitest: summary missing"; exit 1 }
   }
 ' "$temp_root/vitest.log"
+echo 'typecheck:e2e: clean'
 printf 'pytest: '
 awk '/passed/ && /[0-9]+ passed/ { print $1 " passed"; exit }' "$temp_root/pytest.log"
 printf 'cargo: '
