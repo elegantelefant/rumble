@@ -38,6 +38,42 @@ function mountSettings() {
   })
 }
 
+describe("SettingsView templates folder picker", () => {
+  async function browse(respond: () => Promise<string | null>) {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "pick_templates_folder") return respond()
+      return undefined
+    })
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await wrapper.findAll("button").find((b) => b.text().includes("Templates"))!.trigger("click")
+    const button = wrapper.findAll("button").find((b) => b.text() === "Browse")!
+    expect(button.attributes("type")).toBe("button")
+    await button.trigger("click")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(invoke).toHaveBeenCalledWith("pick_templates_folder")
+    return wrapper
+  }
+
+  it("shows a picked path in the templates input", async () => {
+    const wrapper = await browse(async () => "/firm/templates")
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("/firm/templates")
+    expect(mockAddToast).not.toHaveBeenCalled()
+  })
+
+  it("leaves the templates path unchanged when cancelled", async () => {
+    const wrapper = await browse(async () => null)
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("~/Documents/LegalTemplates")
+    expect(mockAddToast).not.toHaveBeenCalled()
+  })
+
+  it("shows a rejected string as an error toast", async () => {
+    const wrapper = await browse(async () => { throw "folder picker unavailable" })
+    expect(mockAddToast).toHaveBeenCalledWith("folder picker unavailable", "error")
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("~/Documents/LegalTemplates")
+  })
+})
+
 describe("SettingsView", () => {
   it("opens the logs folder and disables the action until the host finishes", async () => {
     let finish!: () => void

@@ -188,6 +188,15 @@ onMounted(async () => {
   }
 });
 
+async function pickTemplatesFolder() {
+  try {
+    const path = await invoke<string | null>("pick_templates_folder");
+    if (path !== null) workspaceStorage.templatesPath = path;
+  } catch (error) {
+    toast.addToast(String(error), "error");
+  }
+}
+
 const appearanceSettings = reactive({
   navigationSidebar: "left",
   contextSidebar: "right",
@@ -535,7 +544,7 @@ const selectedProviderDetails = computed(() =>
           Templates folder
           <div class="mt-1 flex gap-2">
             <input v-model="workspaceStorage.templatesPath" class="input" />
-            <button class="btn-secondary" type="button">Browse</button>
+            <button class="btn-secondary" type="button" @click="pickTemplatesFolder">Browse</button>
           </div>
         </label>
         <div>
