@@ -200,11 +200,10 @@ test.describe("4. Document Review", () => {
     await page.screenshot({ path: S("04d-review-session-list"), fullPage: true });
   });
 
-  test("4e. active session shows chat with citations", async ({ page }) => {
+  test("4e. active session shows chat", async ({ page }) => {
     await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
     await expect(page.getByText("Highlight the key renewal obligations")).toBeVisible();
     await expect(page.getByText("Renewal clauses flagged")).toBeVisible();
-    await expect(page.getByText("Contract_2024.pdf · Section 4")).toBeVisible();
     await page.screenshot({ path: S("04e-review-chat-citations"), fullPage: true });
   });
 

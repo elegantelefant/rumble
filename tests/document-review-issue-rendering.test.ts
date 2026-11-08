@@ -104,6 +104,23 @@ describe("DocumentReviewView issue rendering (#49)", () => {
     expect(issuesParagraph!.classes()).toContain("whitespace-pre-line")
   })
 
+  it("renders a reviewed issue's location inline without citation chips", async () => {
+    vi.mocked(waitForJob).mockResolvedValue({
+      status: "completed",
+      result: {
+        summary: "One risk found.",
+        issues: [{ kind: "risk", message: "Renewal is automatic.", location: "Section 4" }],
+      },
+    } as never)
+
+    const wrapper = mountReview()
+    await uploadFile(wrapper)
+
+    const issuesParagraph = wrapper.findAll("p").find((p) => p.text().includes("Issues found:"))
+    expect(issuesParagraph?.text()).toContain("Location: Section 4")
+    expect(wrapper.find(".chip").exists()).toBe(false)
+  })
+
   it("omits the location and suggestion lines when the issue doesn't have them", async () => {
     vi.mocked(waitForJob).mockResolvedValue({
       status: "completed",

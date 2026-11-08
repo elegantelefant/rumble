@@ -582,11 +582,6 @@ const workflowSteps = [
                 <span>{{ message.timestamp }}</span>
               </div>
               <p class="whitespace-pre-line">{{ message.content }}</p>
-              <div v-if="message.citations?.length" class="mt-2 flex flex-wrap gap-2">
-                <span v-for="citation in message.citations" :key="citation" class="chip">
-                  {{ citation }}
-                </span>
-              </div>
             </div>
           </div>
 
