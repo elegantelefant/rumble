@@ -44,7 +44,7 @@ is "offline after setup", not "offline".
 
 | Storage | Location, contents and retention |
 |---|---|
-| Diagnostic logs | `rumble.log` in `~/Library/Logs/legal.elefant.rumble/` (macOS), `%LOCALAPPDATA%\legal.elefant.rumble\logs\` (Windows), or `$XDG_DATA_HOME/legal.elefant.rumble/logs/` (Linux, default `~/.local/share/`). Host and sidecar lifecycle/error diagnostics; HTTP logs record status only, without request/response bodies or headers. The host redacts the sidecar secret from relayed stderr; panic logs omit the payload. INFO level, rotation at 5 MiB with one previous file. Plaintext on this device, no automatic upload; Settings → Open logs folder opens the directory. Delete these files there when no longer needed; Delete all local data only removes the database. |
+| Diagnostic logs | `rumble.log` in `~/Library/Logs/legal.elefant.rumble/` (macOS), `%LOCALAPPDATA%\legal.elefant.rumble\logs\` (Windows), or `$XDG_DATA_HOME/legal.elefant.rumble/logs/` (Linux, default `~/.local/share/`). Host and sidecar lifecycle/error diagnostics; HTTP logs record status only, without request/response bodies or headers. The host redacts the sidecar secret and database key from relayed stderr; panic logs omit the payload. INFO level, rotation at 5 MiB with one previous file. Plaintext on this device, no automatic upload; Settings → Open logs folder opens the directory. Delete these files there when no longer needed; Delete all local data only removes the database. |
 
 
 - **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
@@ -106,22 +106,37 @@ is "offline after setup", not "offline".
   - **Uninstalling** is not relied on to remove this directory or the keychain entries: moving the
     app to the Trash on macOS leaves both, and what the Windows and Linux installers remove has not
     been verified. Delete the directory, and the `elefant-rumble` keychain items, by hand.
-- **OS keychain** — service `elefant-rumble`: the premium `auth_token` and any `byok_<provider>`
+- **OS keychain** — service `elefant-rumble`: the database `db_key`, premium `auth_token` and any `byok_<provider>`
   keys saved in Settings (`src-tauri/src/lib.rs`, keychain helpers).
 - **Ollama's models** — Ollama's own store (`~/.ollama/models`), managed by Ollama, not rumble.
 
 ## Encryption at rest
 
-Rumble relies on full-disk encryption — FileVault, BitLocker, LUKS — and does not encrypt its
-database itself. Application-level encryption such as SQLCipher would add almost nothing against
-the realistic threats. Against a lost or stolen machine, disk encryption already covers the
-database, and also the WAL files, temp files, swap, exported `.docx` files and Ollama's models,
-which SQLCipher would not. Against code running as the same user, the database key would have to
-sit in that same user's keychain, where the attacker can read it. Firms should require disk
-encryption on any machine running rumble.
+Your chats and documents are encrypted on your computer; the key lives in your keychain.
 
-The Settings screen currently claims "Local storage uses SQLCipher for encryption". That is false
-([#19]).
+The local `rumble.db` and its WAL pages use SQLCipher through `sqlcipher3` under aiosqlite.
+On first sidecar spawn, the Rust host generates 32 random bytes (hex encoded) and stores them as
+`db_key` under the `elefant-rumble` OS keychain service. Each spawn reads that entry and passes it
+only in the sidecar's `RUMBLE_DB_KEY` environment, never argv or webview JavaScript. Keychain
+errors, malformed keys and missing sidecar keys stop initialization; there is no plaintext fallback.
+Do not remove `db_key` while keeping a database you need: a replacement key cannot unlock it.
+Deleting local data retains the keychain entry, and encrypted backups need that same key to restore.
+
+On first open of an older plaintext database, `sqlcipher_export` copies every table to an encrypted
+sibling file, preserving the schema version. The original is retained until export and a keyed read
+succeed, then replaced; the old plaintext inode is overwritten, flushed and unlinked. Interrupted
+installation retries from the intact source; a leftover source after installation is erased only
+after the encrypted database unlocks. Migration requires room for both copies and assumes a single
+Rumble instance. Plaintext WAL files are checkpointed and removed before replacement.
+
+Filesystem snapshots, SSD remapping and pre-migration backups may retain plaintext despite this
+overwrite. Full-disk encryption (FileVault, BitLocker or LUKS) remains necessary for those remnants,
+settings, logs, swap and exported documents. SQLCipher does not protect against same-user malware
+or administrators who can access the running process or keychain.
+
+The lock uses `sqlcipher3-binary` on Linux x86-64; the same upstream `sqlcipher3` module's
+self-contained wheels support macOS, Windows and other Linux architectures. Source-sidecar dev
+runs must supply their own `RUMBLE_DB_KEY` in the process environment, even with `--dev`.
 
 ## Known issues
 

@@ -39,6 +39,15 @@ const ALLOWLIST: Record<string, string[]> = {
     // NETWORK.md linked right beside it.
     "on-device",
     "never leave",
+    // #130: owner-approved at-rest copy and the architecture's SQLCipher
+    // label; test_db.py proves keyed reads and rejection by plain SQLite.
+    "encrypt",
+    "sqlcipher",
+  ],
+  [join(SRC_ROOT, "views", "SettingsView.vue")]: [
+    // #130: the same owner-approved, mode-independent storage claim as
+    // README.md; SECURITY.md documents its scope and migration limits.
+    "encrypt",
   ],
 };
 

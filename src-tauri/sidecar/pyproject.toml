@@ -11,6 +11,8 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "pydantic-ai>=0.1",
     "aiosqlite>=0.21",
+    "sqlcipher3-binary>=0.6.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sqlcipher3>=0.6.2; sys_platform != 'linux' or platform_machine != 'x86_64'",
     "httpx>=0.28",
     "sse-starlette>=2.2",
     "pypdf[crypto]>=6.18.1",
