@@ -516,6 +516,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h3 class="text-base font-semibold text-[var(--primary-800)]">Workspace data</h3>
           <p class="text-xs text-[var(--primary-500)]">
+            Your chats and documents are encrypted on your computer; the key lives in your keychain.
             {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>

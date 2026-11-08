@@ -2,6 +2,8 @@
 
 A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine — see [NETWORK.md](NETWORK.md) for exactly what that means and how to verify it.
 
+Your chats and documents are encrypted on your computer; the key lives in your keychain.
+
 Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** and **Linux**.
 
 **End users:** See [Getting Started](agent_docs/2026-03-05-getting-started.md) for installation and usage.
@@ -20,7 +22,7 @@ Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** a
 ├──────────────┬───────────────────────────────┤
 │  Vue 3 UI    │  Python Sidecar (FastAPI)     │
 │  Tailwind    │  PydanticAI + Ollama          │
-│  Vue Router  │  SQLite (aiosqlite)           │
+│  Vue Router  │  SQLCipher (aiosqlite)        │
 │  Pinia       │  SSE streaming                │
 └──────────────┴───────────────────────────────┘
 ```
@@ -58,7 +60,9 @@ cd ../..
 pnpm tauri dev                        # starts Tauri + Vite, and spawns the sidecar
 
 # Optional, in a second terminal: run the sidecar from source instead, so Python
-# changes take effect without rebuilding the binary.
+# changes take effect without rebuilding the binary. Supply RUMBLE_DB_KEY in
+# this process environment: 64 hex characters, matching the database key.
+# The packaged app gets this from the OS keychain automatically.
 pnpm dev:sidecar
 ```
 

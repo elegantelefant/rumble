@@ -3,13 +3,14 @@
 
 import logging
 import os
-import sqlite3
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
 import aiosqlite
+from sqlcipher3 import dbapi2 as sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -69,23 +70,110 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _secure_remove(path: Path) -> None:
+    """Overwrite and unlink the old plaintext inode (SSD/snapshot copies are outside our control)."""
+    if not path.exists():
+        return
+    with path.open("r+b") as old:
+        remaining = os.fstat(old.fileno()).st_size
+        zeros = bytes(1024 * 1024)
+        while remaining:
+            written = old.write(zeros[:min(remaining, len(zeros))])
+            remaining -= written
+        old.flush()
+        os.fsync(old.fileno())
+    path.unlink()
+
+
+def _keyed_connection(path: Path, key: str):
+    connection = sqlite3.connect(str(path))
+    try:
+        # First SQL statement; key is validated hex, never passed through aiosqlite's SQL logger.
+        connection.execute(f"PRAGMA key = \"x'{key}'\"")
+        if not connection.execute("PRAGMA cipher_version").fetchone():
+            raise RuntimeError("SQLCipher is unavailable")
+        connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        return connection
+    except BaseException:
+        connection.close()
+        raise
+
+
+def _migrate_plaintext(path: Path, key: str, backup: Path) -> None:
+    encrypted = path.with_name(path.name + ".migrating-sqlcipher")
+    encrypted.unlink(missing_ok=True)  # An interrupted export; original is still intact.
+    source = sqlite3.connect(str(path))
+    try:
+        try:
+            # Fold committed WAL frames into the source, then remove plaintext journals on close.
+            source.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            source.execute("PRAGMA journal_mode=DELETE")
+            version = source.execute("PRAGMA user_version").fetchone()[0]
+            source.execute("ATTACH DATABASE ? AS encrypted KEY ?", (str(encrypted), f"x'{key}'"))
+            source.execute("SELECT sqlcipher_export('encrypted')")
+            source.execute(f"PRAGMA encrypted.user_version = {version}")
+            source.commit()
+            source.execute("DETACH DATABASE encrypted")
+        finally:
+            source.close()
+        check = _keyed_connection(encrypted, key)
+        check.close()
+        with encrypted.open("rb") as ready:
+            os.fsync(ready.fileno())
+    except BaseException:
+        # Close attached databases before unlinking, including on Windows.
+        encrypted.unlink(missing_ok=True)
+        raise
+    # Keep the complete source until the encrypted copy occupies the database path.
+    os.replace(path, backup)
+    try:
+        os.replace(encrypted, path)
+    except BaseException:
+        os.replace(backup, path)
+        raise
+    _secure_remove(backup)
+
+
+def _open_database(path: Path, key: str):
+    backup = path.with_name(path.name + ".migrating-sqlcipher-plaintext")
+    if backup.exists() and not path.exists():
+        os.replace(backup, path)  # Interrupted between the two renames; retry export.
+    if path.exists():
+        with path.open("rb") as existing:
+            plaintext = existing.read(16) == b"SQLite format 3\x00"
+        if plaintext:
+            _migrate_plaintext(path, key, backup)
+    connection = _keyed_connection(path, key)
+    try:
+        # A crash after installation may have left the source awaiting erasure.
+        _secure_remove(backup)
+    except BaseException:
+        connection.close()
+        raise
+    return connection
+
+
 async def init_db(data_dir: str | None = None) -> None:
     global _db
-    if data_dir:
-        path = Path(data_dir) / "rumble.db"
-        path.parent.mkdir(parents=True, exist_ok=True)
-    else:
-        path = Path("rumble.db")
+    key = os.environ.get("RUMBLE_DB_KEY", "")
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", key):
+        raise RuntimeError("RUMBLE_DB_KEY must contain a 32-byte hexadecimal key")
+    path = Path(data_dir or ".") / "rumble.db"
+    path.parent.mkdir(parents=True, exist_ok=True)
     existed = path.exists()
-    _db = await aiosqlite.connect(str(path))
-    _db.row_factory = aiosqlite.Row
-    await _db.execute("PRAGMA journal_mode=WAL")
-    await _db.execute("PRAGMA foreign_keys=ON")
-    # Zero a deleted row's content in its page rather than leaving it in free space.
-    await _db.execute("PRAGMA secure_delete=ON")
-    await _db.executescript(SCHEMA)
-    await _db.commit()
-    await _compact_once(existed, path)
+    connection = await aiosqlite.Connection(lambda: _open_database(path, key), iter_chunk_size=64)
+    _db = connection
+    try:
+        connection.row_factory = sqlite3.Row
+        await connection.execute("PRAGMA journal_mode=WAL")
+        await connection.execute("PRAGMA foreign_keys=ON")
+        await connection.execute("PRAGMA secure_delete=ON")
+        await connection.executescript(SCHEMA)
+        await connection.commit()
+        await _compact_once(existed, path)
+    except BaseException:
+        await close_db()
+        raise
 
 
 async def _compact_once(existed: bool, path: Path) -> None:

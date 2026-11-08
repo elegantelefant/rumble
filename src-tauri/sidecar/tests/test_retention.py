@@ -6,14 +6,15 @@ import os
 import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import aiosqlite
 import pytest_asyncio
-
 from app import _remove_pidfile, _write_pidfile, create_app, lifespan
 from services import db
+from sqlcipher3 import dbapi2 as cipher
 
 NOW = datetime(2026, 9, 29, 12, 0, 0, tzinfo=UTC)
 RETENTION_DAYS = 30
@@ -115,11 +116,16 @@ async def test_purged_text_is_gone_from_the_database_file_and_wal(tmp_path):
     await db.init_db(str(tmp_path))
     try:
         # Long enough to spill into overflow pages as real document text does.
-        await _job_created_at(CUTOFF - timedelta(days=1), text=MARKER * 2000)
-        assert MARKER.encode() in _file_bytes(tmp_path)
+        job_id = await _job_created_at(CUTOFF - timedelta(days=1), text=MARKER * 2000)
+        assert MARKER in (await db.get_job(job_id))["request"]
+        assert (await (await db._get_db().execute("PRAGMA secure_delete")).fetchone())[0] == 1
+        # Encryption hides the marker even before retention; verify deletion and checkpoint too.
+        assert MARKER.encode() not in _file_bytes(tmp_path)
 
-        await db.purge_jobs_older_than(RETENTION_DAYS, now=NOW)
+        assert await db.purge_jobs_older_than(RETENTION_DAYS, now=NOW) == 1
 
+        assert await db.get_job(job_id) is None
+        assert (tmp_path / "rumble.db-wal").stat().st_size == 0
         assert MARKER.encode() not in _file_bytes(tmp_path)
     finally:
         await db.close_db()
@@ -164,7 +170,7 @@ async def test_compaction_does_not_repeat_on_later_starts(tmp_path, caplog):
     assert not any("compacted" in r.message for r in caplog.records)
 
 
-async def test_startup_purges_expired_jobs(tmp_path, monkeypatch, caplog):
+async def test_startup_purges_expired_jobs(tmp_path, monkeypatch, caplog, database_key):
     monkeypatch.delenv(db.JOB_RETENTION_ENV, raising=False)
     await db.init_db(str(tmp_path))
     expired = await _job_created_at(datetime.now(UTC) - timedelta(days=RETENTION_DAYS + 1))
@@ -176,14 +182,15 @@ async def test_startup_purges_expired_jobs(tmp_path, monkeypatch, caplog):
         async with lifespan(application):
             pass
 
-    async with aiosqlite.connect(tmp_path / "rumble.db") as conn:
-        remaining = {row[0] for row in await (await conn.execute("SELECT id FROM jobs")).fetchall()}
+    with closing(cipher.connect(tmp_path / "rumble.db")) as conn:
+        conn.execute(f"PRAGMA key = \"x'{database_key}'\"")
+        remaining = {row[0] for row in conn.execute("SELECT id FROM jobs").fetchall()}
     assert remaining == {fresh}
     assert expired not in remaining
     assert any("deleted 1 job(s) older than 30 days" in r.message for r in caplog.records)
 
 
-async def test_startup_honours_the_retention_override(tmp_path, monkeypatch):
+async def test_startup_honours_the_retention_override(tmp_path, monkeypatch, database_key):
     await db.init_db(str(tmp_path))
     ten_days_old = await _job_created_at(datetime.now(UTC) - timedelta(days=10))
     await db.close_db()
@@ -192,8 +199,9 @@ async def test_startup_honours_the_retention_override(tmp_path, monkeypatch):
     async with lifespan(create_app(data_dir=str(tmp_path), dev=True)):
         pass
 
-    async with aiosqlite.connect(tmp_path / "rumble.db") as conn:
-        remaining = [row[0] for row in await (await conn.execute("SELECT id FROM jobs")).fetchall()]
+    with closing(cipher.connect(tmp_path / "rumble.db")) as conn:
+        conn.execute(f"PRAGMA key = \"x'{database_key}'\"")
+        remaining = [row[0] for row in conn.execute("SELECT id FROM jobs").fetchall()]
     assert ten_days_old not in remaining
 
 
@@ -244,7 +252,7 @@ def _run_failed_startup(tmp_path, sabotage: str) -> subprocess.CompletedProcess:
         root=str(Path(__file__).resolve().parent.parent), data_dir=str(tmp_path), sabotage=sabotage
     )
     return subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, timeout=STARTUP_EXIT_TIMEOUT_S
+        [sys.executable, "-c", script], check=False, capture_output=True, text=True, timeout=STARTUP_EXIT_TIMEOUT_S
     )
 
 
@@ -270,7 +278,7 @@ async def test_a_failed_compaction_does_not_block_startup_and_retries(tmp_path, 
 
     async def full_disk_vacuum(self, sql, *args, **kwargs):
         if sql == "VACUUM":
-            raise sqlite3.OperationalError("database or disk is full")
+            raise cipher.OperationalError("database or disk is full")
         return await real_execute(self, sql, *args, **kwargs)
 
     monkeypatch.setattr(aiosqlite.Connection, "execute", full_disk_vacuum)

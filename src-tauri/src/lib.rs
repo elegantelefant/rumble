@@ -49,12 +49,17 @@ fn install_panic_hook() {
     }));
 }
 
-fn log_sidecar_stderr(bytes: &[u8], secret: &str) {
+fn log_sidecar_stderr(bytes: &[u8], secret: &str, db_key: &str) {
     let line = String::from_utf8_lossy(bytes);
     let safe = if secret.is_empty() {
         line.into_owned()
     } else {
         line.replace(secret, "[REDACTED]")
+    };
+    let safe = if db_key.is_empty() {
+        safe
+    } else {
+        safe.replace(db_key, "[REDACTED]")
     };
     log::info!("[sidecar] {}", safe.trim());
 }
@@ -658,6 +663,24 @@ fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE_NAME, key).map_err(|e| e.to_string())
 }
 
+fn database_key() -> Result<String, String> {
+    let entry = keyring_entry("db_key")?;
+    match entry.get_password() {
+        Ok(key) if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) => Ok(key),
+        Ok(_) => Err("Invalid database key in system keychain".into()),
+        Err(keyring::Error::NoEntry) => {
+            // Each first byte is unmasked OS randomness from UUID v4; version/variant
+            // bits occur elsewhere. Collect 32 independent random bytes, encoded as hex.
+            let key: String = (0..32)
+                .map(|_| format!("{:02x}", Uuid::new_v4().as_bytes()[0]))
+                .collect();
+            entry.set_password(&key).map_err(|e| e.to_string())?;
+            Ok(key)
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 fn auth_get_token_inner() -> Result<String, String> {
     keyring_entry("auth_token")?
         .get_password()
@@ -897,6 +920,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
+    let db_key = database_key()?;
     let sidecar_cmd = app
         .shell()
         .sidecar("rumble-sidecar")
@@ -912,6 +936,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // defeat the point of the secret. `--secret` stays available for
         // manual dev runs.
         .env("RUMBLE_SIDECAR_SECRET", &state.secret)
+        .env("RUMBLE_DB_KEY", &db_key)
         // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
         // do, so a closed/redirected stdin there can't be mistaken for the host
         // dying.
@@ -967,7 +992,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
-                    log_sidecar_stderr(&line_bytes, &secret_clone);
+                    log_sidecar_stderr(&line_bytes, &secret_clone, &db_key);
                 }
                 CommandEvent::Terminated(payload) => {
                     log::info!(
@@ -1632,7 +1657,8 @@ mod tests {
             &http_client(), &server.uri(), "POST", Some(payload), None, None, Some(secret),
         ).await;
         assert!(result.is_err());
-        log_sidecar_stderr(format!("INFO sidecar started {secret}").as_bytes(), secret);
+        let db_key = "private-db-key-130";
+        log_sidecar_stderr(format!("INFO sidecar started {secret} {db_key}").as_bytes(), secret, db_key);
         log::logger().flush();
         logger.0.lock().unwrap().take();
         let logged = std::fs::read_to_string(&path).unwrap();
@@ -1640,6 +1666,7 @@ mod tests {
         assert!(logged.contains("INFO sidecar started [REDACTED]"));
         assert!(!logged.contains(private_text), "request/response body reached the log");
         assert!(!logged.contains(secret), "sidecar secret reached the log");
+        assert!(!logged.contains(db_key), "database key reached the log");
     }
 
     fn make_state(mode: BackendMode, port: Option<u16>) -> AppState {

@@ -19,6 +19,14 @@ from app import create_app
 from services import db
 
 
+@pytest.fixture(autouse=True)
+def database_key(monkeypatch):
+    """Give every synthetic database (including startup subprocesses) a test-only key."""
+    key = "ab" * 32
+    monkeypatch.setenv("RUMBLE_DB_KEY", key)
+    return key
+
+
 @pytest_asyncio.fixture
 async def tmp_data_dir(tmp_path):
     """Provide a temporary directory for the SQLite database."""
