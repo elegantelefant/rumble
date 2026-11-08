@@ -1395,6 +1395,17 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String>
 
 // --- Settings ---
 
+#[tauri::command]
+async fn pick_templates_folder(app: AppHandle) -> Result<Option<String>, String> {
+    let Some(path) = app.dialog().file().blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let path = path
+        .into_path()
+        .map_err(|e| format!("invalid templates folder path: {}", e))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
 /// Lives in app_local_data_dir, not app_data_dir: on Windows the latter is the
 /// roaming profile, and briefcase and resource names can be client-matter names.
 const SETTINGS_FILE_NAME: &str = "settings.json";
@@ -1557,6 +1568,7 @@ pub fn run() {
             // Document export
             export_draft_docx,
             // Settings
+            pick_templates_folder,
             load_settings,
             save_settings,
             open_logs_folder,
