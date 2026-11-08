@@ -95,8 +95,33 @@ jobs:
         working-directory: src-tauri/sidecar
         shell: cmd
 
+      - name: Configure macOS ad-hoc signing
+        if: runner.os == 'macOS'
+        run: echo 'APPLE_SIGNING_IDENTITY=-' >> "$GITHUB_ENV"
+
       - name: Build Tauri app
         run: pnpm tauri build --bundles ${{ matrix.bundle }}
+
+      - name: Verify macOS app and launch bundled sidecar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(src-tauri/target/release/bundle/dmg/*.dmg)
+          if [ "${#dmgs[@]}" -eq 0 ]; then
+            echo 'No macOS dmg found' >&2
+            exit 1
+          fi
+          mount_dir=$(mktemp -d "${TMPDIR:-/tmp}/rumble-signing.XXXXXX")
+          trap 'hdiutil detach "$mount_dir" >/dev/null 2>&1 || true; rmdir "$mount_dir"' EXIT
+          for dmg in "${dmgs[@]}"; do
+            hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
+            app="$mount_dir/Elefant - Rumble.app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            "$app/Contents/MacOS/rumble-sidecar" --help
+            hdiutil detach "$mount_dir"
+          done
 
       - name: Upload macOS artifact
         if: runner.os == 'macOS'
