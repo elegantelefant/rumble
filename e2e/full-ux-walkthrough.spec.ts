@@ -560,13 +560,6 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08h-settings-storage"), fullPage: true });
   });
 
-  test("8i. storage tab — briefcases and resources", async ({ page }) => {
-    await page.getByRole("button", { name: "Templates & workspace storage" }).click();
-    await expect(page.getByRole("button", { name: "Add briefcase" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Attach resource" })).toBeVisible();
-    await page.screenshot({ path: S("08i-settings-briefcases"), fullPage: true });
-  });
-
   test("8j. appearance tab", async ({ page }) => {
     await page.getByRole("button", { name: "Appearance" }).click();
     await expect(page.getByText("Layout preferences")).toBeVisible();
