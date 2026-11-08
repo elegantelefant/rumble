@@ -2,6 +2,8 @@
 
 A private, on-device legal assistant. Document review, drafting, research, and translation — all running locally via Ollama. Your data never leaves your machine — see [NETWORK.md](NETWORK.md) for exactly what that means and how to verify it.
 
+Your chats and documents are encrypted on your computer; the key lives in your keychain.
+
 Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** and **Linux**.
 
 **End users:** See [Getting Started](agent_docs/2026-03-05-getting-started.md) for installation and usage.
@@ -20,7 +22,7 @@ Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** a
 ├──────────────┬───────────────────────────────┤
 │  Vue 3 UI    │  Python Sidecar (FastAPI)     │
 │  Tailwind    │  PydanticAI + Ollama          │
-│  Vue Router  │  SQLite (aiosqlite)           │
+│  Vue Router  │  SQLCipher (aiosqlite)        │
 │  Pinia       │  SSE streaming                │
 └──────────────┴───────────────────────────────┘
 ```
@@ -94,6 +96,10 @@ Or push a version tag to build all platforms via GitHub Actions:
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
+
+For a manual sidecar run, set `RUMBLE_DB_KEY` in that process’s environment to the 64-character
+hex value from the `elefant-rumble` / `db_key` keychain entry. The Tauri host supplies it
+automatically. Missing, invalid, or incorrect keys refuse startup; there is no plaintext fallback.
 
 ### Tests
 

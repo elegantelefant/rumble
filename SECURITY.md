@@ -44,7 +44,7 @@ is "offline after setup", not "offline".
 
 | Storage | Location, contents and retention |
 |---|---|
-| Diagnostic logs | `rumble.log` in `~/Library/Logs/legal.elefant.rumble/` (macOS), `%LOCALAPPDATA%\legal.elefant.rumble\logs\` (Windows), or `$XDG_DATA_HOME/legal.elefant.rumble/logs/` (Linux, default `~/.local/share/`). Host and sidecar lifecycle/error diagnostics; HTTP logs record status only, without request/response bodies or headers. The host redacts the sidecar secret from relayed stderr; panic logs omit the payload. INFO level, rotation at 5 MiB with one previous file. Plaintext on this device, no automatic upload; Settings → Open logs folder opens the directory. Delete these files there when no longer needed; Delete all local data only removes the database. |
+| Diagnostic logs | `rumble.log` in `~/Library/Logs/legal.elefant.rumble/` (macOS), `%LOCALAPPDATA%\legal.elefant.rumble\logs\` (Windows), or `$XDG_DATA_HOME/legal.elefant.rumble/logs/` (Linux, default `~/.local/share/`). Host and sidecar lifecycle/error diagnostics; HTTP logs record status only, without request/response bodies or headers. The host redacts the sidecar secret and database key from relayed stderr; panic logs omit the payload. INFO level, rotation at 5 MiB with one previous file. Plaintext on this device, no automatic upload; Settings → Open logs folder opens the directory. Delete these files there when no longer needed; Delete all local data only removes the database. |
 
 
 - **SQLite database** — `rumble.db`, with its `-wal`/`-shm` files, in the Tauri *local* app data
@@ -106,22 +106,28 @@ is "offline after setup", not "offline".
   - **Uninstalling** is not relied on to remove this directory or the keychain entries: moving the
     app to the Trash on macOS leaves both, and what the Windows and Linux installers remove has not
     been verified. Delete the directory, and the `elefant-rumble` keychain items, by hand.
-- **OS keychain** — service `elefant-rumble`: the premium `auth_token` and any `byok_<provider>`
+- **OS keychain** — service `elefant-rumble`: the database `db_key`, the premium `auth_token` and any `byok_<provider>`
   keys saved in Settings (`src-tauri/src/lib.rs`, keychain helpers).
 - **Ollama's models** — Ollama's own store (`~/.ollama/models`), managed by Ollama, not rumble.
 
 ## Encryption at rest
 
-Rumble relies on full-disk encryption — FileVault, BitLocker, LUKS — and does not encrypt its
-database itself. Application-level encryption such as SQLCipher would add almost nothing against
-the realistic threats. Against a lost or stolen machine, disk encryption already covers the
-database, and also the WAL files, temp files, swap, exported `.docx` files and Ollama's models,
-which SQLCipher would not. Against code running as the same user, the database key would have to
-sit in that same user's keychain, where the attacker can read it. Firms should require disk
-encryption on any machine running rumble.
+Your chats and documents are encrypted on your computer; the key lives in your keychain.
 
-The Settings screen currently claims "Local storage uses SQLCipher for encryption". That is false
-([#19]).
+The local database and its WAL use SQLCipher. On first sidecar spawn the host creates a
+32-byte random hex key in the OS keychain (`elefant-rumble` / `db_key`) and passes it only
+in the sidecar's `RUMBLE_DB_KEY` environment, never in argv or to the webview. Keychain errors,
+missing/invalid keys and a wrong key refuse startup; no plaintext fallback is permitted.
+Keep the keychain entry with database backups: losing the key makes encrypted data unrecoverable.
+Delete all local data retains this key, alongside the other keychain entries.
+
+An existing plaintext database is exported once with `sqlcipher_export`, preserving chats,
+messages, document jobs and schema version. After verifying the encrypted replacement, the
+old database is overwritten, synced and unlinked. An interrupted rename is recovered on startup.
+Overwriting cannot guarantee removal from SSD wear-levelled blocks, snapshots or older backups.
+Exports, original documents, logs, swap and Ollama models are outside database encryption;
+firms should still require FileVault, BitLocker or LUKS. Code running as the same user may
+access the keychain or process memory; SQLCipher does not protect against that attacker.
 
 ## Known issues
 

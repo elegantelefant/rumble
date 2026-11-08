@@ -49,13 +49,13 @@ fn install_panic_hook() {
     }));
 }
 
-fn log_sidecar_stderr(bytes: &[u8], secret: &str) {
-    let line = String::from_utf8_lossy(bytes);
-    let safe = if secret.is_empty() {
-        line.into_owned()
-    } else {
-        line.replace(secret, "[REDACTED]")
-    };
+fn log_sidecar_stderr(bytes: &[u8], secret: &str, db_key: &str) {
+    let mut safe = String::from_utf8_lossy(bytes).into_owned();
+    for value in [secret, db_key] {
+        if !value.is_empty() {
+            safe = safe.replace(value, "[REDACTED]");
+        }
+    }
     log::info!("[sidecar] {}", safe.trim());
 }
 
@@ -658,6 +658,39 @@ fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE_NAME, key).map_err(|e| e.to_string())
 }
 
+/// UUID v4 uses OS randomness. Skip its version/variant bytes to retain 32 fully random bytes.
+fn new_db_key() -> String {
+    let mut bytes = Vec::with_capacity(42);
+    for _ in 0..3 {
+        let random = Uuid::new_v4();
+        bytes.extend(random.as_bytes().iter().enumerate()
+            .filter(|(index, _)| *index != 6 && *index != 8)
+            .map(|(_, byte)| *byte));
+    }
+    bytes[..32].iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn database_key_with(
+    read: impl FnOnce() -> Result<String, keyring::Error>,
+    store: impl FnOnce(&str) -> Result<(), keyring::Error>,
+) -> Result<String, String> {
+    match read() {
+        Ok(key) if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) => Ok(key),
+        Ok(_) => Err("Invalid database key in keychain".into()),
+        Err(keyring::Error::NoEntry) => {
+            let key = new_db_key();
+            store(&key).map_err(|_| "Could not store database key in keychain".to_string())?;
+            Ok(key)
+        }
+        Err(_) => Err("Could not read database key from keychain".into()),
+    }
+}
+
+fn database_key() -> Result<String, String> {
+    let entry = keyring_entry("db_key")?;
+    database_key_with(|| entry.get_password(), |key| entry.set_password(key))
+}
+
 fn auth_get_token_inner() -> Result<String, String> {
     keyring_entry("auth_token")?
         .get_password()
@@ -893,6 +926,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     // Find a free port synchronously via tauri's async runtime
     let port = tauri::async_runtime::block_on(find_available_port())?;
 
+    let db_key = database_key()?;
     let data_dir = sidecar_data_dir(app)?;
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
@@ -912,6 +946,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         // defeat the point of the secret. `--secret` stays available for
         // manual dev runs.
         .env("RUMBLE_SIDECAR_SECRET", &state.secret)
+        .env("RUMBLE_DB_KEY", &db_key)
         // Only the real spawn path sets this. `pnpm dev:sidecar` and pytest never
         // do, so a closed/redirected stdin there can't be mistaken for the host
         // dying.
@@ -967,7 +1002,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
-                    log_sidecar_stderr(&line_bytes, &secret_clone);
+                    log_sidecar_stderr(&line_bytes, &secret_clone, &db_key);
                 }
                 CommandEvent::Terminated(payload) => {
                     log::info!(
@@ -1601,6 +1636,7 @@ mod tests {
 
         let private_text = "private-document-body-104";
         let secret = "private-sidecar-secret-104";
+        let db_key = "private-database-key-130";
         let payload = serde_json::json!({"text": private_text});
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -1613,7 +1649,7 @@ mod tests {
             &http_client(), &server.uri(), "POST", Some(payload), None, None, Some(secret),
         ).await;
         assert!(result.is_err());
-        log_sidecar_stderr(format!("INFO sidecar started {secret}").as_bytes(), secret);
+        log_sidecar_stderr(format!("INFO sidecar started {secret} {db_key}").as_bytes(), secret, db_key);
         log::logger().flush();
         logger.0.lock().unwrap().take();
         let logged = std::fs::read_to_string(&path).unwrap();
@@ -1621,6 +1657,24 @@ mod tests {
         assert!(logged.contains("INFO sidecar started [REDACTED]"));
         assert!(!logged.contains(private_text), "request/response body reached the log");
         assert!(!logged.contains(secret), "sidecar secret reached the log");
+        assert!(!logged.contains(db_key), "database key reached the log");
+    }
+
+    #[test]
+    fn database_key_is_created_once_and_keychain_failures_refuse_startup() {
+        let mut saved = String::new();
+        let key = database_key_with(|| Err(keyring::Error::NoEntry), |key| {
+            saved = key.to_string();
+            Ok(())
+        }).unwrap();
+        assert_eq!(key, saved);
+        assert_eq!(key.len(), 64);
+        assert!(key.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_ne!(key, new_db_key());
+        assert_eq!(database_key_with(|| Ok(saved.clone()), |_| panic!("replaced key")).unwrap(), saved);
+        assert!(database_key_with(|| Ok("invalid".into()), |_| panic!("replaced invalid key")).is_err());
+        assert!(database_key_with(|| Err(keyring::Error::NoEntry), |_| Err(keyring::Error::NoEntry)).is_err());
+        assert!(database_key_with(|| Err(keyring::Error::TooLong("locked".into(), 1)), |_| panic!("replaced inaccessible key")).is_err());
     }
 
     fn make_state(mode: BackendMode, port: Option<u16>) -> AppState {

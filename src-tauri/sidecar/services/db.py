@@ -1,15 +1,17 @@
 # ABOUTME: Async SQLite database layer for chat persistence.
 # ABOUTME: Manages schema creation, chat CRUD, message and job storage, and job retention via aiosqlite.
 
+import asyncio
 import logging
 import os
-import sqlite3
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
 import aiosqlite
+from sqlcipher3 import dbapi2 as sqlcipher
 
 logger = logging.getLogger(__name__)
 
@@ -69,23 +71,96 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _erase_plaintext(path: Path) -> None:
+    """Overwrite, sync and unlink legacy files (snapshots/SSD remnants need disk encryption)."""
+    if path.exists():
+        with path.open("r+b") as file:
+            remaining = file.seek(0, os.SEEK_END)
+            file.seek(0)
+            zeros = bytes(1024 * 1024)
+            while remaining:
+                size = min(remaining, len(zeros))
+                file.write(zeros[:size])
+                remaining -= size
+            file.flush()
+            os.fsync(file.fileno())
+        path.unlink()
+
+
+def _migrate_plaintext(path: Path, key: str) -> None:
+    backup = path.with_suffix(".db.plaintext")
+    temporary = path.with_suffix(".db.encrypted")
+    # Recover an interruption between the two renames, before inspecting the header.
+    if backup.exists() and not path.exists():
+        backup.replace(path)
+    if not path.exists():
+        return
+    with path.open("rb") as file:
+        plaintext = file.read(16) == b"SQLite format 3\x00"
+    if plaintext:
+        temporary.unlink(missing_ok=True)
+        connection = sqlcipher.connect(str(path))
+        try:
+            # The legacy connection deliberately has no key; its attached destination does.
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            connection.execute("PRAGMA journal_mode=DELETE")
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            connection.execute(f"ATTACH DATABASE ? AS encrypted KEY \"x'{key}'\"", (str(temporary),))
+            connection.execute("SELECT sqlcipher_export('encrypted')")
+            connection.execute(f"PRAGMA encrypted.user_version={version}")
+            connection.commit()
+            connection.execute("DETACH DATABASE encrypted")
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        finally:
+            connection.close()
+        with temporary.open("rb") as file:
+            os.fsync(file.fileno())
+        path.replace(backup)
+        temporary.replace(path)
+    # Verify the encrypted replacement before removing any recovery copy.
+    connection = sqlcipher.connect(str(path))
+    try:
+        connection.execute(f"PRAGMA key = \"x'{key}'\"")
+        connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    finally:
+        connection.close()
+    _erase_plaintext(backup)
+
+
 async def init_db(data_dir: str | None = None) -> None:
     global _db
-    if data_dir:
-        path = Path(data_dir) / "rumble.db"
-        path.parent.mkdir(parents=True, exist_ok=True)
-    else:
-        path = Path("rumble.db")
+    key = os.environ.get("RUMBLE_DB_KEY", "")
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", key):
+        raise RuntimeError("A valid keychain database key is required")
+    path = Path(data_dir) / "rumble.db" if data_dir else Path("rumble.db")
+    path.parent.mkdir(parents=True, exist_ok=True)
     existed = path.exists()
-    _db = await aiosqlite.connect(str(path))
-    _db.row_factory = aiosqlite.Row
-    await _db.execute("PRAGMA journal_mode=WAL")
-    await _db.execute("PRAGMA foreign_keys=ON")
-    # Zero a deleted row's content in its page rather than leaving it in free space.
-    await _db.execute("PRAGMA secure_delete=ON")
-    await _db.executescript(SCHEMA)
-    await _db.commit()
-    await _compact_once(existed, path)
+    await asyncio.to_thread(_migrate_plaintext, path, key)
+
+    def connect():
+        connection = sqlcipher.connect(str(path))
+        try:
+            connection.execute(f"PRAGMA key = \"x'{key}'\"")
+            return connection
+        except BaseException:
+            connection.close()
+            raise
+
+    # Use aiosqlite's worker with a SQLCipher connector, without replacing sqlite globally.
+    _db = await aiosqlite.Connection(connect, iter_chunk_size=64)
+    try:
+        _db.row_factory = sqlcipher.Row
+        await _db.execute("PRAGMA journal_mode=WAL")
+        await _db.execute("PRAGMA foreign_keys=ON")
+        await _db.execute("PRAGMA secure_delete=ON")
+        await _db.executescript(SCHEMA)
+        await _db.commit()
+        await _compact_once(existed, path)
+    except BaseException:
+        await close_db()
+        raise
 
 
 async def _compact_once(existed: bool, path: Path) -> None:
@@ -97,7 +172,7 @@ async def _compact_once(existed: bool, path: Path) -> None:
         try:
             await _db.execute("VACUUM")
             await _checkpoint()
-        except sqlite3.Error as exc:
+        except sqlcipher.Error as exc:
             # Best effort: a full disk or a lock must not stop the sidecar starting. user_version
             # stays unset, so the next start tries again.
             logger.error("could not compact %s (will retry next start): %s", path, exc)
