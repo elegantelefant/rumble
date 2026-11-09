@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           # macOS — Apple Silicon only
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64-apple-darwin
             bundle: dmg
           # Windows — x64 (unsigned preview)
