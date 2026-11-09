@@ -3,7 +3,10 @@
 
 import io
 import logging
+import multiprocessing
 import zipfile
+from collections.abc import Callable
+from multiprocessing.connection import Connection
 
 from docx import Document
 from docx.table import _Cell
@@ -19,6 +22,11 @@ UNREADABLE_DOCX = (
 PASSWORD_PROTECTED_PDF = (
     "This PDF is password protected. Remove the password and upload it again."
 )
+# Below the host's 300-second request timeout, including spawn and cleanup.
+EXTRACTION_TIMEOUT_SECONDS = 60
+EXTRACTION_TIMED_OUT = "timed out"
+EXTRACTION_FAILED = "This document could not be processed."
+
 DOCX_TOO_LARGE = "This Word document is too large or complex to process."
 
 # A .docx is a zip, and python-docx inflates every part into memory and builds
@@ -128,7 +136,7 @@ def extract_docx(data: bytes) -> str:
     return text
 
 
-def extract(filename: str, data: bytes) -> str:
+def _extract_inline(filename: str, data: bytes) -> str:
     """Dispatch on file extension. Plain text passes through unchanged."""
     lower = filename.lower()
 
@@ -143,3 +151,54 @@ def extract(filename: str, data: bytes) -> str:
             raise ExtractionError("File is not valid UTF-8 text.") from exc
 
     raise ExtractionError(f"Unsupported file type: {filename}")
+
+
+def _extract_worker(sender: Connection, worker: Callable[..., str], args: tuple) -> None:
+    """Only the spawned child enters the document parsers."""
+    try:
+        try:
+            result = (True, worker(*args))
+        except ExtractionError as exc:
+            result = (False, str(exc))
+        except Exception:
+            logger.exception("Document extraction failed")
+            result = (False, EXTRACTION_FAILED)
+        sender.send(result)
+    finally:
+        sender.close()
+
+
+def run_isolated(worker: Callable[..., str], *args, timeout_s: float) -> str:
+    """Run a picklable worker in a fresh process; kill and reap it on timeout."""
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(target=_extract_worker, args=(sender, worker, args))
+    try:
+        process.start()
+        sender.close()
+        # Drain the result before joining: text larger than the pipe buffer
+        # otherwise leaves the child blocked in send() and looks like a timeout.
+        if not receiver.poll(timeout_s):
+            raise ExtractionError(EXTRACTION_TIMED_OUT)
+        try:
+            success, result = receiver.recv()
+        except EOFError as exc:
+            raise ExtractionError(EXTRACTION_FAILED) from exc
+        if not success:
+            raise ExtractionError(result)
+        return result
+    finally:
+        sender.close()
+        receiver.close()
+        if process.pid is not None:
+            if process.is_alive():
+                process.kill()  # SIGKILL on POSIX, including a parser stuck in Python.
+            process.join()
+        process.close()
+
+
+def extract(filename: str, data: bytes) -> str:
+    """Extract within the document parser time budget."""
+    return run_isolated(
+        _extract_inline, filename, data, timeout_s=EXTRACTION_TIMEOUT_SECONDS
+    )
