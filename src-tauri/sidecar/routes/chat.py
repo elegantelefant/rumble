@@ -6,9 +6,8 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from sse_starlette.sse import EventSourceResponse
-
 from services import db, llm
+from sse_starlette.sse import EventSourceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +128,8 @@ async def stream_message(chat_id: str, body: dict[str, Any], request: Request) -
             assistant_stored = True
 
             yield {"event": "message", "data": json.dumps({"type": "done", "value": complete_text})}
-        except Exception as exc:
-            logger.exception("SSE stream error for chat %s", chat_id)
+        except Exception as exc:  # noqa: BLE001 — report any provider failure without logging its contents.
+            logger.error("SSE stream error for chat %s: %s", chat_id, type(exc).__name__)
             if not assistant_stored:
                 await db.delete_message(user_msg["id"])
             yield {"event": "message", "data": json.dumps({"type": "error", "value": str(exc)})}
