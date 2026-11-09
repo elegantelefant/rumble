@@ -277,13 +277,41 @@ fn move_to_trash(path: String) -> Result<(), String> {
 
 // --- API proxy ---
 
+const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Local model prompt evaluation and generation can take several minutes.
+const LLM_TIMEOUT_SECS: u64 = 300;
+
+struct RequestTimeouts {
+    default: Duration,
+    llm: Duration,
+}
+
+const REQUEST_TIMEOUTS: RequestTimeouts = RequestTimeouts {
+    default: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+    llm: Duration::from_secs(LLM_TIMEOUT_SECS),
+};
+
+/// Only synchronous model routes receive the longer request budget.
+fn timeout_for_path(path: &str, timeouts: &RequestTimeouts) -> Duration {
+    let path = path.trim_end_matches('/');
+    let segments: Vec<_> = path.split('/').collect();
+    if matches!(path, "/clarify" | "/translate")
+        || path.starts_with("/summarise/")
+        || matches!(segments.as_slice(), ["", "chats", id, "message"] if !id.is_empty())
+    {
+        timeouts.llm
+    } else {
+        timeouts.default
+    }
+}
+
 /// The host's one HTTP client. `no_proxy()` turns off env and system proxies, so
 /// loopback traffic (document text, the shared secret, the bearer token) never
 /// transits a configured proxy (#73). Cloud calls go direct too.
 pub fn http_client() -> Client {
     Client::builder()
         .no_proxy()
-        .timeout(Duration::from_secs(30))
+        .timeout(REQUEST_TIMEOUTS.default)
         .build()
         .expect("failed to build HTTP client")
 }
@@ -296,6 +324,7 @@ async fn make_http_request(
     params: Option<serde_json::Value>,
     auth_token: Option<&str>,
     secret_header: Option<&str>,
+    timeouts: &RequestTimeouts,
 ) -> Result<serde_json::Value, String> {
     let mut builder = match method.to_uppercase().as_str() {
         "GET" => http.get(url),
@@ -305,6 +334,9 @@ async fn make_http_request(
         "DELETE" => http.delete(url),
         other => return Err(format!("unsupported HTTP method: {}", other)),
     };
+
+    let path = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+    builder = builder.timeout(timeout_for_path(path.path(), timeouts));
 
     if let Some(token) = auth_token {
         builder = builder.bearer_auth(token);
@@ -363,7 +395,7 @@ async fn api_call(
             .map_err(|e| log::error!("[keychain] failed to read auth token: {}", e))
             .ok()
     });
-    make_http_request(&state.http, &target.url, &method, body, params, token.as_deref(), secret).await
+    make_http_request(&state.http, &target.url, &method, body, params, token.as_deref(), secret, &REQUEST_TIMEOUTS).await
 }
 
 /// The credentials a request carries: the shared secret for our own sidecar,
@@ -1655,6 +1687,7 @@ mod tests {
             .mount(&server).await;
         let result = make_http_request(
             &http_client(), &server.uri(), "POST", Some(payload), None, None, Some(secret),
+            &REQUEST_TIMEOUTS,
         ).await;
         assert!(result.is_err());
         let db_key = "private-db-key-130";
@@ -2385,6 +2418,64 @@ mod tests {
     use wiremock::matchers::{bearer_token, body_json, body_string_contains, header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    #[test]
+    fn llm_route_timeout_outlasts_default() {
+        assert!(LLM_TIMEOUT_SECS > DEFAULT_TIMEOUT_SECS);
+        assert_eq!(REQUEST_TIMEOUTS.default, Duration::from_secs(30));
+        for path in [
+            "/clarify", "/translate", "/translate/", "/summarise/text",
+            "/summarise/document", "/chats/123/message",
+        ] {
+            assert_eq!(timeout_for_path(path, &REQUEST_TIMEOUTS), REQUEST_TIMEOUTS.llm, "{path}");
+        }
+        for path in [
+            "/health", "/documents", "/extract", "/translate-extra",
+            "/summarise-extra/text", "/chats", "/chats/123/messages",
+            "/chats/123/stream", "/chats//message", "/chats/123/message/extra",
+        ] {
+            assert_eq!(timeout_for_path(path, &REQUEST_TIMEOUTS), REQUEST_TIMEOUTS.default, "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn llm_route_slow_model_outlasts_default() {
+        let server = MockServer::start().await;
+        for route in ["/translate", "/health"] {
+            Mock::given(method("POST"))
+                .and(path(route))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!({"text": "translated"}))
+                        .set_delay(Duration::from_millis(250)),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+        }
+        let timeouts = RequestTimeouts {
+            default: Duration::from_millis(50),
+            llm: Duration::from_secs(5),
+        };
+        // Both requests must override the client's own shorter default.
+        let http = Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_millis(10))
+            .build()
+            .unwrap();
+        let translated = make_http_request(
+            &http, &format!("{}/translate?language=fr", server.uri()), "POST",
+            None, None, None, None, &timeouts,
+        ).await;
+        assert_eq!(translated.unwrap(), serde_json::json!({"text": "translated"}));
+        let started = std::time::Instant::now();
+        let ordinary = make_http_request(
+            &http, &format!("{}/health", server.uri()), "POST",
+            None, None, None, None, &timeouts,
+        ).await;
+        assert!(ordinary.unwrap_err().contains("error sending request"));
+        assert!(started.elapsed() >= timeouts.default);
+    }
+
     #[tokio::test]
     async fn http_get_returns_json() {
         let server = MockServer::start().await;
@@ -2396,7 +2487,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/data", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"ok": true}));
     }
 
@@ -2413,7 +2504,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items", server.uri());
-        let result = make_http_request(&http, &url, "POST", Some(payload), None, None, None).await;
+        let result = make_http_request(&http, &url, "POST", Some(payload), None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"id": "1"}));
     }
 
@@ -2428,7 +2519,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "PUT", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "PUT", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"updated": true}));
     }
 
@@ -2443,7 +2534,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "PATCH", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "PATCH", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"patched": true}));
     }
 
@@ -2458,14 +2549,14 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "DELETE", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "DELETE", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"deleted": true}));
     }
 
     #[tokio::test]
     async fn http_unsupported_method_returns_error() {
         let http = Client::new();
-        let result = make_http_request(&http, "http://localhost", "TRACE", None, None, None, None).await;
+        let result = make_http_request(&http, "http://localhost", "TRACE", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unsupported HTTP method"));
     }
@@ -2484,7 +2575,7 @@ mod tests {
         let http = Client::new();
         let url = format!("{}/search", server.uri());
         let params = serde_json::json!({"foo": "bar", "n": 42});
-        let result = make_http_request(&http, &url, "GET", None, Some(params), None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, Some(params), None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"found": true}));
     }
 
@@ -2501,7 +2592,7 @@ mod tests {
         let http = Client::new();
         let url = format!("{}/secure", server.uri());
         let result =
-            make_http_request(&http, &url, "GET", None, None, Some("test-token"), None).await;
+            make_http_request(&http, &url, "GET", None, None, Some("test-token"), None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"auth": true}));
     }
 
@@ -2517,7 +2608,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/open", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({"open": true}));
         // Verify the mock was hit (no auth header required)
     }
@@ -2533,7 +2624,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/missing", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None, &REQUEST_TIMEOUTS).await;
         let err = result.unwrap_err();
         assert!(err.contains("API error 404"), "got: {}", err);
         assert!(err.contains("not found"), "got: {}", err);
@@ -2550,7 +2641,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/crash", server.uri());
-        let result = make_http_request(&http, &url, "GET", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "GET", None, None, None, None, &REQUEST_TIMEOUTS).await;
         let err = result.unwrap_err();
         assert!(err.contains("API error 500"), "got: {}", err);
         assert!(err.contains("internal failure"), "got: {}", err);
@@ -2561,7 +2652,7 @@ mod tests {
         let http = Client::new();
         // Use a port that's almost certainly not listening
         let result =
-            make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None, None).await;
+            make_http_request(&http, "http://127.0.0.1:1", "GET", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert!(result.is_err());
     }
 
@@ -2576,7 +2667,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/items/1", server.uri());
-        let result = make_http_request(&http, &url, "DELETE", None, None, None, None).await;
+        let result = make_http_request(&http, &url, "DELETE", None, None, None, None, &REQUEST_TIMEOUTS).await;
         assert_eq!(result.unwrap(), serde_json::json!({}));
     }
 
