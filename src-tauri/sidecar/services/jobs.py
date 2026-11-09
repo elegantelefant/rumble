@@ -52,8 +52,8 @@ async def _run_job(job_id: str, coro: Coroutine) -> None:
         reason = str(exc) or "cancelled during shutdown"
         logger.info("Job %s: %s", job_id, reason)
         await db.set_job_result(job_id, error=reason)
-    except Exception as exc:
-        logger.exception("Job %s failed", job_id)
+    except Exception as exc:  # noqa: BLE001 — persist any job failure without logging its contents.
+        logger.error("Job %s failed: %s", job_id, type(exc).__name__)
         await db.set_job_result(job_id, error=str(exc))
 
 

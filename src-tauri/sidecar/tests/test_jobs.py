@@ -9,6 +9,37 @@ from routes.jobs import _normalise_issue_kind
 
 # --- Draft ---
 
+async def test_log_holds_no_document_text(client, caplog):
+    from unittest.mock import AsyncMock, patch
+
+    from services import jobs
+
+    document_text = "Confidential acquisition price: 127 million dollars."
+    provider = AsyncMock(side_effect=ValueError(f"Provider rejected input: {document_text}"))
+    with (
+        patch("services.llm.run_single_turn", new=provider),
+        caplog.at_level("ERROR", logger="services.jobs"),
+    ):
+        response = await client.post("/draft", json={"prompt": document_text})
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+        await asyncio.wait_for(jobs._tasks[job_id], timeout=1)
+        result = await client.get(f"/draft/{job_id}/result")
+
+    assert result.json()["status"] == "failed"
+    assert provider.call_args.args[0] == document_text
+    records = [record for record in caplog.records if record.name == "services.jobs"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.levelname == "ERROR"
+    assert "ValueError" in record.getMessage()
+    assert job_id in record.getMessage()
+    assert record.exc_info is None
+    assert record.stack_info is None
+    assert all(document_text not in record.getMessage() for record in caplog.records)
+    assert document_text not in caplog.text
+
+
 async def test_draft_creates_job(client):
     resp = await client.post("/draft", json={"prompt": "NDA between two parties"})
     assert resp.status_code == 200

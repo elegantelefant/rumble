@@ -4,7 +4,6 @@
 import json
 from unittest.mock import AsyncMock, patch
 
-
 # --- Chat CRUD via HTTP ---
 
 
@@ -165,6 +164,34 @@ async def test_send_message_llm_failure_cleans_up_dangling(client, chat_id):
     assert resp.status_code == 502
     msgs = await client.get(f"/chats/{chat_id}/messages")
     assert len(msgs.json()["messages"]) == 0
+
+
+async def test_log_holds_no_document_text(client, chat_id, caplog):
+    document_text = "Confidential settlement amount: 127000 dollars."
+
+    async def failing_stream(messages, model_name=None):
+        assert messages[-1]["content"] == document_text
+        raise ValueError(f"Provider rejected input: {document_text}")
+        yield  # Make this an async generator like the streaming provider.
+
+    with (
+        patch("services.llm.stream_message", new=failing_stream),
+        caplog.at_level("ERROR", logger="routes.chat"),
+    ):
+        response = await client.post(f"/chats/{chat_id}/stream", json={"text": document_text})
+
+    assert response.status_code == 200
+    assert any(event["type"] == "error" for event in _parse_sse(response.text))
+    records = [record for record in caplog.records if record.name == "routes.chat"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.levelname == "ERROR"
+    assert "ValueError" in record.getMessage()
+    assert chat_id in record.getMessage()
+    assert record.exc_info is None
+    assert record.stack_info is None
+    assert all(document_text not in record.getMessage() for record in caplog.records)
+    assert document_text not in caplog.text
 
 
 def _parse_sse(body: str) -> list[dict]:
