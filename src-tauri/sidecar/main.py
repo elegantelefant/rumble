@@ -3,11 +3,11 @@
 
 import argparse
 import logging
+import multiprocessing
 import os
 import sys
 
 import uvicorn
-
 from app import create_app
 
 DEFAULT_PORT = 11435
@@ -88,4 +88,5 @@ def cli(argv: list[str] | None = None):
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     cli()

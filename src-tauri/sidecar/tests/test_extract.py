@@ -1,14 +1,17 @@
 # ABOUTME: Tests for document text extraction.
 # ABOUTME: Builds real PDF and DOCX bytes rather than mocking the parsers.
 
+import asyncio
 import io
+import multiprocessing
+import time
+import traceback
 import zipfile
 from pathlib import Path
 
 import pytest
 from docx import Document
 from pypdf import PdfWriter
-
 from services import extract as extract_service
 from services.extract import DOCX_TOO_LARGE, ExtractionError, extract, extract_docx
 
@@ -201,3 +204,100 @@ def test_unsupported_extension_raises():
 def test_dispatch_is_case_insensitive():
     data = _docx_bytes(["Clause."])
     assert "Clause." in extract("CONTRACT.DOCX", data)
+
+
+# The outer process is a watchdog for regressions that remove isolation itself.
+# It bounds pytest even when the parser no longer observes the service timeout.
+ISOLATION_TEST_TIMEOUT_SECONDS = 2
+ISOLATION_TEST_BUDGET_SECONDS = 12
+
+
+def _slow_worker(*args) -> str:
+    time.sleep(30)
+    return "too late"
+
+
+def _subprocess_isolation_probe(sender, through_http):
+    extract_service.EXTRACTION_TIMEOUT_SECONDS = ISOLATION_TEST_TIMEOUT_SECONDS
+    try:
+        if through_http:
+            asyncio.run(_subprocess_isolation_http_probe())
+        else:
+            started = time.monotonic()
+            with pytest.raises(ExtractionError, match="^timed out$"):
+                extract_service.run_isolated(
+                    _slow_worker, timeout_s=ISOLATION_TEST_TIMEOUT_SECONDS
+                )
+            elapsed = time.monotonic() - started
+            assert ISOLATION_TEST_TIMEOUT_SECONDS <= elapsed < ISOLATION_TEST_TIMEOUT_SECONDS + 2
+            assert not multiprocessing.active_children()
+            # Larger than a pipe buffer: joining before receiving deadlocks.
+            text = "clause " * 100_000
+            assert extract("notes.txt", text.encode()) == text
+            assert extract("contract.docx", _docx_bytes(["Clause."])) == "Clause."
+        assert not multiprocessing.active_children()
+        sender.send("")
+    except Exception:  # noqa: BLE001 - forward every probe failure to the watchdog parent
+        sender.send(traceback.format_exc())
+    finally:
+        sender.close()
+
+
+async def _subprocess_isolation_http_probe():
+    from app import create_app
+    from httpx import ASGITransport, AsyncClient
+
+    run_isolated = extract_service.run_isolated
+
+    def isolate_test_worker(worker, *args, timeout_s):
+        if args[0] == "slow.txt":
+            worker = _slow_worker
+        return run_isolated(worker, *args, timeout_s=timeout_s)
+
+    extract_service.run_isolated = isolate_test_worker
+    application = create_app(dev=True)
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        for _ in range(2):
+            started = time.monotonic()
+            upload = asyncio.create_task(client.post(
+                "/extract", files={"file": ("slow.txt", b"slow worker", "text/plain")}
+            ))
+            await asyncio.sleep(0.2)
+            health = await asyncio.wait_for(client.get("/health"), timeout=1)
+            assert health.status_code == 200
+            assert not upload.done()
+            response = await upload
+            assert response.status_code == 422
+            assert response.json()["detail"] == extract_service.EXTRACTION_TIMED_OUT
+            assert ISOLATION_TEST_TIMEOUT_SECONDS <= time.monotonic() - started < ISOLATION_TEST_TIMEOUT_SECONDS + 2
+            assert not multiprocessing.active_children()
+            assert (await client.get("/health")).status_code == 200
+        response = await client.post(
+            "/extract", files={"file": ("notes.txt", b"still serving", "text/plain")}
+        )
+        assert response.status_code == 200
+        assert response.json()["text"] == "still serving"
+
+
+@pytest.mark.parametrize("through_http", [False, True], ids=["service", "route"])
+def test_subprocess_isolation(through_http):
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    probe = context.Process(target=_subprocess_isolation_probe, args=(sender, through_http))
+    try:
+        probe.start()
+        sender.close()
+        assert receiver.poll(ISOLATION_TEST_BUDGET_SECONDS), "extraction exceeded watchdog budget"
+        assert receiver.recv() == ""
+        probe.join(timeout=1)
+        assert probe.exitcode == 0
+    finally:
+        sender.close()
+        receiver.close()
+        if probe.pid is not None:
+            if probe.is_alive():
+                probe.kill()
+            probe.join()
+        probe.close()
