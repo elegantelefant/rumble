@@ -165,7 +165,15 @@ runs must supply their own `RUMBLE_DB_KEY` in the process environment, even with
 ## Build and update integrity
 
 - **macOS preview builds are ad-hoc signed with hardened runtime and unnotarized; Developer ID signing follows ([#102](https://github.com/elegantelefant/rumble/issues/102)).**
-- **No auto-updater.** None is in the build; updates are a manual download.
+- **Manual signed updates.** Settings → Check for updates requests the GitHub release manifest only when clicked; the offered version is shown before a second click downloads and installs it. Tauri uses the owner-approved public key in the updater configuration to verify the installer signature before installation. No startup checks. Restart Rumble after installation on macOS/Linux. Release builds enable updater artifacts only with `pnpm build:release`; ordinary builds do not generate them.
+
+Release manifest generation: after `pnpm build:release` signs the updater artifacts, run
+`pnpm updater:manifest VERSION TAG PLATFORM=PATH.sig [...] > latest.json` (for example,
+`darwin-aarch64=release/Rumble.app.tar.gz.sig`). Upload `latest.json` and the corresponding
+artifacts to that GitHub release. Signatures are embedded per platform; the manifest itself
+is metadata, not a separately signed file. Keep the signing private key in the release
+process environment.
+
 - **Supply chain.** CI actions are pinned by tag, not commit SHA; `uv sync` runs without
   `--locked`; releases publish no checksums, SBOM or build provenance. SHA-pinned actions,
   locked installs, CycloneDX SBOMs, build attestation and release checksums are planned ([plan](agent_docs/2026-09-22-credible-delightful-local-first-plan.md)

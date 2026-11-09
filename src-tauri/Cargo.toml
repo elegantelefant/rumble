@@ -37,6 +37,7 @@ uuid = { version = "1", features = ["v4"] }
 # decoders we don't need — this only builds text paragraphs.
 docx-rs = { version = "0.4", default-features = false }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 percent-encoding = "2"
 
 [dev-dependencies]
