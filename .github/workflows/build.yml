@@ -142,13 +142,25 @@ jobs:
             exit 1
           fi
           mount_dir=$(mktemp -d "${TMPDIR:-/tmp}/rumble-signing.XXXXXX")
-          trap 'hdiutil detach "$mount_dir" >/dev/null 2>&1 || true; rmdir "$mount_dir"' EXIT
+          detach_mount() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if [ "$attempt" -eq 5 ]; then
+                hdiutil detach -force "$mount_dir" || true
+              elif hdiutil detach "$mount_dir"; then
+                return 0
+              else
+                sleep 2
+              fi
+            done
+          }
+          trap 'detach_mount >/dev/null 2>&1 || true; rmdir "$mount_dir" || true' EXIT
           for dmg in "${dmgs[@]}"; do
             hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
             app="$mount_dir/Elefant - Rumble.app"
             codesign --verify --deep --strict --verbose=2 "$app"
             "$app/Contents/MacOS/rumble-sidecar" --help
-            hdiutil detach "$mount_dir"
+            detach_mount
           done
 
       - name: Upload macOS artifact
