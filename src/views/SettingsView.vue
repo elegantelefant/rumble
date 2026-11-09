@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { Channel, Resource, invoke } from "@tauri-apps/api/core";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
 import {
@@ -15,6 +15,44 @@ import {
 
 const toast = useToast();
 const openingLogs = ref(false);
+
+// Keep the host's update resource between the two explicit user actions.
+type OfferedUpdate = { rid: number; version: string };
+const offeredUpdate = ref<OfferedUpdate | null>(null);
+const updating = ref(false);
+const updateStatus = ref("");
+
+onUnmounted(() => {
+  if (offeredUpdate.value) {
+    void new Resource(offeredUpdate.value.rid).close().catch(() => {});
+  }
+});
+
+async function checkOrInstallUpdate() {
+  if (updating.value) return;
+  updating.value = true;
+  try {
+    if (offeredUpdate.value) {
+      await invoke("plugin:updater|download_and_install", {
+        rid: offeredUpdate.value.rid,
+        onEvent: new Channel(),
+      });
+      updateStatus.value = "Update installed. Restart Rumble to use the new version.";
+      await new Resource(offeredUpdate.value.rid).close().catch(() => {});
+      offeredUpdate.value = null;
+    } else {
+      offeredUpdate.value = await invoke<OfferedUpdate | null>("plugin:updater|check");
+      updateStatus.value = offeredUpdate.value
+        ? `Version ${offeredUpdate.value.version} is available.`
+        : "You're up to date.";
+    }
+  } catch (error) {
+    updateStatus.value = `Could not update Rumble: ${String(error)}`;
+    toast.addToast(updateStatus.value, "error");
+  } finally {
+    updating.value = false;
+  }
+}
 
 async function openLogsFolder() {
   openingLogs.value = true;
@@ -378,6 +416,14 @@ const selectedProviderDetails = computed(() =>
         Open logs folder
       </button>
     </div>
+
+    <section class="card space-y-2" aria-label="App updates">
+      <p class="text-sm">Updates are checked only when you ask. Installing downloads a signed update.</p>
+      <p role="status">{{ updateStatus }}</p>
+      <button class="btn-secondary" type="button" :disabled="updating" @click="checkOrInstallUpdate">
+        {{ updating ? 'Working…' : offeredUpdate ? `Install version ${offeredUpdate.version}` : 'Check for updates' }}
+      </button>
+    </section>
 
     <div class="flex flex-wrap gap-2">
       <button

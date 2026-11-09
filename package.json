@@ -13,7 +13,9 @@
     "generate:models": "cd src-tauri/sidecar && uv run datamodel-codegen --input ../../sidecar-openapi.json --output models/generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --disable-timestamp",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:release": "tauri build --config '{\"bundle\":{\"createUpdaterArtifacts\":true}}'",
+    "updater:manifest": "node scripts/updater-manifest.mjs"
   },
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
@@ -22,7 +24,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "lucide-vue-next": "^0.545.0",
     "vue": "^3.5.13",
-    "vue-router": "^4.5.1"
+    "vue-router": "^4.5.1",
+    "@tauri-apps/plugin-updater": "^2"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
