@@ -1378,10 +1378,11 @@ fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
 
 /// Writes to `dest` atomically. `write` receives a handle to a fresh, uniquely
 /// named, dot-prefixed temp file created in `dest`'s own directory; the temp
-/// file is renamed onto `dest` only once `write` returns `Ok`. A rename within
-/// one filesystem is atomic, so a reader never observes a partial file, and on
-/// any failure the temp file is removed and `dest` (existing or not) is left
-/// untouched.
+/// file is synced and renamed onto `dest` only once `write` returns `Ok`.
+/// A rename within one filesystem is atomic, so a reader never observes a
+/// partial file. On failure before the rename, the temp file is removed and
+/// `dest` is left untouched. On Unix the directory is synced after the rename;
+/// if that sync fails, an error is returned but `dest` already holds the new file.
 fn write_atomically(
     dest: &Path,
     write: impl FnOnce(&std::fs::File) -> Result<(), String>,
@@ -1389,14 +1390,19 @@ fn write_atomically(
     let dir = dest.parent().unwrap_or_else(|| Path::new("."));
     let temp_name = format!(
         ".{}.{}.tmp",
-        dest.file_name().and_then(|n| n.to_str()).unwrap_or("export"),
+        dest.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("export"),
         Uuid::new_v4()
     );
     let temp_path = dir.join(temp_name);
 
-    let file =
-        std::fs::File::create(&temp_path).map_err(|e| format!("failed to create temp file: {}", e))?;
-    let result = write(&file);
+    let file = std::fs::File::create(&temp_path)
+        .map_err(|e| format!("failed to create temp file: {}", e))?;
+    let result = write(&file).and_then(|()| {
+        file.sync_all()
+            .map_err(|e| format!("failed to sync temp file: {}", e))
+    });
     drop(file);
 
     if let Err(e) = result {
@@ -1407,7 +1413,14 @@ fn write_atomically(
     std::fs::rename(&temp_path, dest).map_err(|e| {
         let _ = std::fs::remove_file(&temp_path);
         format!("failed to finalize export: {}", e)
-    })
+    })?;
+
+    #[cfg(unix)]
+    std::fs::File::open(dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|e| format!("failed to sync export directory: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1530,15 +1543,14 @@ fn save_settings_to(path: &Path, incoming: Settings) -> Result<Option<PathBuf>, 
     Ok(aside)
 }
 
-/// Atomic rename of an fsynced temp file; the directory itself is not fsynced.
+/// Atomic rename of a synced temp file, followed by a directory sync on Unix.
 fn write_settings(path: &Path, settings: &Settings) -> Result<(), String> {
     let write = || {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
         write_atomically(path, |file| {
-            serde_json::to_writer_pretty(file, settings).map_err(|e| e.to_string())?;
-            file.sync_all().map_err(|e| e.to_string())
+            serde_json::to_writer_pretty(file, settings).map_err(|e| e.to_string())
         })
     };
     write().map_err(|e| format!("couldn't save settings to {}: {}", path.display(), e))
@@ -2201,6 +2213,22 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(std::fs::read(&dest).unwrap(), b"hello docx");
+        assert_eq!(entries(dir.path()), vec![dest]);
+    }
+
+    #[test]
+    fn write_atomically_syncs_and_places_content_when_write_does_not_sync() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("draft.docx");
+        std::fs::write(&dest, b"old draft").unwrap();
+
+        write_atomically(&dest, |mut file| {
+            file.write_all(b"replacement draft")
+                .map_err(|e| e.to_string())
+        })
+        .unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), b"replacement draft");
         assert_eq!(entries(dir.path()), vec![dest]);
     }
 
