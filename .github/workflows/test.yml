@@ -27,7 +27,8 @@ jobs:
 
   e2e:
     name: Frontend (Playwright)
-    runs-on: ubuntu-latest
+    # The pinned Playwright has no chromium build for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
