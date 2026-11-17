@@ -163,6 +163,14 @@ jobs:
             detach_mount
           done
 
+      - name: Install the Windows bundles and launch the installed sidecar
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = Get-ChildItem src-tauri/target/release/bundle/msi/*.msi, src-tauri/target/release/bundle/nsis/*-setup.exe
+          if ($installers.Count -ne 2) { throw "expected one .msi and one -setup.exe, found $($installers.Count)" }
+          foreach ($installer in $installers) { ./scripts/smoke-windows-install.ps1 -Installer $installer.FullName }
+
       - name: Upload macOS artifact
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
