@@ -21,6 +21,9 @@ use percent_encoding::percent_decode_str;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
 
+#[cfg_attr(not(test), allow(dead_code))]
+mod sync_crypto;
+
 // Keep one rotated file plus the active file, each about 5 MiB.
 const MAX_LOG_FILE_BYTES: u128 = 5 * 1024 * 1024;
 
