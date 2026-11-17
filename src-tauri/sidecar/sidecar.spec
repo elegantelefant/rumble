@@ -1,7 +1,9 @@
 # ABOUTME: PyInstaller spec for building the rumble-sidecar binary.
-# ABOUTME: Bundles FastAPI + Uvicorn + PydanticAI into a onefile distributable.
+# ABOUTME: Bundles FastAPI + Uvicorn + PydanticAI: onedir on macOS (an app helper), onefile elsewhere.
 
 # -*- mode: python ; coding: utf-8 -*-
+
+import sys
 
 from PyInstaller.utils.hooks import copy_metadata
 
@@ -73,13 +75,17 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# macOS: onedir, shipped as a helper inside the signed .app (Contents/Helpers), so nothing is
+# unpacked to a temp folder at launch and every library is sealed by the app's signature (#157).
+# Elsewhere: onefile, shipped as a Tauri externalBin.
+ONEDIR = sys.platform == "darwin"
+
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+    *([] if ONEDIR else [a.binaries, a.zipfiles, a.datas]),
     [],
+    exclude_binaries=ONEDIR,
     name="rumble-sidecar",
     debug=False,
     bootloader_ignore_signals=False,
@@ -87,3 +93,6 @@ exe = EXE(
     upx=False,
     console=True,
 )
+
+if ONEDIR:
+    coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, name="rumble-sidecar")
