@@ -106,8 +106,14 @@ jobs:
         run: uv sync
         working-directory: src-tauri/sidecar
 
-      - name: Build sidecar (Unix)
-        if: runner.os != 'Windows'
+      # macOS: an onedir helper app in sidecar/dist, which tauri.macos.conf.json places in Contents/Helpers.
+      - name: Build sidecar (macOS)
+        if: runner.os == 'macOS'
+        run: uv run pyinstaller sidecar.spec --noconfirm
+        working-directory: src-tauri/sidecar
+
+      - name: Build sidecar (Linux)
+        if: runner.os == 'Linux'
         run: |
           uv run pyinstaller sidecar.spec --noconfirm
           mkdir -p ../binaries
@@ -159,7 +165,7 @@ jobs:
             hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
             app="$mount_dir/Elefant - Rumble.app"
             codesign --verify --deep --strict --verbose=2 "$app"
-            "$app/Contents/MacOS/rumble-sidecar" --help
+            "$app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar" --help
             detach_mount
           done
 
