@@ -1,68 +1,99 @@
 # Team sync: plan
 
-This is a design plan, not code. Refs #21. It was read against `main` at 2641249 on 2026-11-17. Sizes are S/M/L; there are no dates.
+This is a design plan, not code. Refs #21. It was read against `main` at 2641249 on 2026-11-17. Sizes are given as S/M/L, never as dates.
 
 ## 1. The problem, in the owner's words
 
 > "how to keep docs synced within a team, but local only, and when different laptops come on at different times." (owner, 2026-11-17)
 
+> "also need to have version changes tracked. that's crucial." (owner, 2026-11-17)
+
+> "back in the day we went through how to sync decentralised. we looked at things like telegram and other protocols." … "yes signal is closer." (owner, 2026-11-17)
+
 > "rumble-sync exists as an idea on the roadmap, not as a repo. The concept: users on local language models can still work with colleagues through a decentralised sync mechanism rather than syncing to a server, keeping infrastructure costs down. Researched but not built out." (owner, #21, 2026-09-17)
 
 The product rule (owner, 2026-11-17) also applies: free and open source as a trust builder, Elefant's managed service for most people, a seamless upgrade, no pushiness.
 
-The hard part is the last clause of the first quote. Two laptops may never be on at the same moment, so nothing can depend on a live peer.
+Two things are hard:
+- **Timing.** Laptops may never be on at the same moment, so nothing can depend on a live peer.
+- **History.** Every change must stay attributable and comparable, including two changes made offline at the same time.
 
-## 2. What a synced "doc" is, in the code today
+### The earlier design this builds on
 
-Rumble has no "document" or "matter" record. The sidecar database (`src-tauri/sidecar/services/db.py`, `SCHEMA`) has three tables. Schema changes so far are only `CREATE TABLE IF NOT EXISTS` plus one `user_version` marker, which already means "compacted" (`SCHEMA_VERSION_COMPACTED`).
+`elefant_api_monorepo/agent_docs/2026-02-10-stub-implementation-plan.md` §12, "Briefcase sharing — Telegram-style E2E encrypted", is the research the owner recalls. It keeps:
+- per-person X25519 keys;
+- a per-briefcase symmetric key, "wrapped" (encrypted) separately for each sharee;
+- a relay that "never sees plaintext";
+- "revocation is best-effort";
+- libsodium.
 
-| Table | What it holds today |
-|---|---|
-| `chats` (`id` UUIDv4, `title`, timestamps) | One per review session. `DocumentReviewView.vue` calls `createChat(file.name)` after a review |
-| `messages` (`id` UUIDv4, `chat_id`, `role`, `content`, `created_at`) | The seed user message (the **full document text** and the review summary) and the follow-up Q&A (`routes/chat.py` `send_message`) |
-| `jobs` (`request`, `result`) | Draft, review and research inputs and outputs, purged after 30 days (`DEFAULT_JOB_RETENTION_DAYS`) |
+This plan keeps all five. It changes four things:
 
-What is *not* stored:
-- **The review's issues list.** It is never saved. The summary and issues are pushed only onto the in-memory `session.messages` (`DocumentReviewView.vue`, "Build assistant messages from the review result").
-- **A way back into a session.** `src/api/sidecar.ts` has `createChat`, `getChat` and `sendMessage`, but no list call. Sessions live in the view's memory, so a past review cannot be reopened.
-- **Templates.** They are hardcoded in `DocumentDraftView.vue` (`templates = [employment, nda, service]`). The Settings templates folder is saved, but nothing reads it (#144).
-- **Drafts.** A draft is a job result exported to Word (`export_draft_docx`). Editing and co-authoring happen in Word, not in Rumble.
+| §12 | Here | Why |
+|---|---|---|
+| AES-256-GCM plus HKDF ("Encryption Details") | libsodium `SecretBox` (XSalsa20 plus Poly1305) and sealed boxes | Composed, high-level libsodium calls; random nonces are safe (§4) |
+| `permission` 'read' / 'read_write', `expires_at` | Dropped from the MVP: every member can save versions; there is no expiry | YAGNI until a pilot asks. Read-only members would need admin-signed roles (phase 3) |
+| A server publishes public keys and stores blobs (`user_public_keys`, `briefcase_sync_blobs`) | The firm's synced folder carries both; an Elefant relay becomes an optional second transport | Local-only must work with no Elefant infrastructure |
+| `version INTEGER` and `GET …/sync/latest` | Each version is an immutable file naming its parent versions | "latest" silently drops one of two offline edits, and keeps no history |
+| No signatures | Every file is signed by its author's device key | Every change has a provable author: the audit |
+| Revoke deletes the share record; the key stays the same | Removal starts a new matter key | A removed person cannot read anything written afterwards |
 
-A colleague needs **the review session**: the document text, the AI's summary and issues, and the Q&A so far, with who shared it and when. A review is finished work product, not a text two people type into at once.
+§12's open questions get answers here: "Group sharing" (§5), "Conflict resolution: … last-write-wins or CRDT?" (neither: a person reconciles, §5), "Key backup" (decision 8) and "Offline: how long can a client hold data offline" (indefinitely: §5.4; expiry is not in the MVP).
 
-**Definition used below.** A **synced doc** is a *shared review*: an immutable snapshot of one review session, placed in a **matter**. A matter is a named folder plus a key, shared by the people working on it. Sharing again creates a new snapshot; nothing is ever edited in place.
+## 2. What a synced "doc" is
+
+Today Rumble has no document or matter record. The sidecar database (`src-tauri/sidecar/services/db.py`, `SCHEMA`) has three tables:
+- `chats` (UUIDv4 `id`, `title`) and `messages` (the seed message with the document text, then the Q&A);
+- `jobs`, holding draft, review and research requests and results, purged after 30 days.
+
+A draft is a job result. `DocumentDraftView.vue` shows it in a read-only `<pre>` and exports it with `export_draft_docx`. It cannot be edited, saved or reopened. A review's issues list is never stored; it lives in `session.messages` in memory. `src/api/sidecar.ts` has no call that lists chats. Templates are hardcoded, and the templates folder in Settings is unused (#144).
+
+"Version changes tracked" only means something for a document people change. That is the draft, not the review. Options:
+
+| | Rumble-native drafts | `.docx` edited in Word |
+|---|---|---|
+| What a version is | The draft's text, saved in Rumble | The whole `.docx`, checked back into Rumble after editing in Word |
+| Redline | A word diff of two texts (stdlib `difflib`) | Needs text extraction from `.docx` (`python-docx` is already a dependency); formatting changes are invisible |
+| Needs | A document and version model, plus an editable draft view | The same model, plus a check-in flow and file watching or manual import |
+| Phase | **MVP** | Phase 4 |
+
+**Definition.**
+- A **doc** is a Rumble-native draft.
+- A **version** is one immutable snapshot of its text, with its parents, author, time, content hash and signature.
+- A **matter** is the unit of sharing and the ethical wall: a folder, a member list and a key.
+
+The review-snapshot MVP from v1 of this plan is dropped. It would have shipped sharing without versions, and the version model would then have had to be retrofitted. A review can become a doc later: "save review as a doc".
 
 ## 3. Options compared
 
-### 3a. Transport: how bytes get from laptop A to laptop B when they are never on together
+### 3a. Transport: getting bytes from A to B when they are never on together
 
-| Option | Works when peers are never online together? | New egress from Rumble | Infra cost to Elefant | Fits Rumble's current claims |
+| Option | Never on together? | New egress from Rumble | Elefant infra | Verdict |
 |---|---|---|---|---|
-| (a0) Put `rumble.db` itself in a synced folder | Corrupts the database (§4, SQLite) | None | None | No |
-| **(a) The firm's synced folder** (OneDrive/SharePoint, Dropbox, iCloud, SMB) used as a mailbox of encrypted files | **Yes.** The folder service stores and forwards | **None.** Rumble reads and writes local files; the firm's sync client moves them | None | Yes: Rumble stays "offline after setup" |
-| (b) LAN peer-to-peer with mDNS | **No.** Both laptops must be awake on one network | A non-loopback listener, against "Sidecar binds `127.0.0.1` only" (NETWORK.md) | None | No |
-| (c) A P2P library with relays (iroh) | **No**, by itself. Its relays store nothing (§4) | Yes, to relays | Low | No |
-| (d) An Elefant-hosted relay (mailbox) | Yes | Yes, to Elefant | Ongoing | Only as an opt-in mode with its own NETWORK.md row |
+| Put `rumble.db` in a synced folder | Corrupts the database (§4) | None | None | No |
+| **(a) The firm's synced folder** (OneDrive/SharePoint, Dropbox, iCloud, SMB) used as a mailbox of signed, encrypted files | **Yes**: the folder service stores and forwards | **None**: Rumble does local file I/O, and the firm's sync client moves ciphertext | None | **v1, free** |
+| (b) LAN P2P with mDNS | No: both must be awake on one network | A non-loopback listener, which breaks "Sidecar binds 127.0.0.1 only" (NETWORK.md) | None | No |
+| (c) A P2P library with relays (iroh) | No: relays "don't store your application data" (§4) | Yes | Low | No |
+| **(d) An Elefant relay**: a mailbox that stores the same files | Yes | Yes, to Elefant, opt-in | Ongoing | **Later, Premium** |
 
-Only (a) and (d) solve "different times". Option (a) needs no server and no network code. It uses storage the firm already trusts, permissions and backs up. That is the owner's "decentralised … rather than syncing to a server", built on infrastructure firms already run.
+The transport is a small interface over one file format: `list names`, `read file`, `write file`. The folder implements it with the filesystem. The relay implements the same three operations over HTTPS and sees what the folder sees: ciphertext and file names. Switching transports changes no record and no key.
 
-### 3b. Merge: do we need a CRDT?
+### 3b. Merging concurrent edits
 
-| Library | What it would buy | Why not |
-|---|---|---|
-| Automerge, Yjs/`yrs`, Loro | Concurrent editing of one text | Nothing in Rumble is co-edited. Shared reviews are immutable snapshots, and drafts are edited in Word |
-| cr-sqlite | Row-level CRDT merge inside SQLite | A native extension stacked on SQLCipher and PyInstaller. It has had no release since 2024 (§4) |
+| Approach | For legal text |
+|---|---|
+| Last write wins (§12's `sync/latest`) | Silently loses one person's work. Rejected |
+| CRDT (Automerge, yrs, Loro; §4) | Interleaves both people's characters automatically, a merge nobody reviewed. Rejected for legal text, and unnecessary without live co-typing |
+| **Version graph plus human reconcile** | Each save is a new version naming its parent(s). Two offline saves from one parent make a **fork**: two versions, shown with a redline. A person picks one, or combines them, and saves a version with both as parents. Nothing is merged automatically |
 
-Without in-place edits, merging is just the union of snapshots by id. A CRDT would only become relevant if Rumble gained an editor that two people type into (see §6, "Not planned").
+### 3c. Identity, keys and membership
 
-### 3c. Encryption and membership
-
-| Option | Joining | Removing | Proof of sender | Complexity |
-|---|---|---|---|---|
-| Folder ACL only, plaintext files | The firm grants folder access | The firm revokes access | Folder service logs | Lowest. But the provider, and anyone with folder access, can read client documents (§4, Microsoft 365) |
-| **One key per matter, handed over as a code** (Fernet) | A member gives the code to the new person | The firm revokes folder access. A member rotates the key and gives the new code to the people who stay | Inside the team, authorship is claimed, not proved. Outsiders cannot write anything that imports | Low |
-| Per-person keypairs, encrypting to each member and signing (age plus Ed25519) | Exchange public keys | Stop encrypting to them | Yes | Medium: a signed roster, and conflicts over the roster |
-| An MLS group (e.g. OpenMLS) | A protocol handshake | A protocol commit | Yes, plus forward secrecy | High. It needs ordered delivery of commits, which a folder does not provide |
+| Option | Who wrote it? | Remove a person | Verdict |
+|---|---|---|---|
+| One shared matter code (v1 of this plan) | Claimed, not proved | Hand a new code to everyone who stays | Too weak for an audit trail |
+| **Per-device identity keys; the matter key wrapped per device; every file signed** (§12 plus signatures, and Signal's identity and safety-number model) | Proved (Ed25519) | A new matter key, wrapped for those who stay; nobody passes codes around | **Recommended** |
+| Signal protocol proper (X3DH/PQXDH plus Double Ratchet or sender-key ratchets) | Proved, plus forward secrecy | Protocol-managed | Rejected: forward secrecy conflicts with reading history years later and with new devices seeing past versions; it needs ordered delivery a folder cannot give; libsignal is AGPL-3.0 (§4) |
+| MLS (e.g. OpenMLS) | Proved | Protocol commit | Rejected: needs ordered commits, so it is heavy for a folder |
 
 ## 4. Research: primary sources
 
@@ -87,15 +118,31 @@ Checked 2026-11-17. Quotes are verbatim; "silent" means the source does not say.
 | [Loro](https://github.com/loro-dev/loro) | MIT | 1.18.0, 2026-11-16 | `loro` 1.18.0 | "Loro 1.0 is out!" (README); format-stability page refused fetch: unverified | Export modes `Updates`, `Snapshot` ([docs.rs](https://docs.rs/loro/latest/loro/enum.ExportMode.html)) | silent |
 | [cr-sqlite](https://github.com/vlcn-io/cr-sqlite) | MIT | v0.16.3, **2024-01-17** | loadable extension | Author, 2024-12-30: "I'm full time on https://zero.rocicorp.dev/ these days." and "I don't see that happening for at least 1-2 years" ([#444](https://github.com/vlcn-io/cr-sqlite/issues/444)) | n/a | "a run-time loadable extension for SQLite"; SQLCipher compatibility: silent |
 
-All three CRDTs could carry their updates as files. None is needed while every record is immutable (§2, §5).
+All three CRDTs could carry their updates as files. None is needed while every record is immutable (§2).
 
 **Peer-to-peer.**
 - [iroh](https://github.com/n0-computer/iroh) (MIT OR Apache-2.0, v1.4.1, 2026-10-21): "Iroh hardcodes a set of public relays provided by n0.computer"; relays "don't store your application data; they just facilitate connections"; "Public relays are suitable for development and testing"; self-hosting supported ([relays](https://docs.iroh.computer/concepts/relays)). `iroh-blobs` README: "this version of iroh-blobs is not yet considered production quality." Iroh does not say whether peers must be online together (silent). Relays that store nothing imply they must be, which is our inference.
 - Tauri: there is no official mDNS or LAN-discovery plugin among the 31 in [plugins-workspace](https://github.com/tauri-apps/plugins-workspace).
 
-**Encryption.**
-- [Fernet](https://cryptography.io/en/latest/fernet/) (`cryptography`, already locked at 46.0.5): "Fernet guarantees that a message encrypted using it cannot be manipulated or read without the key." "AES in CBC mode with a 128-bit key … HMAC using SHA256 for authentication." "The encrypted message contains the current time when it was generated in plaintext." "Fernet is ideal for encrypting data that easily fits in memory." It is the library's high-level recipe; the AEAD primitives sit under a module that calls itself "Hazardous Materials" ([AEAD](https://cryptography.io/en/latest/hazmat/primitives/aead/)), which is why they are not used directly.
-- [age](https://github.com/C2SP/C2SP/blob/main/age.md) wraps the file key "for one or more _recipients_". The spec says nothing about sender authentication. Rust `age` 0.12.1 and `pyrage` 1.4.0 exist. Kept for the per-person-key variant if it is ever needed.
+**Encryption library.**
+- [PyNaCl](https://github.com/pyca/pynacl), the Python binding to libsodium, from the same maintainers as `cryptography` (pyca): 1.6.2 (2026-01-01), Apache-2.0, not archived, last push 2026-11-03 (PyPI and GitHub API).
+  - [SecretBox](https://pynacl.readthedocs.io/en/latest/secret/) "encrypts and decrypts messages using the given secret key". It uses the XSalsa20 stream cipher with a Poly1305 MAC, and its docs say "You can safely generate random nonces" (24 bytes).
+  - Sealed boxes ([libsodium](https://doc.libsodium.org/public-key_cryptography/sealed_boxes)) "are designed to anonymously send messages to a recipient given their public key… While the recipient can verify the integrity of the message, they cannot verify the identity of the sender." That is why every record is also signed (Ed25519, [PyNaCl signing](https://pynacl.readthedocs.io/en/latest/signing/)).
+  - Each device holds two key pairs, one to sign and one to receive keys, for key separation. Whether to convert one into the other is irrelevant to this design.
+- [`cryptography`](https://cryptography.io/en/latest/) is already locked (46.0.5, through `pypdf[crypto]`). Its X25519, Ed25519 and AEAD primitives sit under a module that calls itself "Hazardous Materials" and warns "You should **ONLY** use it if you're 100% absolutely sure that you know what you're doing" ([AEAD page](https://cryptography.io/en/latest/hazmat/primitives/aead/)). Wrapping a key for a recipient would mean composing X25519, HKDF and an AEAD by hand. libsodium's sealed box is that construction, already composed. Its high-level Fernet recipe is symmetric only.
+- [age](https://github.com/C2SP/C2SP/blob/main/age.md) wraps a file key "for one or more _recipients_". The spec says nothing about sender authentication. Not chosen: it would still need a separate signature scheme.
+
+**Signal: what to borrow** ([signal.org/docs](https://signal.org/docs/) lists XEdDSA, X3DH, PQXDH, Double Ratchet, Sesame and ML-KEM Braid; it has **no group or sender-key specification**).
+- **Double Ratchet:** "used by two parties to exchange encrypted messages based on a shared secret key. The parties derive new keys for every Double Ratchet message so that earlier keys cannot be calculated from later ones" ([spec](https://signal.org/docs/specifications/doubleratchet/)). The design point is that old message keys cannot be recomputed. A matter must be readable years later, by members and devices added later, from files in a folder. A per-pair ratchet and its session state, in a folder with no ordered delivery, works against both requirements. Not borrowed.
+- **Multiple devices (Sesame):** "With per-device identity keys, each device may have a different key pair." On identity change: "Whenever a change in identity keys is detected users must repeat the authentication process" ([spec §3.1, §6.1](https://signal.org/docs/specifications/sesame/)). Borrowed: per-device identity keys, and a key change is never silent.
+- **Safety numbers** (Signal blog, [2016-11-17](https://signal.org/blog/safety-number-updates/)): they "allow Signal users to verify the privacy of their communication with a contact", and are checked by comparing a number or scanning one QR code. Signal moved from blocking on a key change, where users needed manual approval before "being able to send or receive any further messages", to an advisory notice. Signal's support article returned 403 to fetching, so current behaviour beyond that post is unverified. Borrowed: number and QR comparison. Blocking is decision 6.
+- **Groups and sender keys.** In 2014 Signal "simply deliver[ed] a pairwise encrypted message to each member of the group" and described encrypting once with a random key sent pairwise as a future optimisation ([blog, 2014-05-05](https://signal.org/blog/private-groups/)). Today's sender keys exist in code, not in a spec: libsignal's `sender_keys.rs` and `group_cipher.rs` (`create_sender_key_distribution_message`, `group_encrypt`) ([libsignal](https://github.com/signalapp/libsignal/tree/main/rust/protocol/src)). Borrowed: the shape, encrypt once with a group key and hand that key to each member individually. Not borrowed: the per-sender chain ratchet (same reasoning as the Double Ratchet).
+- **libsignal itself** is `SPDX-License-Identifier: AGPL-3.0-only` (header of `sender_keys.rs`; GitHub reports AGPL-3.0). Rumble is Apache-2.0, so linking it is a licensing decision, not a technical one. It is not proposed.
+
+**Redline building blocks already in the stack.**
+- Python's stdlib [`difflib`](https://docs.python.org/3/library/difflib.html), "Helpers for computing deltas", whose `SequenceMatcher` is "a flexible class for comparing pairs of sequences of any type". It works on word tokens.
+- `docx-rs`, already a host dependency (0.4), has [`Insert`](https://docs.rs/docx-rs/latest/docx_rs/struct.Insert.html) with `author()` and `date()`, and references a `Delete` type. Those are the pieces for a tracked-changes `.docx` export. Whether Word renders them as tracked changes is unverified until a spike.
+- Rumble has **no diff today**: no diff package in `package.json`, and the draft is shown in a read-only `<pre>` (`DocumentDraftView.vue`).
 
 **Legal-sector duties** (what the design must respect, not legal advice; check against the firm's own jurisdiction):
 - ABA Model Rule 1.6(c), as quoted in [Formal Opinion 477](https://docs.tbpr.org/pub/aba%20formal%20opinion%20477.authcheckdam.pdf) (the 2017 text, on a state bar's copy because americanbar.org refused the fetch; the 477R revision's wording is unverified): "A lawyer shall make reasonable efforts to prevent the inadvertent or unauthorized disclosure of, or unauthorized access to, information relating to the representation of a client." The opinion: "a lawyer should consider whether certain data should ever be stored in an unencrypted environment." The ABA definition of "screened" (Rule 1.0(k)) could not be fetched: unverified.
@@ -107,60 +154,94 @@ Together: encrypt before data reaches a third-party store, and make each matter 
 
 ## 5. Recommendation
 
-**One encrypted file per shared review, written once into a matter folder that the firm already syncs. Each laptop imports the files it has not yet seen when Rumble starts or the user clicks Refresh.**
-
-- **Transport** is the firm's own synced folder, option (a). Rumble opens no connection; the sync client carries ciphertext. Laptops coming online at different times is exactly what a sync folder already handles.
-- **One immutable file per shared review**, named `<uuid>.rumble` and written once by its author. Two laptops never write the same file, so the sync service has nothing to conflict over. A stray conflict copy (`… (1).rumble`) decrypts to an id that is already known, and is skipped.
-- **Merge** is a union by id. Import is idempotent and resumable: running it twice changes nothing, and an interrupted run resumes where it stopped.
-- **Encryption** uses Fernet from `cryptography`. It authenticates as well as encrypts, and it is already in `uv.lock` at 46.0.5 through `pypdf[crypto]`, so it adds no dependency. Each matter has one key, and that key *is* the matter code people hand each other.
-- **What it avoids:** no CRDT, no peer-to-peer, no server. The phase-4 Elefant relay is the same files in a different mailbox, so the upgrade is a change of transport, not a rewrite.
+**Each version of a draft is one signed, encrypted, immutable file, written into a matter folder the firm already syncs. Laptops import the files they have not seen whenever they start or the user clicks Refresh. Each device has its own identity key, checked by safety number. The matter key is wrapped for each member device, and replaced whenever someone is removed. Forks are shown as two versions with a redline, for a person to reconcile.**
 
 ```mermaid
 flowchart LR
-  subgraph A["Laptop A (Ana)"]
-    A_UI[Review view] -->|"Share to matter (summary, issues, Q&A)"| A_SC[Sidecar]
-    A_SC -->|"Fernet(matter key) → write .tmp in folder, os.replace"| A_F["Matter folder<br/>&lt;uuid&gt;.rumble"]
-    A_SC --> A_DB[(rumble.db SQLCipher)]
+  subgraph A["Ana's laptop"]
+    A_ED[Draft editor] -->|Save| A_SC[Sidecar]
+    A_SC -->|"sign (Ed25519) → encrypt (matter key) → .tmp → os.replace"| A_F["matter folder<br/>v-&lt;uuid&gt;.rumble"]
+    A_SC --> A_DB[(rumble.db<br/>SQLCipher)]
   end
-  A_F -. "firm's sync client<br/>(OneDrive / Dropbox / SMB)<br/>ciphertext only, store-and-forward" .-> B_F
-  subgraph B["Laptop B (Ben), opens days later"]
-    B_F["Matter folder<br/>&lt;uuid&gt;.rumble"] -->|"on start / Refresh: skip seen names, decrypt new"| B_SC[Sidecar]
-    B_SC -->|INSERT OR IGNORE| B_DB[(rumble.db SQLCipher)]
-    B_DB --> B_UI["Shared reviews list (read-only)"]
+  A_F -. "transport: firm's synced folder (free)<br/>or Elefant relay (Premium, later)<br/>ciphertext + signatures only" .-> B_F
+  subgraph B["Ben's laptop, days later"]
+    B_F["matter folder"] -->|"on start / Refresh:<br/>new names only → decrypt → verify signer is a member"| B_SC[Sidecar]
+    B_SC -->|"INSERT OR IGNORE<br/>place by parent links"| B_DB[(rumble.db)]
+    B_DB --> B_UI["History · redline · fork: pick or combine"]
   end
-  K["Matter code<br/>(handed over in person or via the firm's password manager)"] -.-> A_SC
-  K -.-> B_SC
 ```
 
-### Record format
+### 5.1 Files in a matter folder
 
-Each file is one record, `<uuid>.rumble`, at the top of the matter folder. The file holds the key fingerprint (the first 8 hex characters of the SHA-256 of the key) and a Fernet token. The token's plaintext is JSON:
+Every file is `<kind>-<uuid>.rumble` and is written once, by one device. Two devices never write the same file, so the sync service never has a conflict to resolve. Each file is a signed statement; content files are also encrypted.
 
-```json
-{"v": 1, "kind": "review", "id": "<uuid, equal to the file name>", "title": "NDA - Acme.pdf",
- "shared_by": "Ana Lim", "shared_at": "2026-11-17T09:12:03Z", "model": "qwen3:8b",
- "document_text": "...", "summary": "...", "issues": [...], "qa": [{"role": "user", "content": "..."}]}
-```
+| Kind | Written by | Plaintext or encrypted | Says |
+|---|---|---|---|
+| `matter` (genesis) | The creator | Plaintext, signed | Matter name, the admin list (one device in the MVP UI), the creator's keys. **The matter id is the hash of this file**, so it cannot be swapped |
+| `device` | A device joining | Plaintext, signed by itself | Name ("Ana Lim, MacBook"), Ed25519 signing key, X25519 receiving key |
+| `member` | An admin | Plaintext, signed | Add or remove device D (by fingerprint), with a reason. A removal carries a cutoff: "D's versions with seq ≤ N stay valid" |
+| `key` | An admin | Matter key epochs, each sealed to one device (libsodium sealed box) | On a new epoch: that epoch for every remaining device. On approval of a joiner: every epoch 1..n for the joiner (decision 5) |
+| `version` | Any member device | Encrypted with the current matter key, signature inside | `doc_id`, `version_id`, `parents[]`, `seq`, `epoch`, `title`, `text`, `sha256(text)`, `created_at`, signer fingerprint |
 
-What the format guarantees and what it leaks:
-- **Leaks:** a file name is a random UUID. The file's size and Fernet's plaintext timestamp reveal roughly how big the record is and when it was written.
-- **Id check:** a record whose `id` differs from its file name is rejected, so a member cannot pre-empt someone else's id.
-- **Wrong key:** a file whose fingerprint matches no code you hold is recorded once and counted ("2 items need a newer matter code"). It is not re-read on every start.
-- **Damaged file:** a file with a known fingerprint that fails to decrypt is retried only when its size or mtime changes.
-- **Downloads:** files already seen are skipped by name, without being opened. With OneDrive Files On-Demand, only new files are downloaded.
-- **Atomic writes:** write `<uuid>.rumble.tmp` in the matter folder, then `os.replace` it to its final name. OneDrive does not sync TMP files (§4), and readers ignore `*.tmp`.
+Rules for every kind:
+- **What is signed:** the canonical bytes of the whole record (`matter_id`, `kind`, file id, `seq`, `prev` and every field above). A signature therefore binds a file to its matter and position.
+- **`seq` is per (device, matter)**, +1 for each file that device writes in that matter. Gaps are real gaps.
+- **Admin files form one chain:** each `member` or `key` file names the previous admin file (`prev`). Membership for epoch *n* is the state at the admin file that created epoch *n*. Admin files are applied in chain order, never by clock. A gap in the chain blocks membership changes until the missing file arrives.
 
-### Where the code lives
+What the format guarantees:
+- **Rejected on import:** a `version_id` that differs from its file name, a bad signature, or a signer who was not a member for that key epoch.
+- **Skipped without opening:** names already seen. With OneDrive Files On-Demand, only new files download.
+- **Retried:** a damaged or not-yet-openable file is retried on each Refresh, keyed by file name, and counted in the UI. A half-synced file only fails to decrypt. OneDrive's TMP rule is quoted in §4; whether Dropbox and iCloud skip `.tmp` is unverified and harmless.
+- **Atomic writes:** write `.tmp` in the matter folder, then `os.replace`. OneDrive does not sync TMP files (§4).
 
-- **Sidecar (Python).**
-  - `services/sharing.py`: seal, open, write one record, import a folder.
-  - `routes/matters.py` with four routes: create a matter, join with a code, share a review, refresh.
-  - The sidecar owns the database, so it owns this work too. It is local file I/O only.
-- **Host (Rust).** Generalise `pick_templates_folder` into one `pick_folder` command, used by templates and matters. No new crate.
-- **Frontend.** The review view sends its in-memory session (summary, issues, Q&A) to the share route. This also fixes "issues are never saved" for shared reviews. A "Shared reviews" list renders a snapshot read-only, with "Continue in a new chat", which copies it into a private local chat. This means building a read-only viewer, not chat history.
-- **Schema.**
-  - Two new tables, `matters(id, name, folder, key, member_name)` and `shared_reviews(id, matter_id, shared_by, shared_at, body, hidden)`, plus `skipped_files(name, size, mtime, reason)`.
-  - The change is additive, using `CREATE TABLE IF NOT EXISTS`. It neither alters existing tables nor touches `user_version`.
+### 5.2 Versions, ordering, forks, redline
+
+- **Order** comes from parent links, never from clocks. `created_at` is only a label. History is the graph; the doc's current state is its **heads**, the versions nobody names as a parent.
+- **One head:** the normal case.
+- **Two or more heads: a fork.** Two people saved offline from the same parent (v3 → 4a and 4b). Rumble shows "Two versions of v3: Ana's (Tue) and Ben's (Wed)" with a redline of each against v3 and against each other. The user picks one to continue, or edits a combined text. Either way they save a version whose parents are [4a, 4b]. The fork is closed, and both branches stay in history.
+- **A missing parent** (a file not yet synced) shows as "waiting for 1 earlier version from Ben". A **gap in a device's `seq`** shows as "Ben's #14 has not arrived". This catches withheld or deleted files.
+- **Redline** between any two versions: a word-level diff with stdlib `difflib`, rendered as inserted and deleted spans. No new dependency. Phase 3 adds a tracked-changes `.docx` export via `docx-rs` `Insert`/`Delete` (already a dependency; a spike is needed).
+- **Only an explicit Save makes a version.** Autosave stays local.
+- **Storage:** full snapshots, not deltas. A draft is text, so tens of KB. 1,000 versions of a 50 KB draft is about 50 MB of ciphertext per matter, well under OneDrive's recommended 300,000 synced items. Compaction would break the audit trail, so there is none. Deltas only if real matters prove snapshots too large.
+
+### 5.3 Identity, invites, safety numbers
+
+Signal's model, cut down to what a folder can carry:
+1. **First launch:** each device generates an Ed25519 signing key pair and an X25519 receiving key pair. They are kept separate on purpose, one key per job (key separation). They are stored in the SQLCipher database, which is unlocked by the keychain `db_key`. Each device is an identity, as in Sesame's per-device keys.
+2. **Join:** the joiner picks the matter folder (the firm has already granted folder access) and Rumble writes a `device` file. The folder ACL is wall one.
+3. **Approve, mutually:** the admin sees "Ben Tan, ThinkPad, asks to join". Both screens show the same **safety number**, derived from the admin's and Ben's public keys. They compare it in person or on a call (Signal's comparison, §4). A match proves Ben's key to the admin *and* the matter's admin key, from the genesis file, to Ben. A fake matter planted in the folder fails Ben's side of the check. QR comes later (phase 3). Only after a match does the admin sign a `member` file and wrap the matter keys for Ben's device. The key is wall two.
+4. **Trust on first use, never re-trusted silently.** An approved device's keys are pinned. A device's keys never change: a reinstalled or new laptop is a **new device** that goes through steps 2–3. So there is no "key changed" state to accept by mistake. A second `device` file with an existing display name shows as a separate, unapproved device.
+5. **Several devices per person:** each is approved separately and grouped under the person's name in the UI. Authorship shows person and device.
+
+### 5.4 Removal, lost laptops, laptops back after months
+
+- **Remove a person or one device:**
+  - The admin writes a signed `member` remove file with a seq cutoff, "Ben's MacBook: seq ≤ N valid". N is the highest seq the admin has seen. Every laptop applies the same rule. A version from Ben above N is hidden from the history and shown in the audit as "arrived after removal, rejected", including one a laptop had already imported. Nothing is deleted.
+  - The admin then writes a new `key` epoch, wrapped only for the devices that remain.
+  - New versions use the new key.
+  - Copy, verbatim in the UI: "Ben keeps everything he could already open. He can't open anything saved from now on." There is no remote wipe; §12 called revocation "best-effort", and that stays true.
+  - The firm should also remove Ben's folder access, so he stops receiving files at all.
+- **Lost or stolen laptop:** remove that device, which forces a new key. At-rest protection is unchanged: FDE plus SQLCipher. The person's other devices keep working.
+- **A laptop back months later** imports everything in parent order, including new `key` epochs wrapped for it.
+  - If it was removed while away, it sees the removal and new versions it cannot open, and says so.
+  - Versions it wrote offline under an old epoch are accepted if it is still a member. If it was removed, only those within the removal's seq cutoff are accepted.
+  - Its offline edits become a fork to reconcile, never an overwrite.
+
+### 5.5 Withdraw, audit export
+
+- **Withdraw a doc:** a signed tombstone from the doc's author or an admin. It is reversible: every laptop hides the doc, and laptops back later apply the tombstone. Rumble never deletes folder files, so history stays intact for audit, and the firm's own retention applies to the folder. Legal hold and in-app retention are not needed until Rumble deletes something; they are left out.
+- **Audit export** per doc, as CSV: each version's id, parents, author, device fingerprint, time, SHA-256 and "signature verified". Anyone can re-check the hashes against the folder.
+
+### 5.6 Where the code lives, and which library
+
+- **Sidecar (Python)** owns the database, so it owns this work:
+  - `services/matters.py`: records, sign and verify, seal and open, import;
+  - `services/transport.py`: the folder implementation;
+  - routes for matters, docs and versions.
+- **Host (Rust):** generalise `pick_templates_folder` into one `pick_folder`. No new crate.
+- **Frontend:** an editable draft (a plain `<textarea>`, Tailwind tokens, matching existing components), a history list, a redline view, and the fork reconcile view.
+- **Schema:** additive tables only (`CREATE TABLE IF NOT EXISTS`): `devices`, `matters`, `matter_members`, `matter_keys`, `docs`, `versions`, `files` (names imported or failed). No change to `user_version`, which already means "compacted".
+- **Library: PyNaCl** (libsodium, Apache-2.0, pyca; §4) is one new dependency. It provides `SecretBox` (random 24-byte nonces are safe), `SealedBox` for wrapping a key for one device, and Ed25519 signing, all as composed, high-level calls. The existing `cryptography` dependency would mean hand-composing X25519, HKDF and an AEAD from its "Hazardous Materials" module to wrap keys. That is the riskier choice. libsodium is also what §12 chose (decision 3).
 
 ## 6. Phases
 
@@ -168,76 +249,89 @@ Each phase ships on its own and leaves the app better.
 
 | Phase | Scope | Proof | Size |
 |---|---|---|---|
-| **0. Shared templates, with no sync code** | Fix #144 so the templates folder is actually read. Point it at a firm-synced folder and every laptop sees the same templates. Templates are the firm's precedents, already kept on shared drives, so plaintext matches current practice | Two installs pointed at one folder list the same templates | S (as part of #144) |
-| **1. MVP: shared reviews in one matter, between two laptops that are never on together** | Create a matter (pick a folder, name it, show the code). Join one (pick the folder, paste the code, give your name). "Share to matter" on a finished review. Import on sidecar start and on Refresh. A read-only "Shared reviews" list with "Continue in a new chat". "Hide" is local only | pytest, with two data dirs and one folder, never running together: A shares and stops. B starts, imports, and sees A's review with its issues and A's name. B shares a second review and stops. A starts and sees it. Also tested: re-importing is a no-op; a hidden review stays hidden after re-import; a truncated file and a wrong-code file are counted and not imported; a `… (1).rumble` duplicate is skipped; a record whose id differs from its file name is rejected; no plaintext from the document appears in the folder. Then a human smoke test on two real laptops through OneDrive | M |
-| **2. Real teams** | Several matters, each with its own folder and code: the ethical wall. Rotate the code using `MultiFernet` (the new key encrypts; old keys still decrypt; never pass `ttl`). "Leave matter". Withdraw a review with a tombstone record, authenticated by the matter key; any member can withdraw, and laptops back after months apply it. A per-matter retention setting | A tombstone imported after its review removes the review. A laptop holding only the old code shows "N items need the new code" | M |
-| **3. Comfort** | Import when the window gains focus (no file watcher). Per-matter status ("last shared by Ben, 3 days ago"). Gap detection, if pilots ask for it: a per-member `seq` number, shown as "Ben's #14 is missing" | Unit tests on the status text | S |
-| **4. Optional Elefant relay (paid)** | For teams without a shared folder, or working across firms: an Elefant mailbox that stores the same `.rumble` files. Rumble uploads and downloads ciphertext; Elefant never holds the code | A new NETWORK.md row. The egress-block test still passes with the relay off | L |
-| Not planned | A CRDT library, LAN P2P, iroh, per-person keys, MLS | Revisit if Rumble gains a co-edited editor (CRDT); if firms need proof of authorship inside a team (per-person signing keys); or if matters have dozens of members and frequent removals (MLS) | — |
+| **0. Shared templates** | #144: read the templates folder. Point it at a firm-synced folder, and templates are shared with no sync code | Two installs, one folder, same templates | S |
+| **1. Versioned drafts, local** | Document and version model. The draft becomes editable; Save creates a version with its parent and hash. History list and redline between any two versions. Already useful to a single lawyer | pytest: versions chain by parent; the hash matches the text; the redline marks a changed clause | M |
+| **2. MVP: one matter, two people, laptops never on together** | Devices with keys; create a matter (genesis file, creator is the admin); join, mutual safety-number check, approve (all epochs wrapped for the joiner); sync versions through the folder; import on start and Refresh; forks shown with pick or combine; seq and parent gaps shown | pytest with two data dirs and one folder, never running together: A saves v1–v2 and stops. B imports, sees v2 as Ana's, saves v3 and stops. A sees v3. Both edit v3 offline: each sees a fork, and combining closes it on both sides. Negative tests: tampered, replayed, foreign-matter, wrong-id, unapproved-signer and planted-genesis files are rejected; the folder holds no plaintext. Then two real laptops through OneDrive | L (three M slices: keys and approve; sync; fork view) |
+| **3. Real teams** | Remove a device or person, with a seq cutoff and a new key epoch; several devices per person; several matters; a second admin; QR safety codes; withdraw; CSV audit export; tracked-changes `.docx` export of a redline (spike first) | A removed device cannot open versions saved after removal; a laptop back after removal is handled as in §5.4; the audit CSV re-verifies | M–L |
+| **4. Word round trip** | Check a `.docx` out to Word and back in as a version; redline on extracted text | A Word edit becomes a version with the right parent | M |
+| **5. Elefant relay (Premium)** | The same files through an HTTPS mailbox, for teams with no shared folder or working across firms | NETWORK.md row; the egress-block test still passes with it off | L |
+| Not planned | CRDTs, LAN P2P, iroh, ratchets or forward secrecy, MLS, libsignal | Revisit if Rumble gets live co-typing (CRDT), or if clients demand forward secrecy, accepting that history becomes unreadable to new devices | — |
 
 ## 7. Threat model
 
-**Assets:** client document text, AI analysis, Q&A. Ciphertext sits wherever the firm's folder syncs. Plaintext exists only in each member's SQLCipher database.
+**Assets:** client text, draft history, who changed what. Plaintext exists only in members' SQLCipher databases; the folder or relay holds signed ciphertext.
 
 | Adversary | Can | Cannot | Response |
 |---|---|---|---|
-| Sync provider, firm IT, anyone with folder access but no code | See the file count, sizes and write times. Delete or withhold files without anyone noticing (gap detection is phase 3). Replay old files | Read content. Write a record that imports (Fernet authenticates) | Replays are no-ops (same id). Folder backups are the recovery path |
-| Removed member, before rotation | Read new records. Write records under any name, including fake "AI" summaries and issues. Withdraw anyone's review (phase 2) | — | The firm revokes folder access, so they stop receiving files at all. Phase 2 adds rotation |
-| Removed member, after rotation | Keep everything imported while they were a member | Read or write anything new | Say so plainly: there is no remote wipe, just as with a printed file |
-| Current member | Claim another member's name, or present edited text as the AI's output | Read other matters | Accepted for v1: within a team, authorship is claimed, as on a shared drive today. Per-person signing is a "Not planned" trigger |
-| Lost or stolen laptop | — | — | At rest: FDE plus SQLCipher, unchanged. Rotate the code; the firm revokes folder access |
-| Laptop back after months | Import everything since. If the code has rotated, see "N items need the new code" | — | The count is shown, never swallowed |
-| Lost `db_key` (#156) | Lose the local matter codes and copies | — | Recovery needs the code again: from where the firm keeps it (decision 3) or from a colleague. The folder then restores every shared review |
+| Sync provider, firm IT, relay, anyone with folder access but no key | See file counts, sizes and times; see names and keys in `device` and `member` files (plaintext); delete, withhold or replay files | Read versions; forge any file (signatures); make a replay do anything (same id) | Seq and parent gaps make withholding and deletion visible. Folder backups are recovery. Deciding whether member names may be plaintext in the folder is decision 9 |
+| Malicious current member | Write misleading versions under their own name; withdraw their own doc (reversible); fork endlessly | Write as anyone else; rewrite history (immutable, hash-chained by parents); add members (admin only) | Every version is signed and attributable, and the audit export shows it |
+| Removed member | Keep everything they could open | Open or write anything after removal; backdate old-epoch versions (the removal lists the accepted ones) | Honest copy (§5.4); the firm removes folder access |
+| Someone with folder access who plants a fake genesis or admin | Create a look-alike matter | Get a joiner to trust it: the joiner's half of the mutual safety-number check fails | Genesis hash is the matter id; mutual check (§5.3) |
+| Rogue or compromised admin | Add a device, after a safety-number check that admin performs | Act silently: every `member` and `key` file is signed and shown in matter history | Phase 3: a second admin; member changes are shown to all members |
+| Attacker who swaps a joiner's `device` file in the folder | Present their own key as "Ben" | Get approved if the admin compares the safety number with the real Ben | Approval requires the comparison (decision 6) |
+| Lost or stolen laptop | Whatever FDE and SQLCipher fail to protect | — | Remove the device; new key epoch |
+| Laptop back after months | Import and reconcile | Overwrite anyone's work | §5.4 |
+| Lost `db_key` (#156) | Lose this device's identity and local copies | — | Rejoin as a new device. The folder restores the history once an admin approves it |
 | Same-user malware, administrators | Out of scope, as in SECURITY.md | | |
 
-**Legal-sector constraints (§4) and how the design meets them:**
-- **Confidentiality:** records are encrypted before they reach the folder. The provider holds only ciphertext.
-- **Ethical walls:** one folder and one code per matter, so there are two independent walls: the firm's folder permissions and the code. Someone not on the matter has neither.
-- **Audit:** every record carries who shared it, when, and with which model, and it is never edited. The matter folder is an append-only log that the firm already backs up. Who wrote each file is the sync service's own log; we have not checked what each provider records.
-- **Conflicts users can understand:** in-place edits never happen, so there are none. Two colleagues sharing offline produce two shared reviews, each with its author and time.
-- **Windows roaming:** the matter folder is one the user picks and the firm already syncs. The database and codes stay in `app_local_data_dir` (#57). The folder picker refuses anything under `%APPDATA%`, which roams.
+**Legal-sector constraints (§4):**
+- **Confidentiality:** encrypted before it reaches the folder or relay.
+- **Ethical walls:** a matter is a folder ACL plus a key wrapped only for approved devices.
+- **Audit:** signed, hash-linked, immutable versions, with an export.
+- **Conflicts:** shown as two versions with a redline; never auto-merged.
+- **Windows roaming:** keys and the database stay in `app_local_data_dir` (#57), and the folder picker refuses anything under `%APPDATA%`.
 
 ## 8. What changes in NETWORK.md and SECURITY.md
 
-**NETWORK.md, phase 1:**
-- New section "Local files, synced by others": "Matter sharing reads and writes encrypted files in a folder you choose. Rumble opens no connection for it. If that folder is synced (OneDrive, Dropbox, an SMB share), the sync client, not Rumble, sends the files, encrypted with a code only your team holds."
-- Remove the stale bullet "Settings' sync 'Test connection' is a mock and makes no request". The tab went in #87; the `sync/test` mock in `src/modules/backend/backendClient.ts` can go with it.
-- Phase 4 only: an egress row for the relay, off by default.
+**NETWORK.md, phase 2:**
+- A new section, "Local files, synced by others": "Matter sharing reads and writes signed, encrypted files in a folder you choose. Rumble opens no connection for it; if the folder is synced (OneDrive, Dropbox, an SMB share), the sync client sends the files."
+- Separate small issues, not part of this work: the stale NETWORK.md bullet about the removed sync tab's "Test connection" mock (and `sync/test` in `backendClient.ts`), plus SECURITY.md's stale "sync options" row and its duplicated database bullet with conflicting Windows paths.
 
-**SECURITY.md, phase 1:**
-- "Where data lives": a matter-folder row (ciphertext only; who can read it; "Delete all local data" does not remove what you shared).
-- A "Sharing threat model" section: §7, plainly. Include "a removed colleague keeps what they already had" and "authorship within a matter is not cryptographically proved".
-- Fix while there: "sync options" in the Settings row is stale, and the database bullet is duplicated with conflicting Windows paths (`%APPDATA%` vs `%LOCALAPPDATA%`).
-- The honest-copy rule from #19, #20 and #56: claim "end-to-end encrypted" in the UI only once the phase-1 test proves the folder holds no plaintext.
+**NETWORK.md, phase 5:** a relay egress row, off by default.
+
+**SECURITY.md, phase 2:**
+- "Where data lives": device keys in `rumble.db`; the matter folder holds ciphertext, plus plaintext device and member files.
+- A "Sharing threat model" section (§7), including "a removed colleague keeps what they could already open".
+- Under the #19/#20/#56 honest-copy rule, claim "end-to-end encrypted" in the UI only once the phase-2 no-plaintext test passes.
 
 ## 9. Open owner decisions
 
-1. **Transport for v1.**
-   - Options: (a) the firm's synced folder; (b) the Elefant relay first; (c) both.
-   - **Recommend (a).** It needs no infrastructure and adds no egress. The relay becomes the paid convenience in phase 4, with no rewrite.
-2. **The first shared doc.**
-   - Options: (a) review snapshots; (b) templates; (c) drafts; (d) live shared chat threads.
-   - **Recommend (a)** for phase 1, with templates as phase 0 because #144 makes them free. Drafts stay in Word. Live threads, (d), bring ordering, authorship of AI replies and merge rules: none of that is needed for "keep docs synced".
-3. **How the code is handed over and kept.**
-   - Options: (a) shown to copy, with copy that says "keep it in your firm's password manager; give it in person or through a secure channel"; (b) (a) plus a QR code; (c) the key stored in the folder (folder access alone admits you; no end-to-end encryption).
-   - **Recommend (a).** Option (c) gives up the claim that the provider cannot read client documents.
-4. **Does a shared review include the full document text?**
-   - Options: (a) yes; (b) summary and issues only.
-   - **Recommend (a).** Without it, a colleague's local model has nothing to answer follow-up questions from.
-5. **What deleting does.**
-   - Options: (a) "Hide" is local, and "Withdraw" propagates as a tombstone (phase 2); (b) local deletion only, forever; (c) deleting removes the file from the folder.
-   - **Recommend (a).** Option (c) silently fails for colleagues who already imported the review, which is a false promise.
-6. **Retention of shared reviews.**
-   - Options: (a) none until withdrawn; (b) the 30-day job rule; (c) a per-matter setting.
-   - **Recommend (a)** in phase 1 and (c) in phase 2, because legal retention is set per matter, not per app.
-7. **Is the relay part of Premium?**
-   - Options: (a) yes, in the Elefant subscription; (b) a separate add-on; (c) never.
-   - **Recommend (a).** The folder path stays free and complete, and the relay only removes the need for a shared folder: an upgrade, not a push.
+1. **Transport.**
+   - Options: (a) folder first, relay later as Premium; (b) relay first; (c) both at once.
+   - **Recommend (a).** Local-only works free, there is no infrastructure, and the relay later carries the same files.
+2. **What a doc is for the MVP.**
+   - Options: (a) Rumble-native drafts; (b) `.docx` from Word; (c) review snapshots.
+   - **Recommend (a)**, with (b) as phase 4. (c) has no versions to track.
+3. **Crypto library.**
+   - Options: (a) PyNaCl (libsodium, one new dependency); (b) the existing `cryptography`, composing hazmat primitives.
+   - **Recommend (a).** Composed constructions beat hand-assembled ones, and it matches §12.
+4. **Who can add or remove members.**
+   - Options: (a) admins only; the genesis file holds an admin list from day one; the MVP UI allows one admin, phase 3 more; (b) any member.
+   - **Recommend (a).** One admin chain means two people never make conflicting membership changes. The format is ready for a second admin.
+5. **Do new members see past versions?**
+   - Options: (a) yes, all history; (b) only from when they join (Signal's group behaviour).
+   - **Recommend (a).** A matter team needs the file's history, as with a shared drive.
+6. **Safety-number check.**
+   - Options: (a) required before approval (blocking); (b) advisory.
+   - **Recommend (a).** Approval happens once per device, and devices never change keys, so it is cheap, and it is the only defence against a swapped `device` file.
+7. **Forks.**
+   - Options: (a) always a person picks or combines; (b) auto-merge non-overlapping edits.
+   - **Recommend (a)**, never auto-merge legal text, as the coordinator proposed.
+8. **Lost keys.**
+   - Options: (a) no backup: a lost device rejoins as new and the folder restores history; (b) a password-derived key backup.
+   - **Recommend (a).** It answers §12's "Key backup" question without a new secret to protect.
+9. **Names in the folder.**
+   - Options: (a) person and device names in plaintext `device` and `member` files; (b) fingerprints only, with names inside encrypted files.
+   - **Recommend (a)** for the MVP. A joiner has no key yet, and folder access is already limited to the matter team. Revisit for relay use (phase 5).
+10. **Relay in Premium?**
+    - Options: (a) yes; (b) a separate add-on; (c) never.
+    - **Recommend (a).** The folder path stays free and complete; the relay only removes the need for a shared folder.
 
 ## 10. Rough edges, stated
 
-- **Firms with no synced folder at all** cannot use phase 1. Phase 4 is for them.
-- **Withheld or deleted files go unnoticed** until gap detection lands (phase 3).
-- **Memory:** Fernet holds a whole record in memory. A record is at most one document's text plus Q&A, so this is fine. It would not suit large binary attachments, and phase 1 has none.
-- **Item limits:** one file per shared review keeps far below OneDrive's recommended 300,000 synced items.
-- **Two Rumble instances** on one data directory (#169) would import twice. That is harmless (`INSERT OR IGNORE`), but the single-instance guard is still wanted.
+- **No shared folder:** a firm without one waits for phase 5.
+- **One admin:** until phase 3 (second admin), a lost admin laptop freezes membership **forever** for that matter: nobody can be added or removed. Content keeps syncing. The workaround is a new matter: re-share the current versions.
+- **Every join needs the admin** for a live safety-number comparison.
+- **Plaintext in the folder:** `device` and `member` files expose team names and device names to anyone with folder access (decision 9).
+- **Redlines are text only:** a text redline cannot show formatting changes. Fine for Rumble-native drafts, a limit for phase 4 `.docx`.
+- **Two instances (#169):** two Rumble instances on one data dir would import twice. That is harmless (`INSERT OR IGNORE`), but each could also save versions with the same device `seq`, so the single-instance guard becomes a prerequisite for phase 2.
