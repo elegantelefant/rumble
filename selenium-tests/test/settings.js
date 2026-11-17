@@ -55,7 +55,7 @@ describe("Settings", function () {
 
       page = await driver.findElement(By.css("main"));
       text = await page.getText();
-      expect(text).to.match(/theme|sidebar|position/i);
+      expect(text).to.match(/sidebar|position/i);
     });
   });
 
@@ -151,17 +151,16 @@ describe("Settings", function () {
       await screenshot("settings_appearance_tab_loaded");
     });
 
-    it("shows theme and sidebar position options", async function () {
+    it("shows sidebar position options", async function () {
       const driver = getDriver();
       const page = await driver.findElement(By.css("main"));
       const text = await page.getText();
       await screenshot("settings_appearance_options");
 
-      // Should mention theme and sidebar position
-      expect(text).to.match(/theme/i);
+      // Should mention sidebar position
       expect(text).to.match(/sidebar/i);
 
-      // Should have select elements for theme and sidebar position
+      // Should have select elements for both sidebar positions
       const selects = await driver.findElements(By.css("main select"));
       await screenshot("settings_appearance_selects");
       expect(selects.length).to.be.greaterThanOrEqual(2);

@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# ABOUTME: Smoke-tests a built macOS Rumble.app: both executables carry the library-validation
-# ABOUTME: entitlement, and the bundled sidecar starts from the bundle and answers /health (#157).
+# ABOUTME: Smoke-tests a built macOS Rumble.app: library validation is never disabled, the app has the
+# ABOUTME: hardened runtime, and the bundled sidecar helper starts from the bundle and answers /health (#157).
 set -euo pipefail
 
-# CI's macos runner does not enforce library validation, so a sidecar that starts there can
-# still fail on a user's Mac: the entitlement check is what catches #157 in CI.
-ENTITLEMENT=com.apple.security.cs.disable-library-validation
-EXECUTABLES=(elefant_rumble rumble-sidecar)
-SMOKE_PORT=${RUMBLE_SMOKE_PORT:-18765}
+DISABLE_LIBRARY_VALIDATION=com.apple.security.cs.disable-library-validation
+APP_BINARY=MacOS/elefant_rumble
+HELPER=Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar
 HEALTH_WAIT_SECONDS=${RUMBLE_SMOKE_HEALTH_WAIT_SECONDS:-90}
 HEALTH_REQUEST_SECONDS=2
 STOP_WAIT_SECONDS=5
@@ -16,7 +14,7 @@ if [ "$#" -ne 1 ]; then
   echo "usage: $0 <path to Elefant - Rumble.app>" >&2
   exit 2
 fi
-macos_dir="$1/Contents/MacOS"
+contents="$1/Contents"
 data_dir=$(mktemp -d "${TMPDIR:-/tmp}/rumble-smoke.XXXXXX")
 pid=
 
@@ -34,20 +32,39 @@ stop_sidecar() {
 }
 trap stop_sidecar EXIT
 
-# True, not merely present: an entitlement set to false still prints its key.
-for name in "${EXECUTABLES[@]}"; do
-  plist="$data_dir/$name.entitlements.plist"
-  codesign -d --entitlements - --xml "$macos_dir/$name" >"$plist" 2>/dev/null || true
-  if [ "$(/usr/libexec/PlistBuddy -c "Print :$ENTITLEMENT" "$plist" 2>/dev/null)" != "true" ]; then
-    echo "$name lacks $ENTITLEMENT" >&2
-    exit 1
+fail() {
+  echo "$1" >&2
+  exit 1
+}
+
+# codesign's signature summary for one executable: its flags line, its entitlements as XML.
+flags_of() { codesign -dv "$contents/$1" 2>&1 | sed -n 's/.*flags=0x[0-9a-f]*(\([^)]*\)).*/\1/p'; }
+disables_library_validation() {
+  local plist="$data_dir/entitlements.plist"
+  codesign -d --entitlements - --xml "$contents/$1" >"$plist" 2>/dev/null || true
+  [ "$(/usr/libexec/PlistBuddy -c "Print :$DISABLE_LIBRARY_VALIDATION" "$plist" 2>/dev/null)" = "true" ]
+}
+
+for executable in "$APP_BINARY" "$HELPER"; do
+  if disables_library_validation "$executable"; then
+    fail "${executable##*/} disables library validation"
   fi
 done
+# The app holds the keychain items: the hardened runtime keeps library validation on for it.
+[[ ",$(flags_of "$APP_BINARY")," == *,runtime,* ]] || fail "elefant_rumble lacks the hardened runtime"
+# An ad-hoc signature has no Team ID, so library validation would refuse every library the helper
+# loads; the CI runner doesn't enforce it, a user's Mac does. Developer ID signing (#102) lifts this.
+helper_flags=",$(flags_of "$HELPER"),"
+if [[ $helper_flags == *,adhoc,* && $helper_flags == *,runtime,* ]]; then
+  fail "ad-hoc rumble-sidecar has the hardened runtime: library validation will refuse its libraries"
+fi
 
+# A port nothing is listening on now, so a tunnel or another app on a fixed one can't mask the result.
+SMOKE_PORT=${RUMBLE_SMOKE_PORT:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
 log="$data_dir/sidecar.log"
 secret=$(uuidgen)
 RUMBLE_SIDECAR_SECRET="$secret" RUMBLE_DB_KEY=$(openssl rand -hex 32) \
-  "$macos_dir/rumble-sidecar" --port "$SMOKE_PORT" --data-dir "$data_dir" >"$log" 2>&1 &
+  "$contents/$HELPER" --port "$SMOKE_PORT" --data-dir "$data_dir" >"$log" 2>&1 &
 pid=$!
 
 for _ in $(seq "$HEALTH_WAIT_SECONDS"); do
@@ -59,6 +76,7 @@ for _ in $(seq "$HEALTH_WAIT_SECONDS"); do
   if ! kill -0 "$pid" 2>/dev/null; then
     code=0
     wait "$pid" || code=$?
+    pid=
     echo "sidecar exited with code $code before /health answered" >&2
     cat "$log" >&2
     exit 1

@@ -1,5 +1,5 @@
-# ABOUTME: Runs scripts/smoke-macos-app.sh against synthetic .app bundles: it refuses an executable
-# ABOUTME: without the library-validation entitlement (or with it false) and a sidecar that won't answer.
+# ABOUTME: Runs scripts/smoke-macos-app.sh against synthetic .app bundles: it refuses library
+# ABOUTME: validation disabled or the app without hardened runtime, and a helper that won't answer.
 
 import subprocess
 import sys
@@ -9,9 +9,14 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 SMOKE = REPO / "scripts" / "smoke-macos-app.sh"
-ENTITLEMENTS = REPO / "src-tauri" / "Entitlements.plist"
-APP_BINARY = "elefant_rumble"
-SIDECAR = "rumble-sidecar"
+APP_BINARY = "MacOS/elefant_rumble"
+HELPER = "Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar"
+DISABLE_LIBRARY_VALIDATION = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>com.apple.security.cs.disable-library-validation</key><true/>
+</dict></plist>
+"""
 
 # Exits at once with PyInstaller's code for a Python library it couldn't load.
 EXITS_255_C = "int main(void) { return 255; }\n"
@@ -19,7 +24,6 @@ EXITS_255_C = "int main(void) { return 255; }\n"
 SERVES_HEALTH_C = """
 #include <unistd.h>
 int main(int argc, char **argv) {
-    argv[0] = SCRIPT;
     execv("/usr/bin/python3", (char *[]){"python3", SCRIPT, argv[1], argv[2], argv[3], argv[4], 0});
     return 127;
 }
@@ -42,57 +46,68 @@ http.server.HTTPServer(("127.0.0.1", port), Health).serve_forever()
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="codesign is macOS-only")
 
+# How each executable is signed, as the bundler does for an ad-hoc build today: the app with the
+# hardened runtime, the helper (PyInstaller's ad-hoc signature) without it.
+SHIPPED = {APP_BINARY: {"runtime": True}, HELPER: {"runtime": False}}
 
-def _build_app(tmp_path: Path, entitled: dict[str, Path | None], serves_health: bool = False) -> Path:
-    """`entitled` maps each executable to the entitlements file it is signed with (None: none)."""
+
+def _build_app(tmp_path: Path, signing: dict[str, dict], serves_health: bool = False) -> Path:
     script = tmp_path / "fake_sidecar.py"
     script.write_text(FAKE_SIDECAR_PY)
     exits, serves = tmp_path / "exits.c", tmp_path / "serves.c"
     exits.write_text(EXITS_255_C)
     serves.write_text(SERVES_HEALTH_C)
-    macos = tmp_path / "Rumble.app" / "Contents" / "MacOS"
-    macos.mkdir(parents=True)
-    for name, entitlements in entitled.items():
-        binary = macos / name
-        source = serves if serves_health and name == SIDECAR else exits
+    entitlements = tmp_path / "disable-library-validation.plist"
+    entitlements.write_text(DISABLE_LIBRARY_VALIDATION)
+    contents = tmp_path / "Rumble.app" / "Contents"
+    for relative, how in signing.items():
+        binary = contents / relative
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        source = serves if serves_health and relative == HELPER else exits
         subprocess.run(["cc", f'-DSCRIPT="{script}"', str(source), "-o", str(binary)], check=True)
-        sign = ["codesign", "--force", "-s", "-", "--options", "runtime"]
-        if entitlements:
+        sign = ["codesign", "--force", "-s", "-"]
+        if how.get("runtime"):
+            sign += ["--options", "runtime"]
+        if how.get("disable_library_validation"):
             sign += ["--entitlements", str(entitlements)]
         subprocess.run([*sign, str(binary)], check=True, capture_output=True)
     return tmp_path / "Rumble.app"
-
-
-def _entitlement_set_false(tmp_path: Path) -> Path:
-    plist = tmp_path / "false.plist"
-    plist.write_text(ENTITLEMENTS.read_text().replace("<true/>", "<false/>"))
-    return plist
 
 
 def _smoke(app: Path) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(SMOKE), str(app)], capture_output=True, text=True, check=False)
 
 
-def test_the_smoke_refuses_a_sidecar_signed_without_the_entitlement(tmp_path):
-    result = _smoke(_build_app(tmp_path, {APP_BINARY: ENTITLEMENTS, SIDECAR: None}))
-    assert (result.returncode, f"{SIDECAR} lacks com.apple.security.cs.disable-library-validation" in result.stderr) == (1, True)
-
-
-def test_the_smoke_refuses_an_app_binary_signed_without_the_entitlement(tmp_path):
-    result = _smoke(_build_app(tmp_path, {APP_BINARY: None, SIDECAR: ENTITLEMENTS}))
-    assert (result.returncode, f"{APP_BINARY} lacks com.apple.security.cs.disable-library-validation" in result.stderr) == (1, True)
-
-
-def test_the_smoke_refuses_the_entitlement_set_to_false(tmp_path):
-    result = _smoke(_build_app(tmp_path, {APP_BINARY: ENTITLEMENTS, SIDECAR: _entitlement_set_false(tmp_path)}))
-    assert (result.returncode, f"{SIDECAR} lacks com.apple.security.cs.disable-library-validation" in result.stderr) == (1, True)
-
-
-def test_the_smoke_passes_when_both_are_entitled_and_the_sidecar_answers_health_with_the_secret(tmp_path):
-    result = _smoke(_build_app(tmp_path, {APP_BINARY: ENTITLEMENTS, SIDECAR: ENTITLEMENTS}, serves_health=True))
+def test_the_smoke_passes_the_shipped_signing_when_the_helper_answers_health_with_the_secret(tmp_path):
+    result = _smoke(_build_app(tmp_path, SHIPPED, serves_health=True))
     assert result.returncode == 0, result.stderr
 
 
-def test_the_smoke_fails_when_the_bundled_sidecar_exits_before_answering(tmp_path):
-    result = _smoke(_build_app(tmp_path, {APP_BINARY: ENTITLEMENTS, SIDECAR: ENTITLEMENTS}))
+def test_the_smoke_refuses_an_app_that_disables_library_validation(tmp_path):
+    signing = {**SHIPPED, APP_BINARY: {"runtime": True, "disable_library_validation": True}}
+    result = _smoke(_build_app(tmp_path, signing, serves_health=True))
+    assert (result.returncode, "elefant_rumble disables library validation" in result.stderr) == (1, True)
+
+
+def test_the_smoke_refuses_a_helper_that_disables_library_validation(tmp_path):
+    signing = {**SHIPPED, HELPER: {"disable_library_validation": True}}
+    result = _smoke(_build_app(tmp_path, signing, serves_health=True))
+    assert (result.returncode, "rumble-sidecar disables library validation" in result.stderr) == (1, True)
+
+
+def test_the_smoke_refuses_an_app_without_the_hardened_runtime(tmp_path):
+    signing = {**SHIPPED, APP_BINARY: {"runtime": False}}
+    result = _smoke(_build_app(tmp_path, signing, serves_health=True))
+    assert (result.returncode, "elefant_rumble lacks the hardened runtime" in result.stderr) == (1, True)
+
+
+def test_the_smoke_refuses_an_ad_hoc_helper_with_the_hardened_runtime(tmp_path):
+    # Library validation would refuse its own libraries on a user's Mac; the CI runner doesn't enforce it.
+    signing = {**SHIPPED, HELPER: {"runtime": True}}
+    result = _smoke(_build_app(tmp_path, signing, serves_health=True))
+    assert (result.returncode, "ad-hoc rumble-sidecar has the hardened runtime" in result.stderr) == (1, True)
+
+
+def test_the_smoke_fails_when_the_helper_exits_before_answering(tmp_path):
+    result = _smoke(_build_app(tmp_path, SHIPPED))
     assert (result.returncode, "sidecar exited with code 255 before /health answered" in result.stderr) == (1, True)

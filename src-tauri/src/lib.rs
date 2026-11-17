@@ -937,6 +937,33 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
     unreachable!()
 }
 
+/// Where the macOS sidecar lives, relative to the app bundle's Contents: a PyInstaller onedir
+/// helper app sealed by the app's signature, so no library is unpacked to a temp folder (#157).
+const MACOS_HELPER: &str = "Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar";
+
+/// The helper beside the app executable `exe` (Contents/MacOS/<exe>).
+fn bundled_helper(exe: &Path) -> Option<PathBuf> {
+    Some(exe.parent()?.parent()?.join(MACOS_HELPER))
+}
+
+/// The sidecar command: the bundled helper on macOS, the externalBin elsewhere. A debug build
+/// run outside a bundle (`pnpm tauri dev`) uses the onedir build in src-tauri/sidecar/dist.
+fn sidecar_command(app: &AppHandle) -> Result<tauri_plugin_shell::process::Command, String> {
+    if cfg!(target_os = "macos") {
+        let exe = std::env::current_exe().map_err(|e| format!("failed to find the app executable: {}", e))?;
+        let helper = bundled_helper(&exe).filter(|path| path.is_file());
+        #[cfg(debug_assertions)]
+        let helper = helper.or_else(|| {
+            Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("sidecar/dist").join(MACOS_HELPER.trim_start_matches("Helpers/")))
+        });
+        let helper = helper.ok_or("the app bundle has no sidecar helper")?;
+        return Ok(app.shell().command(helper));
+    }
+    app.shell()
+        .sidecar("rumble-sidecar")
+        .map_err(|e| format!("failed to create sidecar command: {}", e))
+}
+
 fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
 
@@ -955,10 +982,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
     let db_key = database_key()?;
-    let sidecar_cmd = app
-        .shell()
-        .sidecar("rumble-sidecar")
-        .map_err(|e| format!("failed to create sidecar command: {}", e))?
+    let sidecar_cmd = sidecar_command(app)?
         .args([
             "--port",
             &port.to_string(),
@@ -3074,6 +3098,19 @@ mod tests {
         assert_eq!(migrate_data_dir(&old, &new).unwrap(), Migration::NotNeeded);
         assert!(!new.exists());
         assert_eq!(active_data_dir(&old, &new), new);
+    }
+
+    // --- bundled_helper ---
+
+    #[test]
+    fn the_macos_sidecar_is_the_helper_sealed_in_the_app_bundle() {
+        let exe = Path::new("/Applications/Elefant - Rumble.app/Contents/MacOS/elefant_rumble");
+        assert_eq!(
+            bundled_helper(exe),
+            Some(PathBuf::from(
+                "/Applications/Elefant - Rumble.app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar"
+            ))
+        );
     }
 
     // --- delete_local_data_files / delete_after_sidecar_exit ---
