@@ -325,6 +325,13 @@ describe("SettingsView", () => {
       expect(wrapper.text()).not.toContain("/stale/saved/path")
     })
 
+    it("says the database is kept in the workspace path it shows", async () => {
+      mockCommands({ data_dir: () => "/actual/data" })
+      const wrapper = await mountAndLoad()
+      await openTab(wrapper, "Templates")
+      expect(wrapper.text()).toContain("are kept in a database in the workspace path below.")
+    })
+
     it("does not send workspacePath to save_settings even when legacy settings contain it", async () => {
       mockCommands({
         data_dir: () => "/actual/data",
