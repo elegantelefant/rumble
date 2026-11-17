@@ -34,7 +34,7 @@ The design has to handle three things:
 
 | §12 | Here | Why |
 |---|---|---|
-| A server holds keys and blobs (`user_public_keys`, `briefcase_sync_blobs`) | One file format over a pluggable transport: the firm's synced folder (free), or the Elefant relay (working name: Trail; Premium, §7) | Local-only must work with no Elefant infrastructure |
+| A server holds keys and blobs (`user_public_keys`, `briefcase_sync_blobs`) | One file format over a pluggable transport: the firm's synced folder (free), or Rumble Relay (hosted on team plans, §7) | Local-only must work with no Elefant infrastructure |
 | `version INTEGER`, `GET …/sync/latest` | Immutable versions that name their parents; the relay is an append-only log | "latest" drops one of two offline edits and keeps no history |
 | No signatures | Every file is signed by its author's device | Provable authorship, which is the audit trail |
 | Revoke deletes the share record; the key stays the same | Removal starts a new matter key | A removed person cannot read anything written later |
@@ -45,7 +45,7 @@ The design has to handle three things:
 - "Group sharing": §5.
 - "Conflict resolution: last-write-wins or CRDT?": neither. A person resolves forks in one step (§6).
 - "Key backup": decision 9.
-- "Offline: how long…": indefinitely (§5.4).
+- "Offline: how long…": indefinitely (§5.3).
 
 ## 2. What a synced "doc" is
 
@@ -65,6 +65,50 @@ Does a Rumble-native draft model still earn its place? **No.**
 - "Save to matter" on a draft writes the `.docx` that `export_draft_docx` already produces as version 1. After that it is just a file.
 - One model (matter → files → versions) is simpler than two.
 
+### A matter is a briefcase
+
+Owner, 2026-11-17: "The matter should match what a briefcase means on the main web app." What the web app has today (read-only, `monorepo` at the sprint checkout):
+
+- **One entity.** `backend/src/elefant_api/core/briefcase_vocabulary.py:5-7`: "A matter, an in-house project and an intake room are not three entities — they are one briefcase with a different ``kind``".
+  - `BriefcaseKind = Literal["research", "matter", "intake"]` (line 41).
+  - The word on screen is per org: `BriefcaseLabel = Literal["briefcase", "matter", "project"]` (line 55). "A firm says 'Matter', an in-house team says 'Project', everyone else says 'Briefcase'" (lines 16-18).
+- **What it holds:**
+  - `briefcase` rows: name, `ownerId`, `org_id`, `kind`, `client_label` (`frontend/packages/db/src/schema/briefcase.ts`; migrations `2026_08_21`, `2026_08_22`, `2026_09_09`);
+  - `briefcase_item`: saved *references* (legislation, cases, hansard, news), not files (`api_schemas.py:4701-4707`);
+  - notes;
+  - chats (`chat.briefcase_id`);
+  - uploaded documents (`document.briefcase_id`, `files.gcs_path`).
+- **Versions.** Uploaded files are versioned: "Immutable versioning (design §8.4): version_group_id is shared by every version of 'the same upload' … version is monotonic within a group", with `base_version_id` (`db/repositories/files.py:46-52`).
+- **Sharing.**
+  - `briefcase_shares` (sharer, sharee, `permission IN ('view', 'comment', 'full')`, accepted, revoked; `2026_08_19_share_permission_vocabulary.py:91-92`);
+  - `briefcase_share_invitations` for emails without an account, with `expires_at` (`2026_09_02`);
+  - routes `/briefcases/{id}/share`, `/shares`, `/shared-with-me`, `/claim` (`api/v1/external/briefcases.py:490-1258`);
+  - an `/activity` feed and `/export`.
+- **§12's E2E phases B–C are not built.** There is no `user_public_keys`, `sync_blob` or `encrypted_key` table.
+
+How Rumble's matter aligns with that:
+
+| Web briefcase | Rumble matter | Match? |
+|---|---|---|
+| Name, `kind = matter`, `client_label` | Name and client label inside the encrypted `info` record; `kind` fixed to `matter`. The UI uses "Matter" by default, and the org's label once linked to an Elefant account | Yes |
+| Owner, org | Creator admin and second admin; the firm's folder access stands in for `org_id` | Partly: no org row-level security, because there is no server |
+| Shares: view / comment / full, clamped by plan (`max_share_permission`: Lite, Explorer and Pro share view only; team plans full; `plan_defaults.py:602-737`) | Members. **MVP: everyone is `full`.** Phase 3 adds `view` as a role in the signed `member` record. Honest importers then drop records a view member may not write: `version`, `withdraw` and named-version records. `presence` is allowed, and `comment` comes later. A demotion uses the same record-hash cutoff as a removal. This is client-side enforcement: a view member still holds the epoch keys, so it filters the writes, it doesn't prevent them | `full` and `view` yes; `comment` later. **Folder matters are exempt from plan ceilings** (there is no server); relay matters follow them |
+| Share invitations to an email, expiring | An invite link. There is no server-side expiry (no trusted clock) | Different by necessity |
+| Uploaded documents, `version_group_id` and monotonic `version` | Files, each a version graph; a fork is the only non-linear case | Yes; same idea, plus forks |
+| Saved references (legislation, cases) | Not in the MVP. They come from the cloud corpus; could sync later as small records | **No** |
+| Notes, chats | Not in the MVP. Chats are local AI sessions | **No**, for now |
+| Activity feed | The signed version and admin log | Yes, and tamper-evident |
+| Export | Audit CSV, plus the stock-`age` exit path | Yes |
+
+**Where a file-based matter can't match:**
+- server-side access control and org RLS;
+- revocation the server enforces (here a removed member keeps what they had);
+- invitation expiry;
+- items that are corpus references;
+- the web app's retrieval and synthesis over a briefcase, which need the cloud.
+
+**Naming.** The code, the format and the relay call the entity a **briefcase** (`briefcase_id`, `relay_briefcases`), as the web app does. The UI label defaults to "Matter", as the web app's `BriefcaseLabel` allows; this plan says "matter" for readability. **Later:** an Elefant account could link a Rumble briefcase to a web briefcase by storing the web briefcase's uuid in the encrypted `info` record. The ids differ in kind: web ids are uuids, Rumble's is the genesis hash. Only ciphertext and the transport would be shared, and only if the owner wants it. Not planned now.
+
 ## 3. Options compared
 
 ### 3a. Transport
@@ -75,9 +119,27 @@ Does a Rumble-native draft model still earn its place? **No.**
 | **(a) The firm's synced folder** (OneDrive/SharePoint, Dropbox, iCloud, SMB) as a mailbox of files | Yes | None: the firm's sync client moves ciphertext | **Free, MVP** |
 | (b) LAN P2P with mDNS | No | A non-loopback listener, which contradicts NETWORK.md | No |
 | (c) iroh relays/hole-punching | No: relays "don't store your application data" (§4) | Yes | No |
-| **(d) Elefant relay**, an append-only mailbox of the same files | Yes | Yes, opt-in | **Premium (§7); also self-hostable** |
+| **(d) Elefant relay**, an append-only mailbox of the same files | Yes | Yes, opt-in | **Rumble Relay (§7), team plans; also self-hostable** |
 
 A transport is three operations: `list`, `read`, `write`. The folder does them with the filesystem; the relay does them over HTTPS. A matter can use both at once, because the files are identical and named by id.
+
+### 3a′. "Firm's synced folder" includes Google Drive and SharePoint
+
+Owner, 2026-11-17: "Just to confirm this means Google Drive and SharePoint as well." Yes. Here is what each does with Rumble's small write-once files, from the vendors' current docs:
+
+| | OneDrive / SharePoint | Google Drive for desktop |
+|---|---|---|
+| How a library or folder gets onto the laptop | "use the Sync button in the document library", or "add shortcuts to libraries and folders to OneDrive"; Microsoft: "We recommend using OneDrive shortcuts as the more versatile option" ([sync SharePoint](https://support.microsoft.com/en-us/office/sync-sharepoint-and-teams-files-with-your-computer-6de9ede8-5b6e-4503-80b2-6190f3354a88)) | **Stream**: "Files are only available online unless specifically made available offline". **Mirror**: "Mirrored files will always be stored on your computer and in the cloud" ([stream vs mirror](https://support.google.com/drive/answer/13401938)). Shared drives "are still streamable" but stream-only ([mirroring tips](https://support.google.com/drive/answer/13470231)) |
+| Placeholders | "When you open an online-only file, it downloads to your device"; "You can't open online-only files when your device isn't connected to the Internet" ([Files On-Demand, Windows](https://support.microsoft.com/en-us/office/save-disk-space-with-onedrive-files-on-demand-for-windows-0e6860d3-d9f3-4971-b321-7092438fb38e)); on Mac, "File Provider is the only OneDrive Files On-Demand solution" ([Mac](https://support.microsoft.com/en-us/office/save-disk-space-with-onedrive-files-on-demand-for-mac-529f6d53-e572-4922-a585-e7a318c135f0)) | On macOS, "Downloaded and locally created files are accessible when Drive for desktop isn't running", so streamed-only files are not; "Drive for desktop uses macOS's File Provider technology", under `~/Library/CloudStorage` ([macOS](https://support.google.com/drive/answer/12178485)) |
+| Detecting placeholders | Windows Cloud Files attributes: `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` ("not fully present locally"), `FILE_ATTRIBUTE_PINNED` ("should be kept fully present locally") ([attributes](https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants)). Reading a placeholder hydrates it "without additional code changes", and a user can block an app's hydration through a toast ([cloud sync engine](https://learn.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine)) | Google documents no programmatic check (unverified). On Windows the stream drive "uses a FAT file system" ([admin config](https://knowledge.workspace.google.com/admin/drive/advanced-drive-for-desktop-configuration)), so files are capped at 4 GB; whether rename is atomic there is unverified |
+| Temp files, conflicts | "Temporary TMP files don't sync to OneDrive"; "Sync issues can also occur if you edit files offline." Conflict-copy naming is undocumented by Microsoft (unverified) | "Drive for desktop keeps both" when local and cloud differ ([mirroring tips](https://support.google.com/drive/answer/13470231)). Naming and temp-file rules are undocumented (unverified) |
+
+**What Rumble must do so both work:**
+1. **The matter folder must be available offline.** That means OneDrive "Always keep on this device", or Google "Available offline" (or Mirror for My Drive). At join and on every start, Rumble checks this: on Windows through the Cloud Files attributes above; on macOS through a File Provider check in a spike. If it fails, Rumble says "Make this folder available offline so Rumble can work when you're not connected", with the vendor's two-click instructions. Otherwise a laptop that goes offline can't read colleagues' versions, and a placeholder read while offline fails.
+2. **Read every new file before use, then verify it.** Reading hydrates a placeholder. But Windows shows "an interactive toast" for app-triggered hydration, and a user who blocks it there stays blocked until they unblock it in Settings. So **"hydration blocked" is a named state**: "Windows is blocking Rumble from downloading this matter's files. Settings → Automatic file downloads → allow Rumble." A partial hydration fails verification and is retried, never trusted. Whether Google's "Available offline" also covers files colleagues add later is unverified; it is a spike item.
+3. **Write `.tmp`, then rename,** so OneDrive never uploads half a file. On Google's FAT stream drive, rename atomicity needs a spike. Until it passes, recommend Mirror or a folder location rather than the G: drive.
+4. **Ignore every name that isn't `<uuid>.rumble`.** Conflict copies, `desktop.ini` and `.DS_Store` are skipped. Rumble never writes one file from two devices, so a vendor conflict copy can only be a duplicate of a file Rumble already has.
+5. **SharePoint libraries:** sync the matter's library or folder by OneDrive shortcut, as Microsoft recommends. **Google shared drives:** stream with "Available offline", because they can't be mirrored.
 
 ### 3b. Concurrent edits
 
@@ -144,6 +206,28 @@ All three CRDTs could carry their updates as files. None fits: they cannot merge
 - Word's owner file. A Microsoft Q&A answer (community, not documentation) describes `~$`-prefixed "owner files", which Word uses "to know that the corresponding document file is open" ([Q&A](https://learn.microsoft.com/en-us/answers/questions/4822723/what-are-doc-and-docx-can-you-open-them-or-delete)). Using it as the "Word closed the file" signal needs a spike.
 - Plain text needs no Word. Python's stdlib [`difflib`](https://docs.python.org/3/library/difflib.html) offers "Helpers for computing deltas", and Rust has equivalents. Rumble has no diff code today (no diff package; the draft is a read-only `<pre>`).
 
+**Word automation: the four open questions, resolved where the docs allow.**
+- **(i) Handing a file to the Word add-in without a network listener.**
+  - Office URI schemes take only "a URI to the document, based on the http or https scheme" ([Office URI schemes](https://learn.microsoft.com/en-us/office/client-developer/office-uri-schemes)), so they cannot carry a local file, and they don't launch an add-in with a payload.
+  - Inside a running add-in, `Application.openDocument(filePath)` (WordApi 1.6) works with local paths: "Word on the web only supports remote (cloud) locations, while Word on Windows, on Mac, and on iOS support local and remote locations" ([Word.Application](https://learn.microsoft.com/en-us/javascript/api/word/word.application)).
+  - `Document.compare(filePath)` (WordApiDesktop 1.1) also takes a path.
+  - The no-listener channel is therefore **a path on disk**: Rumble writes both versions locally, and the add-in compares by path. How the add-in learns which path to use is undocumented. One idea is for Rumble to write it into the working copy's custom XML part for the add-in to read on open; it needs a spike. Microsoft says nothing about add-ins reading arbitrary local files (unverified).
+- **(ii) Mac automation.**
+  - Word for Mac's AppleScript dictionary has `compare` ("Compares this document with another.", with `path`, `author name`, `target`) and `merge` ("Merges the changes marked with revision marks from one document to another."). This was read from the installed Word 16.115 `Word.sdef`, which is first-party but not a web page.
+  - There is no `compare documents` or `merge documents` command.
+  - An outside app sending Apple Events to Word needs the user's one-time consent; Apple's page could not be fetched (unverified).
+  - `AppleScriptTask` is the other direction, VBA inside Word calling scripts in `~/Library/Application Scripts/com.microsoft.Word/` ([Microsoft](https://learn.microsoft.com/en-us/office/vba/office-mac/applescripttask)).
+- **(iii) Three-way combine.**
+  - Office.js has `compare` (WordApiDesktop 1.1) and `compareFromBase64` (1.2). `Document.merge` is "WordApi BETA (PREVIEW ONLY)": "Do not use this API in a production environment."
+  - COM `Application.MergeDocuments` takes `OriginalDocument`, `RevisedDocument`, `OriginalAuthor` ("the name of the author of the original document") and `RevisedAuthor` ("the person to use for unattributed changes after merging two documents") ([MergeDocuments](https://learn.microsoft.com/en-us/office/vba/api/word.application.mergedocuments)). That is two inputs, not three.
+  - Word's own Combine is also two at a time: "Click Review > Compare > Combine." "Under Original document … choose the document you sent for review." "Under Revised document, choose the document you want to merge." ([Combine revisions](https://support.microsoft.com/en-us/word/combine-document-revisions)).
+  - A three-way result (v3 base; Ana's and Ben's v4s, each attributed) is therefore **two chained combines**: combine(v3, Ana's), then combine(result, Ben's). This is inferred, not documented, and goes in the spike.
+- **(iv) Outlook attachments.**
+  - Windows moves non-file items with `CFSTR_FILEDESCRIPTOR`/`CFSTR_FILECONTENTS`, "the preferred way to transfer Shell objects that are not stored as file-system files … a group of email messages as individual files" ([Shell clipboard formats](https://learn.microsoft.com/en-us/windows/win32/shell/clipboard)).
+  - Which formats Outlook offers for an attachment drag is undocumented (unverified).
+  - Tauri v2's drop event carries only `paths: string[]` ([Tauri webview API](https://v2.tauri.app/reference/javascript/api/namespacewebview/)). A virtual-file drop therefore likely yields nothing; that is inferred, and tauri [#15861](https://github.com/tauri-apps/tauri/issues/15861) on changing drag handling is open.
+  - **Plan change:** the MVP accepts files from disk. "Drop from Outlook" is a phase-2 spike (a native Windows drop target, or the webview's own HTML5 drop). Until then the copy says "Save the attachment, then drop it here."
+
 **iManage, for contrast.** Only two facts were verified, both from iManage Control Center help ([Containers and Documents](https://docs.imanage.com/cc-help/10.5.2/en-US/Containers_and_Documents.html)): while a document is checked out, "other users can't check it out or edit it", and unlocking needs either the document owner with a role that has "the library role Document Unlock privilege enabled", or someone who has "at least Tier 1 iManage Work system administrator privileges". Everything else said about iManage here is general knowledge and **unverified**: profile forms on save, a "new version or replace" prompt, and a server or cloud dependency.
 
 **Legal-sector duties** (what the design must respect, not legal advice; check against the firm's own jurisdiction):
@@ -161,11 +245,11 @@ Together: encrypt before data reaches a third-party store, and make each matter 
 ```mermaid
 flowchart LR
   subgraph A["Ana's laptop"]
-    W1["Word, on a stable working copy"] -->|"Save; cut after idle"| H1["Rust host<br/>sign + encrypt<br/>(keys in OS keychain)"]
+    W1["Word, on a stable working copy"] -->|"every Save = a version, written at once"| H1["Rust host<br/>sign + encrypt<br/>(keys in OS keychain)"]
     H1 -->|verified metadata| S1[(sidecar index<br/>SQLCipher)]
     H1 -->|"write-once &lt;uuid&gt;.rumble"| T1[(transport)]
   end
-  T1 -. "firm's synced folder (free)<br/>or Elefant relay (Premium)<br/>opaque ciphertext only" .-> T2
+  T1 -. "firm's synced folder (free)<br/>or Rumble Relay (team plans)<br/>opaque ciphertext only" .-> T2
   subgraph B["Ben's laptop, days later"]
     T2[(transport)] -->|"new names only"| H2["Rust host<br/>verify + decrypt"]
     H2 --> S2[(sidecar index)]
@@ -189,7 +273,7 @@ Every record is a file named `<uuid>.rumble`: opaque, with its kind inside the e
 | `presence` | "D is editing F since T, based on V"; expires after `PRESENCE_TTL_MINUTES` | Members |
 
 Rules for every kind:
-- **One signature definition for every kind.** The Ed25519 signature covers every header field in a canonical encoding: `matter_id`, `kind`, the blob uuid, the signer's public key, `seq`, `prev`, `admin_head` and the kind's own fields. For versions those are `file_id`, `version_id`, `parents`, `epoch`, file name, media type, size, `created_at` and `sha256(content)`. The signature sits inside the encryption. Import rejects a record whose uuid differs from its file name. Any member holds the epoch identity and could otherwise decrypt Ana's file, change an unsigned field and re-encrypt it under a new uuid; Filippo's warning is that "the recipient can decrypt the file, keep your signature, and encrypt it to a different recipient" ([age authentication](https://words.filippo.io/age-authentication/)).
+- **One signature definition for every kind.** The Ed25519 signature covers every header field in a canonical encoding: `briefcase_id`, `kind`, the blob uuid, the signer's public key, `seq`, `prev`, `admin_head` and the kind's own fields. For versions those are `file_id`, `version_id`, `parents`, `epoch`, file name, media type, size, `created_at` and `sha256(content)`. The signature sits inside the encryption. Import rejects a record whose uuid differs from its file name. Any member holds the epoch identity and could otherwise decrypt Ana's file, change an unsigned field and re-encrypt it under a new uuid; Filippo's warning is that "the recipient can decrypt the file, keep your signature, and encrypt it to a different recipient" ([age authentication](https://words.filippo.io/age-authentication/)).
 - **`admin_head`.** Every record carries the hash of the newest admin file its writer has seen. A withheld removal or `key` file then shows up as a gap, as soon as anyone writes after it.
 - **Equivocation.** Two different records with the same (device, seq) mean the device is compromised. It is flagged to admins, and its later records are held until an admin decides.
 - **`seq`** is counted per (device, matter).
@@ -202,7 +286,7 @@ Rules for every kind:
 
 ### 5.2 Identity and joining (Signal-shaped, minus the ceremony)
 
-- **Keys.** Each device has a signing key pair and a receiving key pair, kept in the OS keychain by the Rust host as an item that **never syncs**: no iCloud Keychain, and never restored from a backup onto another machine. Keys never change, so a reinstalled laptop is a new device, and there is never a "key changed" prompt to wave through.
+- **Keys.** Each device has a signing key pair and a receiving key pair, kept by the Rust host as an item that **must not leave the device**. **The existing `keyring` 3 crate does not give that.** In v3.6.3, Windows writes `CRED_PERSIST_ENTERPRISE` (`windows.rs:246`), a persistence type that, by Microsoft's definition (not re-fetched), roams with roaming profiles. macOS uses the legacy login keychain (`macos.rs:32`), which backups and Migration Assistant copy. **Phase-1 requirement:** on Windows, `CRED_PERSIST_LOCAL_MACHINE` through the raw Credential API; on macOS, the data-protection keychain with a `…ThisDeviceOnly` accessibility class, which may need a keychain-access-groups entitlement and provisioning profile (unverified). On macOS this is best done by wrapping the keys with a Secure Enclave key (§12c), which cannot be exported. Keys never change, so a reinstalled laptop is a new device, and there is never a "key changed" prompt to wave through.
 - **Invite inside a firm, the common path.**
   - An admin clicks **Invite**, types "Ben Tan", and sends the link through Teams or email.
   - Ben opens the link and picks the matter folder (the firm has already granted folder access).
@@ -235,12 +319,18 @@ Rules for every kind:
   - Word's Recent list keeps working.
   - The copy is always watched and is pruned after `WORKING_COPY_IDLE_DAYS`.
 - **Open** writes the head version there if the copy is older, then opens it in Word (the opener plugin is already a dependency). On first open, Rumble shows: **"Press Save in Word to share your changes."** The copy is outside OneDrive, so Word's AutoSave is off there.
-- **Cutting versions.**
-  - A version is cut `VERSION_IDLE_MINUTES` after the last save, and again when Rumble quits.
-  - At startup, Rumble cuts any working copy whose hash differs from its last version. A Word crash therefore loses nothing.
-  - There is no close detection: Word's `~$` file is unreliable after a crash.
-- **Parent.** The parent of a cut is the last version this working copy produced, or the version it was opened from. Later saves in the same Word session continue your line instead of forking you from yourself.
-- **Someone else saves while you edit.** A notice appears at once: "Ben saved v5 while you were editing. Yours will be kept alongside; you'll be asked to combine when you're done."
+- **Every save is a version, written at once.**
+  - Owner, 2026-11-17: "Follow Google Drive's example. After a few idle minutes someone might close their laptop after an update."
+  - When Word saves the working copy, the host records a version immediately and writes it to the transport straight away. Nothing waits for idle.
+  - A save whose content hash equals the previous version's is not a new version.
+- **Flush on sleep and quit.** On the OS sleep or power notification, and on quit, the host finishes any pending write before allowing them. The exact macOS and Windows notifications are a spike item. At startup, Rumble also writes a version for any working copy whose hash differs from its last version, so a Word crash or a dead battery loses nothing.
+- **Grouping is display only.** It follows Google's history panel: Google Docs lets you "Find grouped versions: In the right panel, click Expand", "Name this version", and "turn on Only show named versions" ([Docs version history](https://support.google.com/docs/answer/190843)).
+  - Rumble groups consecutive saves by the same person into one row, e.g. "v12–v17 · Priya · 10:02–10:40", expandable to each save.
+  - **Name this version** writes a small signed record, so "Sent to client 18 Nov" shows for everyone.
+  - The toggle **Only show named versions**.
+  - What Rumble does *not* copy: Google Drive's retention for uploaded files ("A version might be permanently deleted after 30 days or if there are 100 newer versions", unless "Keep forever"; [Drive versions](https://support.google.com/drive/answer/2409045)). Legal history is kept, and every version is effectively "Keep forever".
+- **Parent.** A version's parent is the last version this working copy produced, or the version it was opened from, so later saves in the same Word session continue your line instead of forking you from yourself.
+- **Someone else saves while you edit.** A notice appears at once: "Ben saved v5 while you were editing. Your next save will sit alongside it as your own version." The fork banner then appears on your next save. Later saves extend your branch, and you combine whenever you choose.
 - **Dragging in an existing file.** Rumble remembers the source path. If that file changes later: "nda.docx on your Desktop changed. Add as v5?" One click. A Save As to somewhere else cannot be seen; that is a stated limit.
 - **Plaintext on disk** exists in working copies and in Word's temp files, covered by full-disk encryption (SECURITY.md).
 
@@ -261,7 +351,7 @@ Rules for every kind:
 
 Two existing crates are reused:
 - `sha2` 0.10, already in the lockfile, for content hashes;
-- `keyring` 3, already used for `db_key`, for the OS keychain.
+- the OS keychain for device keys, **not** through `keyring` 3 as it stands (§5.2; it roams on Windows and backs up on macOS). `keyring` stays for `db_key`.
 
 **Design.**
 - **Device keys.** Each device has an age X25519 identity (receiving) and an Ed25519 key (signing). A signed `device` record binds the two together.
@@ -273,7 +363,7 @@ Two existing crates are reused:
 **Rules the crypto needs.**
 - **Sign, then encrypt.** One Ed25519 signature covers every header field (§5.1 has the single definition), including the blob uuid and the signer's key. Verify with `verify_strict`, and never use signature bytes as an id or a dedup key.
 - **Verify before release.** Decrypt to a temp file **in `app_local_data_dir` only**, never in the transport folder. Check the hash and the signature, then rename it into the working copy. Delete it on failure, and clear leftovers in the startup sweep. age authenticates chunks, not the sender.
-- **`key` files must be signed by an authorised admin device**, with the signature inside the payload, binding `matter_id`, the epoch and the epoch's public key. After decrypting, the host checks that the identity's derived public key equals the signed one. Two reasons, both from age's author ([age authentication](https://words.filippo.io/age-authentication/)): anyone with folder write access can encrypt to an epoch, and multiple recipients of one file can forge for each other. In his words, encrypting to two recipients means "you just gave a blank check to Alice and Bob to encrypt files to each other."
+- **`key` files must be signed by an authorised admin device**, with the signature inside the payload, binding `briefcase_id`, the epoch and the epoch's public key. After decrypting, the host checks that the identity's derived public key equals the signed one. Two reasons, both from age's author ([age authentication](https://words.filippo.io/age-authentication/)): anyone with folder write access can encrypt to an epoch, and multiple recipients of one file can forge for each other. In his words, encrypting to two recipients means "you just gave a blank check to Alice and Bob to encrypt files to each other."
 - **Removal cutoff and rollback.** The cutoff is a record hash in the signed `prev` chain, because there is no trusted clock. `admin_head` and `prev` reveal deleted or withheld files once a later record arrives. **Withholding the tail of a chain** (the newest removal, before anyone writes after it) **cannot be detected** without a trusted channel. The relay's append-only log narrows that window; a folder cannot.
 - **Safety number.** SHA-256 over a versioned domain label (`rumble-safety-v1`) and both devices' **Ed25519** public keys in canonical order, shown as at least 60 digits, Signal's length, so an attacker cannot grind keys to a match. It is defined in our own documented spec with test vectors; Signal publishes no spec for its safety numbers.
 - **Blob names.** A uuid or the ciphertext hash. Never the plaintext hash, which would let anyone holding the file confirm it.
@@ -307,7 +397,7 @@ Two existing crates are reused:
 5. Canonical record encoding and safety-number test vectors.
 6. Negative tests: a forged `key` file; a `key` file whose identity doesn't match its signed public key; a non-member blob; a removed device's record after its cutoff hash; a re-encrypted record under a new uuid; equivocating records with the same seq; two claims on one invite.
 7. Check whether age has shipped a post-quantum identity.
-8. A keychain item that cannot sync (iCloud Keychain, Windows roaming credentials).
+8. Device-only key storage: Windows `CRED_PERSIST_LOCAL_MACHINE`; macOS data-protection keychain `…ThisDeviceOnly` or a Secure Enclave wrap; prove it is not copied by a backup restore to a second Mac or by roaming profiles.
 
 ## 6. Recommendation: the experience
 
@@ -320,7 +410,7 @@ Matters are the only organising concept. The common path needs no ceremony. An e
 | iManage habit | Rumble |
 |---|---|
 | A checked-out document: others "can't check it out or edit it". A stale lock needs the owner with an unlock privilege, or an administrator with "at least Tier 1 … privileges" (verified) | **No locks.** Presence warns, never blocks. Two edits become two versions, not a refusal |
-| Check-in dialogs, "new version or replace?" (unverified) | **Save in Word.** Rumble cuts the version after idle. No dialog |
+| Check-in dialogs, "new version or replace?" (unverified) | **Save in Word.** Each save is a version, recorded at once. No dialog |
 | A profile form on save (unverified) | **Drop a file into a matter.** Name, type, author and time are already known |
 | Workspaces, folders, filters (unverified) | **Matters, then files** |
 | Needs the server or service to reach anything (unverified) | Works offline, from a folder the firm already syncs |
@@ -329,7 +419,7 @@ Matters are the only organising concept. The common path needs no ceremony. An e
 ### 6.3 The common path
 
 1. Click a file in the matter. Word opens.
-2. Edit, then Save. A few minutes later the matter shows **"v4 · Priya · 2 min ago"**.
+2. Edit, then Save. The matter shows **"v4 · Priya · just now"** at once on her laptop, and on colleagues' laptops as soon as the folder syncs. Ten saves in a morning show as one expandable row.
 3. Colleagues see **"Priya is editing"** while she works (phase 2). Through a synced folder it arrives minutes late; through the relay, at once. Opening it anyway is allowed: "Priya is editing this. If you both save, you'll be asked to combine." There is no lock.
 4. **Versions are numbered 1, 2, 3**, by depth in the parent graph, so every laptop shows the same number. If two branches have different lengths, the version that joins them takes the next number after the longest, so numbers can skip on the shorter side. That is stated, and harmless.
 
@@ -342,7 +432,7 @@ Two versions with the same parent are labelled with **depth plus initials**, whi
 
 - **Use mine** or **Use Ana's** makes v5 from that content, with both as parents. The other stays in history, one click away. Identical choices made on two laptops collapse into one v5 (§5.1).
 - **Combine in Word** opens your version as the working copy, with Ana's beside it. In the MVP, you bring her changes across, using Word's Compare if you like (Microsoft's four steps are shown inline). Saving then makes v5, with both parents.
-  - **Phase 2 automates this.** Word's comparison is written into your working copy: the add-in's `compareFromBase64` with `compareTarget` set to the current document, or the COM `Destination` option. The banner then reads "Accept or reject the marked changes, then save."
+  - **Phase 2 automates this** (decision 3). Word's comparison is written into your working copy, by one of three routes: the add-in's `compare(path)` with `compareTarget` set to the current document, AppleScript `compare` on Mac, or COM `CompareDocuments`/`MergeDocuments` with `Destination` on Windows. The banner then reads "Accept or reject the marked changes, then save."
   - All differences carry one author name ("Ana's version"), because a two-way compare cannot attribute each change (§4). Per-author attribution needs Word's three-way combine from v3, which is a spike.
 - **Clicking Open on a forked file** shows the banner first, so a third branch can't start by accident.
 - **Other file types:** "Open both side by side".
@@ -351,26 +441,26 @@ Two versions with the same parent are labelled with **depth plus initials**, whi
 
 - **Forks still happen,** because presence is only as fresh as the folder. That is why the fork path is cheap.
 - **An in-firm invite link is a lasting read capability** for history up to its epoch, for anyone who also has folder access (§5.2). A thief who claims it gets flagged once Ben claims too; but if Ben never opens it, the thief's claim is the only one. So the admin sees the claimant's device details in "not yet confirmed", and Verify is one click away. Cross-firm and relay links carry no keys.
-- **Outlook attachments** dragged in on Windows may arrive as virtual files, not paths. Whether Tauri's drag-and-drop handles them is unverified; spike it.
+- **Outlook attachments** may arrive as virtual files, and Tauri's drop event delivers only paths (§4). The MVP copy says "Save the attachment, then drop it here"; a direct drop is a phase-2 spike.
 
-## 7. The Elefant relay (working name: Trail), Premium, and the self-hosted relay
+## 7. Rumble Relay (hosted, team plans) and the self-hosted relay
 
 **What it is.** An append-only mailbox of the same opaque `.rumble` files. Elefant never holds keys, never decrypts, and cannot forge a file (every file is signed). It is built from §12's tables, with a log in place of latest-only:
 
 ```sql
-CREATE TABLE relay_matters (id TEXT PRIMARY KEY, created_by TEXT NOT NULL, next_seq BIGINT NOT NULL DEFAULT 1,
+CREATE TABLE relay_briefcases (id TEXT PRIMARY KEY, created_by TEXT NOT NULL, next_seq BIGINT NOT NULL DEFAULT 1,
                             created_at TIMESTAMPTZ NOT NULL);
-CREATE TABLE relay_members (matter_id TEXT REFERENCES relay_matters(id), account_id TEXT NOT NULL,
-                            added_at TIMESTAMPTZ NOT NULL, removed_at TIMESTAMPTZ, PRIMARY KEY (matter_id, account_id));
-CREATE TABLE relay_files   (matter_id TEXT REFERENCES relay_matters(id), seq BIGINT NOT NULL, name TEXT NOT NULL,
+CREATE TABLE relay_members (briefcase_id TEXT REFERENCES relay_briefcases(id), account_id TEXT NOT NULL,
+                            added_at TIMESTAMPTZ NOT NULL, removed_at TIMESTAMPTZ, PRIMARY KEY (briefcase_id, account_id));
+CREATE TABLE relay_files   (briefcase_id TEXT REFERENCES relay_briefcases(id), seq BIGINT NOT NULL, name TEXT NOT NULL,
                             size BIGINT NOT NULL, uploaded_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL,
                             object_key TEXT NOT NULL, expires_at TIMESTAMPTZ,
-                            PRIMARY KEY (matter_id, seq), UNIQUE (matter_id, name));
+                            PRIMARY KEY (briefcase_id, seq), UNIQUE (briefcase_id, name));
 ```
 
-- **Write-once:** `PUT /matters/{id}/files/{name}`. It locks the matter row, takes `next_seq`, and stores the blob in object storage under `RELAY_MAX_FILE_MB`. An existing name gets 409. Seq is allocated under that lock, so a reader's `?after=` cursor never skips a late commit.
-- **Read:** `GET /matters/{id}/files?after={seq}` returns everything since your cursor. It replaces `sync/latest`.
-- **Live updates:** `GET /matters/{id}/events` streams them over SSE.
+- **Write-once:** `PUT /briefcases/{id}/files/{name}`. It locks the matter row, takes `next_seq`, and stores the blob in object storage under `RELAY_MAX_FILE_MB`. An existing name gets 409. Seq is allocated under that lock, so a reader's `?after=` cursor never skips a late commit.
+- **Read:** `GET /briefcases/{id}/files?after={seq}` returns everything since your cursor. It replaces `sync/latest`.
+- **Live updates:** `GET /briefcases/{id}/events` streams them over SSE.
 - **Presence** is ordinary write-once files with `expires_at`. The relay garbage-collects them.
 - **Access:** `relay_members` controls who may read and write the mailbox, and invites add an account. Cryptographic membership stays in the signed files.
 
@@ -382,7 +472,7 @@ CREATE TABLE relay_files   (matter_id TEXT REFERENCES relay_matters(id), seq BIG
 
 **What Elefant can see:** which accounts are in which opaque matter; connection times and IP addresses; file count, sizes and times. File names are random, and kinds, names, members and content are all inside the encryption. Phase 4 adds padding to size buckets, so sizes reveal less.
 
-**Self-hosted relay.** The same code, open source under Apache-2.0 like Rumble, runs as one container on Postgres with any S3-compatible store. A firm can run it itself: anyone can audit it, and anyone can avoid Elefant entirely. The hosted copy is the Premium convenience. Upgrading is "Sign in to use Elefant relay" in matter settings; nothing in the matter changes.
+**Self-hosted relay.** The same code, open source under Apache-2.0 like Rumble, runs as one container on Postgres with any S3-compatible store. A firm can run it itself: anyone can audit it, and anyone can avoid Elefant entirely. The hosted copy is the managed convenience on the team plans (decision 11). Upgrading is "Sign in to use Elefant relay" in matter settings; nothing in the matter changes.
 
 **Size: M.** Three tables, three routes, existing Elefant account auth, and the host's second transport.
 
@@ -391,10 +481,11 @@ CREATE TABLE relay_files   (matter_id TEXT REFERENCES relay_matters(id), seq BIG
 | Phase | Scope | Proof | Size |
 |---|---|---|---|
 | **0. Shared templates** | #144: read the templates folder; point it at a synced folder | Two installs, same templates | S |
-| **1. MVP: a matter of versioned files, two people, laptops never on together** | Crypto spike (§5.6), then host keys and format; create a matter (second-admin prompt); invite link and auto-countersign; add files by drag and drop (any type); stable working copies with Open in Word; versions cut on idle, quit and startup sweep; v1, v2, v3 with authors; the fork banner with Use mine, Use theirs and Combine in Word (manual) | Two data dirs and one folder, never running together. A adds `nda.docx` (v1), invites B and stops. B joins with no A online, saves, and v2 is "Ben (invited)". A starts, countersigns, and sees v2. Both edit v2 offline: banner on both; "Use Ana's" on both collapses to one v3. Kill Word mid-edit: the startup sweep cuts the version. Negative tests: tampered, replayed, foreign-matter, planted-genesis, two claims on one invite (no countersign), re-encrypted records, equivocation and records past a removal cutoff are rejected or flagged; no plaintext, names included, in the folder; no keys in the sidecar DB. Then two real laptops on OneDrive | L (four slices: keys and format M; folder sync and index M; working copies and cutting M; versions and fork UI S) |
-| **2. Less friction** | Presence; automated Compare into the working copy (spike first: add-in vs COM, the loopback question in §4, three-way combine); QR Verify; a built-in text redline; "Save draft to matter"; gap notices | Presence shows within one sync interval and expires; Combine opens with marks in the working copy | M |
-| **3. Real teams** | Removal with a new key epoch; several devices per person; several matters; withdraw; audit CSV | A removed device cannot open new versions; a returning removed laptop is handled per §5.3 | M |
-| **4. The relay (working name: Trail) and self-host** | §7, plus size padding | NETWORK.md row; the egress-block test passes with it off | M |
+| **1. MVP: a matter of versioned files, two people, laptops never on together** | Crypto spike (§5.6), then host keys and format; create a matter (second-admin prompt); invite link and auto-countersign; add files by drag and drop (any type); the matter-folder offline check (OneDrive, SharePoint, Google Drive; §3a′); stable working copies with Open in Word; a version on every save, written at once, flushed on sleep and quit, plus the startup sweep; v1, v2, v3 with authors, grouped by person in display; the fork banner with Use mine, Use theirs and Combine in Word (manual) | Two data dirs and one folder, never running together. A adds `nda.docx` (v1), invites B and stops. B joins with no A online, saves, and v2 is "Ben (invited)". A starts, countersigns, and sees v2. Both edit v2 offline: banner on both; "Use Ana's" on both collapses to one v3. Kill Word straight after a save: the version is in the folder. A **per-version "uploaded" state** is read from the Windows Cloud Files in-sync state, or from File Provider upload status on macOS (spike). The proof is that a colleague receives a version saved just before the author's laptop slept, after the author's laptop wakes. Rumble cannot make OneDrive or Drive upload sooner; it can only show "not uploaded yet". Run on OneDrive and on Google Drive (Mirror, and Stream with Available offline). Negative tests: tampered, replayed, foreign-matter, planted-genesis, two claims on one invite (no countersign), re-encrypted records, equivocation and records past a removal cutoff are rejected or flagged; no plaintext, names included, in the folder; no keys in the sidecar DB. Then two real laptops on OneDrive | L (four slices: keys and format M; folder sync and index M; working copies and versioning M; versions and fork UI S) |
+| **2. Less friction** | Presence; automated Compare into the working copy (spike first: add-in by path, AppleScript or COM, and two chained combines; §4); QR Verify; named versions; drop from Outlook (spike); a built-in text redline; "Save draft to matter"; gap notices | Presence shows within one sync interval and expires; Combine opens with marks in the working copy | M |
+| **3. Real teams** | Removal with a new key epoch; several devices per person; several matters; view-only members; withdraw; audit CSV; Secure Enclave key wrapping (§12c) | A removed device cannot open new versions; a returning removed laptop is handled per §5.3 | M |
+| **4. Rumble Relay and self-host** | §7, plus size padding | NETWORK.md row; the egress-block test passes with it off | M |
+| **Committed with phase 1 (§12a)** | The public sync spec (`docs/sync-spec.md`) with test vectors; cargo-fuzz in CI from the first parser commit; an OSS-Fuzz application at public launch | A second, independent reader passes the test vectors; fuzzing runs nightly with no open crashes | M (spec), S (fuzzing) |
 | Not planned | CRDTs, LAN P2P, iroh, ratchets, MLS, a `.docx` diff engine, a native editor, locks | Revisit if Rumble gains live co-typing, or clients demand forward secrecy | — |
 
 ## 9. Threat model
@@ -442,50 +533,78 @@ Legal-sector constraints (§4):
 - the stale NETWORK.md "sync Test connection" bullet and the `sync/test` mock;
 - SECURITY.md's stale "sync options" row and its duplicated Windows-path bullet.
 
-## 11. Open owner decisions
+## 11. Owner decisions
 
-1. **Unit of sharing.**
-   - Options: (a) a matter is a set of versioned files of any type; (b) Rumble-native drafts.
-   - **Recommend (a).** It is one model and makes `.docx` first-class.
-2. **Transport.**
-   - Options: (a) folder in the MVP, relay in phase 4; (b) relay first.
-   - **Recommend (a).** Local-only works free from day one.
-3. **How "Combine in Word" gets automated** (phase 2).
-   - Options: (a) the Elefant Word add-in (`compareFromBase64` into the working copy; Windows and Mac desktop; needs a way to pass the file, possibly a loopback listener); (b) Windows COM `CompareDocuments` with `Destination`, plus a Mac route that is unverified; (c) stay manual.
-   - **Recommend a spike that chooses between (a) and (b).** The MVP ships (c), which already works everywhere.
-4. **When a version is cut.**
-   - Options: (a) after `VERSION_IDLE_MINUTES` idle, on quit, and on the startup sweep; (b) every save; (c) a manual Publish button.
-   - **Recommend (a).** (b) floods history, and (c) is the check-in ceremony we are removing.
-5. **Presence.**
-   - Options: (a) automatic and advisory (phase 2); (b) none.
-   - **Recommend (a).**
-6. **Joining.**
-   - Options: (a) in-firm: an invite link that carries keys, so the joiner works at once; an admin countersigns automatically only when there is exactly one claim, and the countersign rotates the epoch; (b) live approval with a safety number.
-   - **Recommend (a).** It is the owner's scenario: the admin may be offline. The cost, stated in the copy, is that a leaked link opens history up to the join.
-7. **Admins.**
-   - Options: (a) the creator, then a prompted second admin added by an admin file, with an explicit warning if skipped; (b) one; (c) every member.
-   - **Recommend (a).** A lost laptop doesn't freeze the matter, and concurrent admin branches resolve by a fixed rule (§5.2).
-8. **Verify (safety number).**
-   - Options: (a) optional for everyone; (b) cross-firm and relay links carry no keys, which are released only after Verify; optional inside a firm; (c) always required.
-   - **Recommend (b).** Link theft is a confidentiality problem, so the gate must be on reading, not writing. Inside a firm, folder access is the second wall.
-9. **New members see history.**
-   - Options: (a) yes; (b) no.
-   - **Recommend (a).**
-10. **Key backup.**
-    - Options: (a) none: a new invite, and history returns from the transport; (b) password-derived.
-    - **Recommend (a).**
-11. **Relay pricing.**
-    - Options: (a) hosted in Premium, open-source relay free to self-host; (b) hosted only; (c) never.
-    - **Recommend (a).**
-12. **Crypto stack.** Options: (a) `age` 0.12.1 plus `ed25519-dalek` 2.2, pure Rust; (b) a runner-up from §5.6. **Recommend (a)**, subject to the spike. It is the only option that gives a firm a stock-tool exit path.
-13. **Relay name.** "Trail" is PROPOSED; no trademark check has been done. Options: (a) adopt it after a trademark check; (b) keep a descriptive name ("Elefant relay"). **Recommend (a)**, with the check first.
+Decided 2026-11-17, recorded verbatim where quoted:
 
-## 12. Rough edges, stated
+1. **Unit of sharing: DECIDED.** A matter is a set of versioned files, and "The matter should match what a briefcase means on the main web app." Alignment and gaps are in §2.
+2. **Transport: DECIDED.** "Yes, firms folder followed by relay in phase 4. Just to confirm this means Google Drive and SharePoint as well." It does; the requirements are in §3a′.
+3. **How "Combine in Word" is automated: OPEN** (the owner wants more information first; unchanged).
+   - Options: (a) the Elefant Word add-in; (b) OS automation; (c) stay manual.
+   - Recommendation: a spike choosing between (a) and (b); the MVP ships (c).
+   - New facts for that discussion are in §4: the add-in can compare by **path**, so no listener is needed; Mac has an AppleScript `compare`; true three-way needs two chained combines.
+4. **When a version is recorded: DECIDED.** "Follow Google Drive's example." Every save is a version, written at once, and flushed on sleep and quit. Grouping and named versions are display only (§5.4).
+5. **Presence: DECIDED.** "Yes, same as [Google]. Shouldn't inconvenience anyone." Automatic and advisory, never a lock.
+6. **Joining: DECIDED** (yes): an invite link, as in §5.2. Note that **§12(d) recommends a stricter replacement** (no keys in any link). Its pros and cons are there for the owner to confirm or reject.
+7. **Admins: DECIDED** (yes).
+8. **Verify: DECIDED** (yes, cross-firm and relay require it). §12(d), if adopted, would remove keys from in-firm links but keep Verify optional inside a firm.
+9. **New members see history: DECIDED** (yes).
+10. **Key backup: DECIDED** (yes, none).
+11. **Who gets the hosted Rumble Relay: OPEN.** "Yes but don't use the word 'premium'. It has to match the subscription plans on the web app." The plans, from `backend/src/elefant_api/core/subscription_plans.py`:
+
+    | Plan | Category | `has_team_features` |
+    |---|---|---|
+    | Lite | individual | False |
+    | Explorer | individual | False |
+    | Pro | individual | False |
+    | Business | team (min 5 seats) | **True** |
+    | Enterprise | team (min 5 seats) | **True** |
+    | API | api | False |
+    | Academia | academia | **True** |
+
+    - Options: (a) Business and Enterprise create relay matters; any Elefant account, on any plan, may *join* one as a member or as external counsel; (b) every plan with `has_team_features`, so Business, Enterprise and Academia; (c) every paid plan.
+    - **Recommend (a).** It follows the coordinator's lean and the team plans' purpose. Letting any account join keeps external counsel free of a purchase, which avoids pushiness. Academia can be added by changing one rule if wanted.
+    - The self-hosted relay is free for anyone, on any plan.
+12. **Maximum assurance: PARTLY DECIDED.** "Go with 1 and 2 for now."
+    - **Committed:** a public spec with test vectors, and continuous fuzzing (§12a).
+    - **Still recommended, awaiting the owner:**
+      - (b) `age1pq` epochs when rage ships them;
+      - (c) device keys that cannot leave the device, a phase-1 correctness requirement on macOS through a Secure Enclave wrap;
+      - (d) no keys in invite links;
+      - (e) SLSA build provenance, `cargo-auditable`, `cargo-deny` and `cargo-vet`.
+    - **Deferred:** audit-funding programmes, a bug bounty, a paid audit of the crypto core.
+13. **Name: DECIDED.** "Let's just stick to Rumble Relay."
+
+## 12. Maximum assurance
+
+Owner, 2026-11-17: "Is that the most secure? There's been a whole slate of recent cybersecurity incidents and we want to be extra, extra, extra sure."
+
+| # | Measure | What the sources say | Friction | Size | Recommendation |
+|---|---|---|---|---|---|
+| a | **Committed (owner, 2026-11-17: "Go with 1 and 2 for now"). 1: a public spec with test vectors. 2: continuous fuzzing** | **1.** The spec, `docs/sync-spec.md` in the Rumble repo, Apache-2.0, covers the record format, canonical encoding, signature scope, epochs and `key` files, the admin chain, removal cutoffs, the safety number, and import rules. Its test vectors are canonical bytes, signatures, an age epoch chain decryptable with stock `age`, and negative cases. Anyone can check our claims, and anyone can write a second implementation. **2.** cargo-fuzz targets for record parsing, canonical encoding, import and the admin-chain fold, run in CI on every PR plus a nightly long run. Rust integration with OSS-Fuzz "is expected to use cargo fuzz to build fuzzers" ([Rust guide](https://google.github.io/oss-fuzz/getting-started/new-project-guide/rust-lang/)). **Applying to OSS-Fuzz:** Google accepts "an open-source project [that] must have a significant user base and/or be critical to the global IT infrastructure"; the application is "a pull request with a new `projects/<project_name>/project.yaml` file", and the contact must be "an established project committer (according to VCS logs)", "associated with a Google account" ([acceptance](https://google.github.io/oss-fuzz/getting-started/accepting-new-projects/)). Rumble is Apache-2.0, but its user base is small today, so expect a no until adoption grows. Apply anyway; CI fuzzing doesn't depend on the answer | None for users | Spec: M (written alongside phase 1, which needs the encoding anyway). Fuzzing: S | **Both are part of building sync.** The spec and vectors ship with phase 1. Fuzzing runs from the first parser commit. The OSS-Fuzz application goes in at public launch |
+| b | **Post-quantum hybrid** | The age spec defines "The MLKEM768-X25519 (i.e. X-Wing) hybrid post-quantum recipient type" (`age1pq`, `AGE-SECRET-KEY-PQ-`) ([age spec](https://github.com/C2SP/C2SP/blob/main/age.md)). Go age v1.3.0 ships it: "age now has native post-quantum recipients based on HPKE with a hybrid ML-KEM-768 KEM". **The Rust crate does not.** 0.12.0 added `tag` and `tagpq` (P-256 and ML-KEM-768 + P-256), both "encryption-only" ( [CHANGELOG](https://github.com/str4d/rage/blob/main/age/CHANGELOG.md)), and native `pq` is open PR [#632](https://github.com/str4d/rage/pull/632). The `ml-kem` crate says "has never been independently audited! USE AT YOUR OWN RISK!" ([RustCrypto](https://github.com/RustCrypto/KEMs/tree/master/ml-kem)) | None | S once rage ships it (epoch identities switch type; new epochs only) | **Don't roll our own** with `ml-kem`. Design epochs so the identity type can change, and adopt `age1pq` epochs when rage releases it. Owner note: PR #632 has no date, so gating GA on it could block GA indefinitely. The fallback is the hardware route in (c): the age spec says its tagged types (`p256tag`, `mlkem768p256tag`) are designed for hardware keys, but the Rust crate can only encrypt to them today. **Recommend:** not a hard gate; adopt `age1pq` as soon as it releases. Files written under classical epochs before then stay classical; say so |
+| c | **Hardware-backed keys** | The Secure Enclave "Works only with NIST P-256 elliptic curve keys" and "Can't encode preexisting keys" ([Apple](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave)). CryptoKit adds ML-KEM/ML-DSA in the enclave on macOS 26, but no Curve25519 or Ed25519 ([CryptoKit](https://developer.apple.com/documentation/cryptokit/secureenclave)). Windows' Platform Crypto Provider "utilizes the Trusted Platform Module … private keys are securely stored and cannot be extracted", and the page lists no algorithms ([CNG KSPs](https://learn.microsoft.com/en-us/windows/win32/seccertenroll/cng-key-storage-providers)); Ed25519 and X25519 are not mentioned. So **our keys cannot live in the hardware**. They can be **wrapped** by a hardware P-256 key: Apple documents enclave keys for "symmetric encryption using the eciesEncryptionCofactorX963SHA256AESGCM algorithm" (applying that to our keys is our inference) | None (silent) | M (macOS); Windows needs a spike | **Phase 1 on macOS**, because it is what makes "keys never leave this device" true (§5.2). It protects keys at rest only: the Ed25519 key is unwrapped in memory to sign, and same-user malware on the running laptop can ask the enclave to unwrap. An alternative to evaluate is a P-256 device key living in the enclave, with age's hardware-oriented tagged types on the `key`-file layer. It needs in-process decryption, which the Rust crate lacks today |
+| d | **Invite links carry no keys, even inside a firm** | This removes the critical finding: a leaked link from a mail archive opens nothing | **Real cost:** through a folder, a join needs several hops: Ben's request syncs to the admin, the admin's Rumble sees it, and the admin's `key` file syncs back. That can take hours, and it breaks "the joiner works at once" (decided item 6). To keep the ceremony light, Verify stays optional inside a firm: the admin approves the *named* request ("Ben Tan, ThinkPad"), and two requests for one invite block until the admin chooses. Through Rumble Relay the round trip is instant | **S, and it deletes code**: claims, provisional members, "exactly one claim", countersign rotation | **Yes.** It is simpler *and* safer. It changes decided item 6 ("works at once"), so it needs the owner's confirmation |
+| e | **Supply chain and transparency** | Tauri: "you cannot fully rely on reproducible builds by default, and sadly need to fully trust your build systems" ([Tauri security lifecycle](https://v2.tauri.app/security/lifecycle/)). "Artifact attestations by itself provides SLSA v1.0 Build Level 2" ([GitHub](https://docs.github.com/en/actions/concepts/security/artifact-attestations)). Tools: cargo-vet ("supply-chain security for Rust"), cargo-auditable, cargo-deny. Key-transparency precedents: WhatsApp's "record of public key changes" ([Meta](https://engineering.fb.com/2023/04/13/security/whatsapp-key-transparency/)), Apple's Contact Key Verification ([Apple](https://support.apple.com/en-us/118246)), and the IETF KEYTRANS WG ([charter](https://datatracker.ietf.org/wg/keytrans/about/)) | None | S each | **Yes, before sync ships:** SLSA build provenance on releases, targeting L3, since GitHub says reusable workflows "can provide isolation between the build process and the calling workflow" (alongside the existing signed updater, macOS notarisation #102 and Windows signing #129); `cargo-auditable` binaries; `cargo-deny` with a ban list and `cargo-vet` for the crypto crates. **Key transparency: no.** Each matter's signed admin chain is already its own append-only membership log. A global directory needs a server, so YAGNI until Rumble Relay, and then only if cross-firm use asks for it |
+
+Taken together: (a) is committed. (c) on macOS is a phase-1 correctness requirement. (b), (d) and (e) await the owner. (d) would replace decided item 6's keyed link, and the owner must choose between instant joining and a link that opens nothing. Each one either removes a risk we would otherwise have to explain, or replaces a claim with something a client's security team can check.
+
+**Deferred options** (not committed; revisit as adoption or client demand grows):
+- **Open-source audit-funding programmes.**
+  - OSTIF "facilitat[es] security audits and reviews". It notes that "initial audits could range anywhere from $30k to $200k" and that "we have helped many projects raise funds and source sponsors to cover the entire costs or to split them". Intake is a form, then an RfP OSTIF drafts. No eligibility criteria are published ([OSTIF](https://ostif.org/get-an-audit/)).
+  - The Open Technology Fund's Security Lab, whose apply link is still `/red-team-lab/`, funds "software security audits" and "security architecture and design reviews" for tools that contribute "to internet freedom anywhere in the world" ([OTF Security Lab](https://www.opentech.fund/labs/security-lab/)). A legal-AI app is unlikely to fit that mission; that is our reading.
+  - **Recommend:** apply to OSTIF once the public spec exists. OTF only if a fit appears.
+- **A bug bounty.** Cheap to start as a published scope plus a safe-harbour statement on `SECURITY.md` (dpo@elefant.legal is already the private channel). Paid rewards come later.
+- **A paid audit of the crypto core only:** the spec plus the Rust record, verify and import modules, a few thousand lines. It is the cheapest audit that covers the part where a mistake is silent.
+  - **Recommend:** this is the first paid audit, if and when one is bought.
+  - It becomes a gate if a client contract requires an audit report.
+
+## 13. Rough edges, stated
 
 - **No shared drive:** a firm without one waits for phase 4.
 - **Combine in Word** relies on desktop Word. Word for the web is not covered. Per-author marks need the three-way spike.
 - **Plaintext working copies** persist until pruned. Full-disk encryption is required, as SECURITY.md already says.
 - **Save As to another folder** can't be tracked. Drag-in source tracking covers the common case.
-- **Storage:** every version is a full copy. A 2 MB `.docx` cut 200 times is 400 MB per matter. Idle coalescing keeps the count down. Deltas are not planned.
+- **Storage and item counts:** every save is a full copy, so a 2 MB `.docx` saved 300 times is 600 MB **per file**. Item counts bind sooner: 50 matters × 20 files × 300 saves = 300,000 items, OneDrive's recommended ceiling, plus one presence file per editing session (each deleted presence file also lands in the recycle bin). Saves with an unchanged hash are skipped. Deltas are not planned; revisit if pilots show real matters near OneDrive's recommended 300,000 items or their quota.
 - **Linkable admins:** an admin's key appears in plaintext in every genesis they create, so a sync provider or relay can tell which opaque matters share an admin. A per-matter admin key would fix this, but is deferred (YAGNI).
 - **#169:** the single-instance guard must land before phase 1. Two instances would share a device `seq`.
