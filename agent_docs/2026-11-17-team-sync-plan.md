@@ -180,16 +180,18 @@ Every record is a file named `<uuid>.rumble`: opaque, with its kind inside the e
 
 | Kind | Content | Readable by |
 |---|---|---|
-| `genesis` | Only the matter id inputs and the creators' public keys (the admin list, up to two from day one). **The matter id is this file's hash.** No names | Anyone with folder access (keys only) |
-| `invite` | One-time: the matter's epoch keys, sealed under a random secret that travels in the invite link; an expiry (`INVITE_TTL_HOURS`) | Whoever holds the link |
+| `genesis` | A random 32-byte nonce and the creator's admin key. **The matter id is the SHA-256 of this file**, and invite links carry all 32 bytes of it. No names | Anyone with folder access (keys only) |
+| `invite` | Admin-signed. Holds the invitee's name **as the admin typed it** and an invite public key derived from the link secret. For an in-firm invite it also holds epochs 1..n, sealed under the link secret. Cross-firm and relay invites hold no keys (§5.2) | Whoever holds the link, **for as long as the file exists**, including in sync-provider version history |
 | `device` | Display name and public keys | Members (encrypted) |
-| `member` / `key` | Add, confirm or remove a device (a removal carries a seq cutoff); new epoch keys wrapped per device; admin-signed, chained by `prev` | Members |
+| `member` / `key` | Add, countersign or remove a device. A removal names the **hash** of the device's last accepted record. New epoch identities are wrapped per device. Admin-signed and chained by `prev` | Members |
 | `info` | The matter's name and settings | Members |
 | `version` | Header: `file_id`, `version_id`, `parents[]`, `seq`, `epoch`, file name, media type, size, `sha256(content)`, `created_at`, signer. Body: the file bytes | Members |
 | `presence` | "D is editing F since T, based on V"; expires after `PRESENCE_TTL_MINUTES` | Members |
 
 Rules for every kind:
-- **Signatures** cover the canonical header bytes, including `matter_id`, `kind` and id.
+- **One signature definition for every kind.** The Ed25519 signature covers every header field in a canonical encoding: `matter_id`, `kind`, the blob uuid, the signer's public key, `seq`, `prev`, `admin_head` and the kind's own fields. For versions those are `file_id`, `version_id`, `parents`, `epoch`, file name, media type, size, `created_at` and `sha256(content)`. The signature sits inside the encryption. Import rejects a record whose uuid differs from its file name. Any member holds the epoch identity and could otherwise decrypt Ana's file, change an unsigned field and re-encrypt it under a new uuid; Filippo's warning is that "the recipient can decrypt the file, keep your signature, and encrypt it to a different recipient" ([age authentication](https://words.filippo.io/age-authentication/)).
+- **`admin_head`.** Every record carries the hash of the newest admin file its writer has seen. A withheld removal or `key` file then shows up as a gap, as soon as anyone writes after it.
+- **Equivocation.** Two different records with the same (device, seq) mean the device is compromised. It is flagged to admins, and its later records are held until an admin decides.
 - **`seq`** is counted per (device, matter).
 - **"Member for epoch n"** means the membership state at the admin file that created epoch n.
 - **Import rejects** a bad signature, a mismatched id, a foreign matter, or a signer who was not a member for that epoch.
@@ -200,20 +202,26 @@ Rules for every kind:
 
 ### 5.2 Identity and joining (Signal-shaped, minus the ceremony)
 
-- **Keys.** Each device has a signing key pair and a receiving key pair, kept in the OS keychain by the Rust host. Keys never change: a reinstalled laptop is a new device, so there is never a "key changed" prompt to wave through.
-- **Invite, the common path.**
-  - An admin clicks **Invite**, and Rumble gives them a link to send through Teams or email.
-  - The joiner opens the link and picks the matter folder (the firm has already granted folder access), or, on the relay, just signs in.
-  - The joiner can read and write **immediately**. No admin needs to be online.
-  - Their versions show as "Ben Tan (invited by Ana)" until an admin's Rumble next runs and **countersigns** automatically. The countersign accepts only the first device that claimed the invite; later claims are rejected and shown.
-  - Invites are single-use and expire.
-- **Verify, optional.** Any two members can compare a **safety number** (in person or on a call; a QR code comes in phase 2). This is Signal's model, and it upgrades a person to "verified". It is optional inside a firm; decision 8 recommends requiring it before a cross-firm or relay joiner can write.
-- **Admins.** Creating a matter prompts for a second admin; skipping is allowed. Either admin can countersign, remove or rotate. A lost or reinstalled admin laptop therefore doesn't freeze the matter.
+- **Keys.** Each device has a signing key pair and a receiving key pair, kept in the OS keychain by the Rust host as an item that **never syncs**: no iCloud Keychain, and never restored from a backup onto another machine. Keys never change, so a reinstalled laptop is a new device, and there is never a "key changed" prompt to wave through.
+- **Invite inside a firm, the common path.**
+  - An admin clicks **Invite**, types "Ben Tan", and sends the link through Teams or email.
+  - Ben opens the link and picks the matter folder (the firm has already granted folder access).
+  - Ben can read and write **immediately**; no admin needs to be online.
+  - Ben's device writes a **claim**, signed by the invite key, which proves the link was used. Until countersigned, Ben is a **provisional member**: his records are valid if his `device` record carries a valid claim on an admin-signed invite. Others see **"Ben Tan (invited by Ana, not yet confirmed)"**, using the name Ana typed, never one the claimant chose.
+  - When an admin's Rumble next runs, it countersigns **only if exactly one claim exists** for that invite. With two or more, it countersigns none and alerts the admin, and every claimant stays provisional until the admin removes the wrong ones.
+  - Countersigning also **rotates to a new epoch**, so what the link can open is capped at the history before Ben joined.
+- **What an in-firm link really is.** A permanent read capability for the matter's history up to the epoch it was issued in, for anyone who also has folder read access. The invite file persists in the folder and in the provider's version history and recycle bin. Enforcement of "single use" is by honest clients only, and there is no trusted clock, so the plan claims no expiry.
+- **Invite across firms or via the relay.** The link carries only the matter id and the current epoch's *public* recipient. Ben's device encrypts its `device` record to that recipient. **No keys are released until Ben and an admin Verify**, and only then does the admin wrap the epochs to Ben's device. Theft of this link reveals nothing.
+- **Verify.** Two members compare a **safety number** in person or on a call (QR in phase 2), as in Signal. Inside a firm it is optional and marks a person "verified". Across firms and on the relay, it is required before keys are released (decision 8).
+- **Admins.**
+  - The creator is the first admin. Once a colleague has joined, Rumble asks the creator to make them a second admin; this is an admin file. Skipping is an explicit choice: "If this laptop is lost, nobody can add or remove people in this matter."
+  - Any admin can countersign, remove or rotate.
+  - Two offline admins can branch the admin chain, for example both rotating the epoch. The rule is deterministic: versions under either sibling epoch are accepted, a removal in either branch counts, and the next admin file names both branches as parents.
 
 ### 5.3 Removal, lost laptops, laptops back after months
 
 - **Remove a device or person.**
-  - An admin signs a removal with a cutoff: "D's changes up to seq N stay valid". A new key epoch is wrapped only for the remaining devices.
+  - An admin signs a removal naming the **hash of D's last accepted record**: everything in D's chain up to that record stays valid. A new key epoch is wrapped only for the remaining devices.
   - Anything D writes later is hidden, and the audit trail marks it "arrived after removal", on every laptop alike.
   - The UI says: "Ben keeps everything he could already open. He can't open anything saved from now on."
   - The firm should also remove Ben's folder access.
@@ -263,18 +271,19 @@ Two existing crates are reused:
   `age -d -i device.key keyfile > epoch.key; age -d -i epoch.key blob > doc.docx`
 
 **Rules the crypto needs.**
-- **Sign, then encrypt.** One Ed25519 signature covers a canonical record that binds `matter_id`, kind, file id, `seq`, `epoch`, `prev`, `parents` and `sha256(content)`.
-- **Verify before release.** Decrypt to a temp file, check the hash and the signature, then rename. age authenticates chunks, not the sender.
-- **`key` files must be signed by an authorised admin device** and bind `matter_id`, the epoch and the epoch's public key. Two reasons, both from age's author ([age authentication](https://words.filippo.io/age-authentication/)): anyone with folder write access can encrypt to an epoch, and multiple recipients of one file can forge for each other. In his words, encrypting to two recipients means "you just gave a blank check to Alice and Bob to encrypt files to each other."
-- **Removal cutoff.** The cutoff sits in the signed `prev`/`seq` chain, because there is no trusted clock. The same chain detects deletion and rollback.
-- **Safety number.** SHA-256 over both public keys in canonical order, defined in our own documented spec with test vectors. Signal publishes no spec for its safety numbers.
+- **Sign, then encrypt.** One Ed25519 signature covers every header field (§5.1 has the single definition), including the blob uuid and the signer's key. Verify with `verify_strict`, and never use signature bytes as an id or a dedup key.
+- **Verify before release.** Decrypt to a temp file **in `app_local_data_dir` only**, never in the transport folder. Check the hash and the signature, then rename it into the working copy. Delete it on failure, and clear leftovers in the startup sweep. age authenticates chunks, not the sender.
+- **`key` files must be signed by an authorised admin device**, with the signature inside the payload, binding `matter_id`, the epoch and the epoch's public key. After decrypting, the host checks that the identity's derived public key equals the signed one. Two reasons, both from age's author ([age authentication](https://words.filippo.io/age-authentication/)): anyone with folder write access can encrypt to an epoch, and multiple recipients of one file can forge for each other. In his words, encrypting to two recipients means "you just gave a blank check to Alice and Bob to encrypt files to each other."
+- **Removal cutoff and rollback.** The cutoff is a record hash in the signed `prev` chain, because there is no trusted clock. `admin_head` and `prev` reveal deleted or withheld files once a later record arrives. **Withholding the tail of a chain** (the newest removal, before anyone writes after it) **cannot be detected** without a trusted channel. The relay's append-only log narrows that window; a folder cannot.
+- **Safety number.** SHA-256 over a versioned domain label (`rumble-safety-v1`) and both devices' **Ed25519** public keys in canonical order, shown as at least 60 digits, Signal's length, so an attacker cannot grind keys to a match. It is defined in our own documented spec with test vectors; Signal publishes no spec for its safety numbers.
 - **Blob names.** A uuid or the ciphertext hash. Never the plaintext hash, which would let anyone holding the file confirm it.
 
 **Risks, stated.**
 - age is pre-1.0, and no published audit of the Rust crate was found.
 - The age `plugin` feature stays off ([RUSTSEC-2024-0433](https://rustsec.org/advisories/RUSTSEC-2024-0433.html): "Malicious plugin names, recipients, or identities can cause arbitrary binary execution").
-- About 22 transitive crates, all pure Rust.
-- **Post-quantum gap.** age 0.12.1 has no ML-KEM identity type, so long-lived files face harvest-now-decrypt-later. We adopt one when the crate ships it.
+- Pin `age = "=0.12.1"`. age's unreleased main moves to `curve25519-dalek` 5, which would break sharing with `ed25519-dalek` 2.2.
+- age 0.12.1 makes `hpke`, `ml-kem`, `p256`, `sha3`, `i18n-embed` and `rust-embed` required dependencies (crates.io), so the transitive count is well above 22. `cargo tree` in the spike gives the real number. All are pure Rust as far as known.
+- **Post-quantum gap.** age 0.12.0 added an ML-KEM-based recipient (`tagpq`), but only for encryption; the crate has no native post-quantum identity that the epoch design could use. So long-lived files face harvest-now-decrypt-later. We adopt one when the crate ships it.
 - A removed member keeps the old epoch keys.
 
 **Runners-up, and why each lost.**
@@ -287,7 +296,7 @@ Two existing crates are reused:
 | dryoc | No audit |
 | sodiumoxide | Deprecated |
 | ring | Its X25519 is ephemeral only |
-| hpke | A building block only, and unaudited |
+| hpke (direct) | A building block only, and unaudited. age already pulls it in transitively, so the dependency is accepted inside age's use of it, not as our API |
 | minisign | Deferred (YAGNI) |
 
 **Spike checklist** (the first slice of phase 1, size S):
@@ -296,8 +305,9 @@ Two existing crates are reused:
 3. `cargo tree`: exactly one `curve25519-dalek`, no new `-sys` or `cc` crates; record the binary size.
 4. macOS notarisation and library validation; a signed Windows build.
 5. Canonical record encoding and safety-number test vectors.
-6. Negative tests: a forged `key` file, a non-member blob, a removed device's signature after its cutoff.
+6. Negative tests: a forged `key` file; a `key` file whose identity doesn't match its signed public key; a non-member blob; a removed device's record after its cutoff hash; a re-encrypted record under a new uuid; equivocating records with the same seq; two claims on one invite.
 7. Check whether age has shipped a post-quantum identity.
+8. A keychain item that cannot sync (iCloud Keychain, Windows roaming credentials).
 
 ## 6. Recommendation: the experience
 
@@ -340,7 +350,7 @@ Two versions with the same parent are labelled with **depth plus initials**, whi
 ### 6.5 Rough edges in the experience
 
 - **Forks still happen,** because presence is only as fresh as the folder. That is why the fork path is cheap.
-- **Invite links are bearer secrets** until they are claimed. Anyone holding the link before Ben claims it can join, and the admin's countersign would flag a second claimant. They are single-use and expire; decision 8 covers when to require Verify.
+- **An in-firm invite link is a lasting read capability** for history up to its epoch, for anyone who also has folder access (§5.2). A thief who claims it gets flagged once Ben claims too; but if Ben never opens it, the thief's claim is the only one. So the admin sees the claimant's device details in "not yet confirmed", and Verify is one click away. Cross-firm and relay links carry no keys.
 - **Outlook attachments** dragged in on Windows may arrive as virtual files, not paths. Whether Tauri's drag-and-drop handles them is unverified; spike it.
 
 ## 7. The Elefant relay (working name: Trail), Premium, and the self-hosted relay
@@ -381,7 +391,7 @@ CREATE TABLE relay_files   (matter_id TEXT REFERENCES relay_matters(id), seq BIG
 | Phase | Scope | Proof | Size |
 |---|---|---|---|
 | **0. Shared templates** | #144: read the templates folder; point it at a synced folder | Two installs, same templates | S |
-| **1. MVP: a matter of versioned files, two people, laptops never on together** | Crypto spike (§5.6), then host keys and format; create a matter (second-admin prompt); invite link and auto-countersign; add files by drag and drop (any type); stable working copies with Open in Word; versions cut on idle, quit and startup sweep; v1, v2, v3 with authors; the fork banner with Use mine, Use theirs and Combine in Word (manual) | Two data dirs and one folder, never running together. A adds `nda.docx` (v1), invites B and stops. B joins with no A online, saves, and v2 is "Ben (invited)". A starts, countersigns, and sees v2. Both edit v2 offline: banner on both; "Use Ana's" on both collapses to one v3. Kill Word mid-edit: the startup sweep cuts the version. Negative tests: tampered, replayed, foreign-matter, planted-genesis, second invite claim and unconfirmed-past-cutoff are rejected; no plaintext, names included, in the folder; no keys in the sidecar DB. Then two real laptops on OneDrive | L (four slices: keys and format M; folder sync and index M; working copies and cutting M; versions and fork UI S) |
+| **1. MVP: a matter of versioned files, two people, laptops never on together** | Crypto spike (§5.6), then host keys and format; create a matter (second-admin prompt); invite link and auto-countersign; add files by drag and drop (any type); stable working copies with Open in Word; versions cut on idle, quit and startup sweep; v1, v2, v3 with authors; the fork banner with Use mine, Use theirs and Combine in Word (manual) | Two data dirs and one folder, never running together. A adds `nda.docx` (v1), invites B and stops. B joins with no A online, saves, and v2 is "Ben (invited)". A starts, countersigns, and sees v2. Both edit v2 offline: banner on both; "Use Ana's" on both collapses to one v3. Kill Word mid-edit: the startup sweep cuts the version. Negative tests: tampered, replayed, foreign-matter, planted-genesis, two claims on one invite (no countersign), re-encrypted records, equivocation and records past a removal cutoff are rejected or flagged; no plaintext, names included, in the folder; no keys in the sidecar DB. Then two real laptops on OneDrive | L (four slices: keys and format M; folder sync and index M; working copies and cutting M; versions and fork UI S) |
 | **2. Less friction** | Presence; automated Compare into the working copy (spike first: add-in vs COM, the loopback question in §4, three-way combine); QR Verify; a built-in text redline; "Save draft to matter"; gap notices | Presence shows within one sync interval and expires; Combine opens with marks in the working copy | M |
 | **3. Real teams** | Removal with a new key epoch; several devices per person; several matters; withdraw; audit CSV | A removed device cannot open new versions; a returning removed laptop is handled per §5.3 | M |
 | **4. The relay (working name: Trail) and self-host** | §7, plus size padding | NETWORK.md row; the egress-block test passes with it off | M |
@@ -394,9 +404,10 @@ Assets are client files, their history, and who changed what. Plaintext exists i
 | Adversary | Can | Cannot | Response |
 |---|---|---|---|
 | Sync provider, IT, relay operator, anyone with folder access but no key | See counts, sizes, times; read genesis public keys; delete, withhold, replay | Read anything else (names included); forge; make a replay matter | Gap notices after the grace period; folder backups |
-| Someone who intercepts an invite link before it is claimed | Join as the invitee | Stay hidden: the countersign takes the first claim, and others see "invited by Ana" plus device details | Single use, short expiry, Verify for sensitive matters (decision 8) |
-| Someone with folder access who plants a fake genesis | Create a look-alike matter | Make it match an invite: the link names the matter id, which is the genesis hash | — |
-| Malicious member | Misleading versions under their own name; forks; withdraw their own files (reversible) | Write as anyone else; rewrite history; add members | Everything is signed and audited |
+| Someone who gets an in-firm invite link (mail archive, forwarded Teams message) and has folder read access | Read history up to the link's epoch, at any time | Read anything after the countersign (the epoch rotates); be auto-confirmed if the real invitee also claims (two claims, no countersign) | Cross-firm and relay links carry no keys; Verify; state that a link is a lasting capability |
+| Someone with folder access who plants a fake genesis | Create a look-alike matter | Make it match an invite: the link carries the full 32-byte matter id (the genesis hash, nonce included) | — |
+| A non-member with folder write access | Delete or flood files (DoS) | Get any record imported: every record needs a member's signature | Backups; the relay rate-limits |
+| Malicious member | Misleading versions under their own name; forks; withdraw their own files (reversible); equivocate (two records, same seq); withhold or delete others' files | Write as anyone else (the signer key is signed); re-wrap someone's signed record (the uuid is signed); rewrite history; add members | Signed and audited; equivocation flags the device; gaps show through `admin_head` |
 | Removed member | Keep what they could open | Open or write anything new; backdate past the cutoff | Honest copy; the firm removes folder access |
 | Rogue admin | Countersign or remove | Do it invisibly: admin files are signed and shown to all | The second admin sees it |
 | Lost or stolen laptop | Whatever FDE and the keychain don't protect; working copies | — | Remove the device; new epoch |
@@ -424,7 +435,7 @@ Legal-sector constraints (§4):
   - the sidecar index (metadata only);
   - stable working copies, pruned after idle;
   - the transport (opaque ciphertext).
-- **A sharing threat model (§9),** including invite links as bearer secrets until claimed.
+- **A sharing threat model (§9),** including that an in-firm invite link is a lasting read capability for history up to the join.
 - **Honest copy (#19, #20, #56):** say "end-to-end encrypted" only once the no-plaintext test passes.
 
 **Separate small issues:**
@@ -449,14 +460,14 @@ Legal-sector constraints (§4):
    - Options: (a) automatic and advisory (phase 2); (b) none.
    - **Recommend (a).**
 6. **Joining.**
-   - Options: (a) an invite link: the joiner works at once and an admin countersigns automatically; (b) live approval with a safety number.
-   - **Recommend (a).** It is the owner's scenario: the admin may be offline.
+   - Options: (a) in-firm: an invite link that carries keys, so the joiner works at once; an admin countersigns automatically only when there is exactly one claim, and the countersign rotates the epoch; (b) live approval with a safety number.
+   - **Recommend (a).** It is the owner's scenario: the admin may be offline. The cost, stated in the copy, is that a leaked link opens history up to the join.
 7. **Admins.**
-   - Options: (a) up to two in genesis, with a prompt for the second at creation; (b) one; (c) every member.
-   - **Recommend (a).** No conflicting membership changes, and a lost laptop doesn't freeze the matter.
+   - Options: (a) the creator, then a prompted second admin added by an admin file, with an explicit warning if skipped; (b) one; (c) every member.
+   - **Recommend (a).** A lost laptop doesn't freeze the matter, and concurrent admin branches resolve by a fixed rule (§5.2).
 8. **Verify (safety number).**
-   - Options: (a) optional for everyone; (b) required for cross-firm or relay matters; (c) always required.
-   - **Recommend (b).** Inside a firm, folder access plus a single-use invite is enough. Across firms, the link travels over channels nobody controls.
+   - Options: (a) optional for everyone; (b) cross-firm and relay links carry no keys, which are released only after Verify; optional inside a firm; (c) always required.
+   - **Recommend (b).** Link theft is a confidentiality problem, so the gate must be on reading, not writing. Inside a firm, folder access is the second wall.
 9. **New members see history.**
    - Options: (a) yes; (b) no.
    - **Recommend (a).**
@@ -476,4 +487,5 @@ Legal-sector constraints (§4):
 - **Plaintext working copies** persist until pruned. Full-disk encryption is required, as SECURITY.md already says.
 - **Save As to another folder** can't be tracked. Drag-in source tracking covers the common case.
 - **Storage:** every version is a full copy. A 2 MB `.docx` cut 200 times is 400 MB per matter. Idle coalescing keeps the count down. Deltas are not planned.
+- **Linkable admins:** an admin's key appears in plaintext in every genesis they create, so a sync provider or relay can tell which opaque matters share an admin. A per-matter admin key would fix this, but is deferred (YAGNI).
 - **#169:** the single-instance guard must land before phase 1. Two instances would share a device `seq`.
