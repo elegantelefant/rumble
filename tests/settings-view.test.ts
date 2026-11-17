@@ -3,6 +3,7 @@
 
 import { mount } from "@vue/test-utils"
 import { invoke } from "@tauri-apps/api/core"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import SettingsView from "../src/views/SettingsView.vue"
 import { TOAST_KEY } from "../src/composables/toast"
 import { backendMode } from "../src/composables/backendMode"
@@ -10,6 +11,8 @@ import { backendMode } from "../src/composables/backendMode"
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }))
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -617,13 +620,26 @@ describe("SettingsView processing mode", () => {
     expect((radio(wrapper, "byok").element as HTMLInputElement).checked).toBe(false)
   })
 
-  it("offers Premium but marks it unavailable", async () => {
+  it("does not let Premium be selected", async () => {
     hostInMode("ollama")
     const wrapper = mountSettings()
     await vi.advanceTimersByTimeAsync(0)
-    const premium = radio(wrapper, "premium")
-    expect((premium.element as HTMLInputElement).disabled).toBe(true)
-    expect(premium.element.closest("label")!.textContent).toContain("Not available in this version.")
+    expect((radio(wrapper, "premium").element as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it("says Premium is coming later", async () => {
+    hostInMode("ollama")
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio(wrapper, "premium").element.closest("label")!.textContent).toContain("Coming later.")
+  })
+
+  it("opens the plans page from Premium's quiet link", async () => {
+    hostInMode("ollama")
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    await wrapper.findAll("a").find((a) => a.text() === "See plans")!.trigger("click")
+    expect(openUrl).toHaveBeenCalledWith("https://elefant.legal/pricing")
   })
 
   it("marks BYOK unavailable in a packaged build", async () => {
