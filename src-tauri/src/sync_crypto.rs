@@ -818,11 +818,14 @@ mod tests {
         let epoch = Epoch::generate(1);
         let dir = tempfile::tempdir().unwrap();
         let (src, blob_path) = (dir.path().join("big.docx"), dir.path().join("big.rumble"));
-        let mut content = vec![0u8; LARGE_FILE_BYTES];
-        content.iter_mut().enumerate().for_each(|(i, b)| *b = (i * 31 % 251) as u8);
-        fs::write(&src, &content).unwrap();
-        let hash: Hash = Sha256::digest(&content).into();
-        drop(content);
+        // Written in chunks so the measured peak memory is the stream's, not the fixture's.
+        let (mut file, mut hasher) = (File::create(&src).unwrap(), Sha256::new());
+        let chunk: Vec<u8> = (0..COPY_CHUNK_BYTES).map(|i| (i * 31 % 251) as u8).collect();
+        for _ in 0..LARGE_FILE_BYTES / COPY_CHUNK_BYTES {
+            hasher.update(&chunk);
+            file.write_all(&chunk).unwrap();
+        }
+        let hash: Hash = hasher.finalize().into();
         let uuid = Uuid::new_v4();
         let mut header = version_header(&ana, uuid, 1, b"");
         let Body::Version(v) = &mut header.body else { unreachable!() };
