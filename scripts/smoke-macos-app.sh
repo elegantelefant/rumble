@@ -4,6 +4,14 @@
 set -euo pipefail
 
 DISABLE_LIBRARY_VALIDATION=com.apple.security.cs.disable-library-validation
+# The other hardened-runtime exceptions; each would let code into the app that holds the keychain items.
+RUNTIME_EXCEPTIONS=(
+  com.apple.security.cs.allow-dyld-environment-variables
+  com.apple.security.cs.allow-unsigned-executable-memory
+  com.apple.security.cs.disable-executable-page-protection
+  com.apple.security.cs.allow-jit
+  com.apple.security.get-task-allow
+)
 APP_BINARY=MacOS/elefant_rumble
 HELPER=Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar
 HEALTH_WAIT_SECONDS=${RUMBLE_SMOKE_HEALTH_WAIT_SECONDS:-90}
@@ -39,15 +47,21 @@ fail() {
 
 # codesign's signature summary for one executable: its flags line, its entitlements as XML.
 flags_of() { codesign -dv "$contents/$1" 2>&1 | sed -n 's/.*flags=0x[0-9a-f]*(\([^)]*\)).*/\1/p'; }
-disables_library_validation() {
+# Whether executable $1 is signed with entitlement $2 set to true.
+entitled() {
   local plist="$data_dir/entitlements.plist"
   codesign -d --entitlements - --xml "$contents/$1" >"$plist" 2>/dev/null || true
-  [ "$(/usr/libexec/PlistBuddy -c "Print :$DISABLE_LIBRARY_VALIDATION" "$plist" 2>/dev/null)" = "true" ]
+  [ "$(/usr/libexec/PlistBuddy -c "Print :$2" "$plist" 2>/dev/null)" = "true" ]
 }
 
 for executable in "$APP_BINARY" "$HELPER"; do
-  if disables_library_validation "$executable"; then
+  if entitled "$executable" "$DISABLE_LIBRARY_VALIDATION"; then
     fail "${executable##*/} disables library validation"
+  fi
+done
+for exception in "${RUNTIME_EXCEPTIONS[@]}"; do
+  if entitled "$APP_BINARY" "$exception"; then
+    fail "elefant_rumble has the hardened-runtime exception $exception"
   fi
 done
 # The app holds the keychain items: the hardened runtime keeps library validation on for it.
