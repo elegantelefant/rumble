@@ -46,11 +46,29 @@ const templateFields: Record<string, FieldConfig[]> = {
   ],
 };
 
-const templates = [
+type TemplateOption = { id: string; name: string; fileName?: string };
+
+const builtInTemplates: TemplateOption[] = [
   { id: "employment", name: "Employment Agreement" },
   { id: "nda", name: "Non-Disclosure Agreement" },
   { id: "service", name: "Service Contract" },
 ];
+
+// File names from the templates folder chosen in Settings (#144); the host reads it.
+const folderTemplateNames = ref<string[]>([]);
+const folderNotice = ref("");
+const templates = computed<TemplateOption[]>(() => [
+  ...builtInTemplates,
+  ...folderTemplateNames.value.map((fileName) => ({ id: `folder:${fileName}`, name: fileName, fileName })),
+]);
+
+onMounted(async () => {
+  try {
+    folderTemplateNames.value = await invoke<string[]>("list_templates");
+  } catch (error) {
+    folderNotice.value = typeof error === "string" ? error : String(error);
+  }
+});
 
 const selectedTemplate = ref("employment");
 const formState = reactive<Record<string, string>>({});
@@ -61,9 +79,8 @@ const draftResult = ref("");
 const draftWarnings = ref<string[]>([]);
 
 const activeFields = computed(() => templateFields[selectedTemplate.value] ?? []);
-const activeTemplateName = computed(
-  () => templates.find((t) => t.id === selectedTemplate.value)?.name ?? "Selected",
-);
+const activeTemplate = computed(() => templates.value.find((t) => t.id === selectedTemplate.value));
+const activeTemplateName = computed(() => activeTemplate.value?.name ?? "Selected");
 
 watch(selectedTemplate, () => {
   Object.keys(formState).forEach((k) => delete formState[k]);
@@ -102,8 +119,11 @@ async function generateDraft() {
       .filter((line) => !line.endsWith(": "))
       .join("\n");
 
+    const fileName = activeTemplate.value?.fileName;
     const prompt = [
-      `Draft a ${activeTemplateName.value} with the following details:`,
+      fileName
+        ? `Draft a document from this template (${fileName}), keeping its structure:\n\n${await invoke<string>("extract_template", { fileName })}`
+        : `Draft a ${activeTemplateName.value} with the following details:`,
       fieldSummary,
       formState.terms?.trim() ? `\nAdditional terms: ${formState.terms.trim()}` : "",
     ].filter(Boolean).join("\n");
@@ -127,7 +147,7 @@ async function generateDraft() {
 
     const jobResponse = await createDraftJob({
       prompt,
-      document_type: selectedTemplate.value,
+      document_type: fileName ?? selectedTemplate.value,
       fields,
     });
 
@@ -153,7 +173,8 @@ async function generateDraft() {
       toasts.addToast("Draft completed but returned no content.", "info");
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to generate draft.";
+    // The host's extract_template rejects with a string, not an Error.
+    const message = typeof error === "string" ? error : error instanceof Error ? error.message : "Failed to generate draft.";
     toasts.addToast(message, "error");
   } finally {
     elapsedMs.value = 0;
@@ -214,6 +235,7 @@ async function exportDraft(format: "word" | "pdf") {
             {{ template.name }}
           </button>
         </div>
+        <p v-if="folderNotice" class="mt-3 text-xs text-[var(--primary-500)]">{{ folderNotice }}</p>
         <button class="btn-secondary mt-4 w-full" type="button" @click="toasts.addToast('Template browsing coming soon.', 'info')">Browse Local Templates...</button>
       </aside>
 
