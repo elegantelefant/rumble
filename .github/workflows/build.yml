@@ -132,6 +132,7 @@ jobs:
 
       - name: Verify macOS app and launch bundled sidecar
         if: runner.os == 'macOS'
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail
