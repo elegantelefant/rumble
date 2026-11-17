@@ -165,7 +165,6 @@ runs must supply their own `RUMBLE_DB_KEY` in the process environment, even with
 ## Build and update integrity
 
 - **macOS preview builds are ad-hoc signed with hardened runtime and unnotarized; Developer ID signing follows ([#102](https://github.com/elegantelefant/rumble/issues/102)).**
-  Library validation is disabled for the app and the sidecar (`com.apple.security.cs.disable-library-validation`, `src-tauri/Entitlements.plist`): the onefile sidecar loads the Python library it unpacks at launch, and an ad-hoc signature has no Team ID for validation to match ([#157](https://github.com/elegantelefant/rumble/issues/157)). Revisit with Developer ID signing.
 - **Manual signed updates.** Settings → Check for updates requests the GitHub release manifest only when clicked; the offered version is shown before a second click downloads and installs it. Tauri uses the owner-approved public key in the updater configuration to verify the installer signature before installation. No startup checks. Restart Rumble after installation on macOS/Linux. Release builds enable updater artifacts only with `pnpm build:release`; ordinary builds do not generate them.
 
 Release manifest generation: after `pnpm build:release` signs the updater artifacts, run
