@@ -2,7 +2,7 @@
 //! ABOUTME: Canonical header encoding and the v1 safety number. Not yet wired into the app (#21 spike).
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -21,6 +21,9 @@ const MAX_HEADER_LINE_BYTES: u64 = 16 * 1024;
 const MAX_TEXT_BYTES: usize = 1024;
 const MAX_PARENTS: usize = 64;
 const COPY_CHUNK_BYTES: usize = 64 * 1024;
+/// Decrypted plaintext is readable by the owner only while it waits in the temp folder.
+#[cfg(unix)]
+const TEMP_FILE_MODE: u32 = 0o600;
 const SAFETY_DOMAIN: &[u8] = b"rumble-safety-v1";
 const SAFETY_DIGITS: usize = 60;
 const SAFETY_GROUP_DIGITS: usize = 5;
@@ -46,6 +49,7 @@ pub enum RecordError {
     NotAdmin,
     AfterRemovalCutoff,
     EpochKeyMismatch,
+    WrongEpoch,
     ContentMismatch,
 }
 
@@ -262,6 +266,8 @@ impl<'a> Cursor<'a> {
 }
 
 /// Who may sign, as the admin chain says. A removed device keeps its records up to its cutoff.
+/// Limit: `seq` below the cutoff is signer-chosen, so a removed device can still mint a low-seq record
+/// until the import fold checks each record against the signer's own chain.
 #[derive(Default)]
 pub struct Membership {
     pub admins: HashSet<PublicKey>,
@@ -298,6 +304,8 @@ pub fn seal(
         return Err(RecordError::SignerMismatch);
     }
     let bytes = header.encode();
+    // Refuse to sign what no peer could decode (oversized text or parent lists).
+    Header::decode(&bytes)?;
     let signature = signer.signing.sign(&bytes);
     let encryptor = age::Encryptor::with_recipients(recipients.iter().copied())
         .map_err(RecordError::Encrypt)?;
@@ -322,16 +330,27 @@ pub fn seal_key_file(
     seal(admin, header, line.as_bytes(), &recipients, out)
 }
 
-/// Decrypt with `identities`, then check the signed header against the file name and the matter.
-fn open(
-    ciphertext: impl Read,
+/// Decrypt with the first of `identities` that opens it, then check the signed header against the
+/// file name and the matter. Returns which identity opened it, so the caller can bind the signed epoch.
+fn open<'r, R: Read + Seek>(
+    ciphertext: &'r mut R,
     file_uuid: Uuid,
     briefcase_id: &Hash,
     identities: &[&dyn age::Identity],
-) -> Result<(Header, impl BufRead), RecordError> {
+) -> Result<(Header, impl BufRead + 'r, usize), RecordError> {
+    let mut decrypt_with = |identity: &dyn age::Identity| {
+        ciphertext.seek(SeekFrom::Start(0))?;
+        let decryptor = age::Decryptor::new(&mut *ciphertext).map_err(RecordError::Decrypt)?;
+        decryptor.decrypt(std::iter::once(identity)).map(drop).map_err(RecordError::Decrypt)
+    };
+    let index = identities
+        .iter()
+        .position(|identity| !matches!(decrypt_with(*identity), Err(RecordError::Decrypt(age::DecryptError::NoMatchingKeys))))
+        .ok_or(RecordError::Decrypt(age::DecryptError::NoMatchingKeys))?;
+    ciphertext.seek(SeekFrom::Start(0))?;
     let decryptor = age::Decryptor::new(ciphertext).map_err(RecordError::Decrypt)?;
     let mut plain = BufReader::new(
-        decryptor.decrypt(identities.iter().copied()).map_err(RecordError::Decrypt)?,
+        decryptor.decrypt(std::iter::once(identities[index])).map_err(RecordError::Decrypt)?,
     );
     let mut line = Vec::new();
     (&mut plain).take(MAX_HEADER_LINE_BYTES).read_until(b'\n', &mut line)?;
@@ -360,18 +379,18 @@ fn open(
     if &header.briefcase_id != briefcase_id {
         return Err(RecordError::ForeignMatter);
     }
-    Ok((header, plain))
+    Ok((header, plain, index))
 }
 
 /// Open a `key` file addressed to `device`; returns the epoch only if an admin signed this exact identity.
 pub fn open_key_file(
-    ciphertext: impl Read,
+    mut ciphertext: impl Read + Seek,
     file_uuid: Uuid,
     briefcase_id: &Hash,
     device: &DeviceKeys,
     membership: &Membership,
 ) -> Result<Epoch, RecordError> {
-    let (header, mut rest) = open(ciphertext, file_uuid, briefcase_id, &[&device.receiving])?;
+    let (header, mut rest, _) = open(&mut ciphertext, file_uuid, briefcase_id, &[&device.receiving])?;
     let Body::Key(fields) = &header.body else {
         return Err(RecordError::WrongKind);
     };
@@ -392,7 +411,7 @@ pub fn open_key_file(
 /// Decrypt a version into `temp_dir` (local app data, never the transport), check signature, signer,
 /// size and hash, then rename to `dest`. On any failure the temp file is removed and `dest` is untouched.
 pub fn release_version(
-    ciphertext: impl Read,
+    mut ciphertext: impl Read + Seek,
     file_uuid: Uuid,
     briefcase_id: &Hash,
     epochs: &[Epoch],
@@ -401,14 +420,22 @@ pub fn release_version(
     dest: &Path,
 ) -> Result<Header, RecordError> {
     let identities: Vec<&dyn age::Identity> = epochs.iter().map(|e| &e.identity as _).collect();
-    let (header, mut rest) = open(ciphertext, file_uuid, briefcase_id, &identities)?;
+    let (header, rest, opened_by) = open(&mut ciphertext, file_uuid, briefcase_id, &identities)?;
     let Body::Version(fields) = &header.body else {
         return Err(RecordError::WrongKind);
     };
+    if fields.epoch != epochs[opened_by].number {
+        return Err(RecordError::WrongEpoch);
+    }
     membership.admit(&header)?;
-    let temp = temp_dir.join(format!("{file_uuid}.tmp"));
-    let mut file = OpenOptions::new().write(true).create_new(true).open(&temp)?;
-    let written = copy_hashed(&mut rest, &mut file).and_then(|(size, hash)| {
+    let temp = temp_dir.join(format!("{file_uuid}.{}.tmp", Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, TEMP_FILE_MODE);
+    let mut file = options.open(&temp)?;
+    // One byte past the signed size is enough to reject an oversized payload without writing it all.
+    let written = copy_hashed(&mut rest.take(fields.size.saturating_add(1)), &mut file).and_then(|(size, hash)| {
         if size != fields.size || hash != fields.content_sha256 {
             return Err(RecordError::ContentMismatch);
         }
@@ -545,7 +572,7 @@ mod tests {
         fs::create_dir_all(dir.path().join("tmp")).unwrap();
         fs::create_dir_all(dir.path().join("work")).unwrap();
         let result = release_version(
-            ciphertext,
+            io::Cursor::new(ciphertext),
             uuid,
             &BRIEFCASE,
             epochs,
@@ -642,7 +669,7 @@ mod tests {
         let mut key_file = Vec::new();
         seal_key_file(&admin, &key_header(&admin, key_uuid, &epoch), &epoch, &[admin.recipient(), ben.recipient()], &mut key_file).unwrap();
         let m = matter(&[&admin, &ben], &[&admin]);
-        let opened = open_key_file(&key_file[..], key_uuid, &BRIEFCASE, &ben, &m).unwrap();
+        let opened = open_key_file(io::Cursor::new(&key_file), key_uuid, &BRIEFCASE, &ben, &m).unwrap();
 
         let uuid = Uuid::new_v4();
         let blob = seal_version(&admin, &version_header(&admin, uuid, 1, b"v1 text"), b"v1 text", &epoch);
@@ -660,7 +687,7 @@ mod tests {
         let mut key_file = Vec::new();
         seal_key_file(&mallory, &key_header(&mallory, uuid, &epoch), &epoch, &[ben.recipient()], &mut key_file).unwrap();
         let m = matter(&[&admin, &mallory, &ben], &[&admin]);
-        assert!(matches!(open_key_file(&key_file[..], uuid, &BRIEFCASE, &ben, &m), Err(RecordError::NotAdmin)));
+        assert!(matches!(open_key_file(io::Cursor::new(&key_file), uuid, &BRIEFCASE, &ben, &m), Err(RecordError::NotAdmin)));
     }
 
     #[test]
@@ -671,7 +698,7 @@ mod tests {
         let mut key_file = Vec::new();
         seal_key_file(&admin, &key_header(&admin, uuid, &signed_epoch), &swapped_epoch, &[ben.recipient()], &mut key_file).unwrap();
         let m = matter(&[&admin, &ben], &[&admin]);
-        assert!(matches!(open_key_file(&key_file[..], uuid, &BRIEFCASE, &ben, &m), Err(RecordError::EpochKeyMismatch)));
+        assert!(matches!(open_key_file(io::Cursor::new(&key_file), uuid, &BRIEFCASE, &ben, &m), Err(RecordError::EpochKeyMismatch)));
     }
 
     #[test]
@@ -727,7 +754,9 @@ mod tests {
         let uuid = Uuid::new_v4();
         let mut blob = seal_version(&ana, &version_header(&ana, uuid, 1, b"x"), b"x", &epoch);
         let mac_line = blob.windows(4).position(|w| w == b"--- ").unwrap();
-        blob[mac_line + 5] ^= 1;
+        // Swap one full-weight base64 digit of the header MAC for another valid digit.
+        let digit = &mut blob[mac_line + 5];
+        *digit = if *digit == b'A' { b'B' } else { b'A' };
         let r = release(&blob, uuid, &[epoch], &matter(&[&ana], &[&ana]));
         assert!(matches!(r.result, Err(RecordError::Decrypt(age::DecryptError::InvalidMac))));
     }
@@ -796,6 +825,63 @@ mod tests {
         seal_key_file(&ana, &key_header(&ana, uuid, &epoch), &epoch, &[epoch.recipient()], &mut key_file).unwrap();
         let r = release(&key_file, uuid, &[epoch], &matter(&[&ana], &[&ana]));
         assert!(matches!(r.result, Err(RecordError::WrongKind)));
+    }
+
+    #[test]
+    fn version_labelled_with_an_epoch_other_than_the_one_that_opens_it_is_rejected() {
+        let ana = DeviceKeys::generate();
+        let (epoch1, epoch2) = (Epoch::generate(1), Epoch::generate(2));
+        let uuid = Uuid::new_v4();
+        let mut header = version_header(&ana, uuid, 1, b"x");
+        let Body::Version(v) = &mut header.body else { unreachable!() };
+        v.epoch = 2;
+        let blob = seal_version(&ana, &header, b"x", &epoch1);
+        let r = release(&blob, uuid, &[epoch2, epoch1], &matter(&[&ana], &[&ana]));
+        assert!(matches!(r.result, Err(RecordError::WrongEpoch)));
+    }
+
+    #[test]
+    fn version_opens_with_whichever_held_epoch_it_was_sealed_to() {
+        let ana = DeviceKeys::generate();
+        let (epoch1, epoch2) = (Epoch::generate(1), Epoch::generate(2));
+        let uuid = Uuid::new_v4();
+        let blob = seal_version(&ana, &version_header(&ana, uuid, 1, b"x"), b"x", &epoch1);
+        assert!(release(&blob, uuid, &[epoch2, epoch1], &matter(&[&ana], &[&ana])).result.is_ok());
+    }
+
+    #[test]
+    fn leftover_temp_file_from_a_crashed_release_does_not_block_the_next() {
+        let ana = DeviceKeys::generate();
+        let epoch = Epoch::generate(1);
+        let uuid = Uuid::new_v4();
+        let blob = seal_version(&ana, &version_header(&ana, uuid, 1, b"x"), b"x", &epoch);
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(format!("{uuid}.tmp")), b"partial").unwrap();
+        let result = release_version(io::Cursor::new(&blob), uuid, &BRIEFCASE, &[epoch], &matter(&[&ana], &[&ana]), dir.path(), &dir.path().join("out"));
+        assert!(result.is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn released_plaintext_is_readable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let ana = DeviceKeys::generate();
+        let epoch = Epoch::generate(1);
+        let uuid = Uuid::new_v4();
+        let blob = seal_version(&ana, &version_header(&ana, uuid, 1, b"x"), b"x", &epoch);
+        let r = release(&blob, uuid, &[epoch], &matter(&[&ana], &[&ana]));
+        assert_eq!(fs::metadata(r.dest()).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    fn sealing_a_header_no_peer_could_decode_is_refused() {
+        let ana = DeviceKeys::generate();
+        let epoch = Epoch::generate(1);
+        let mut header = version_header(&ana, Uuid::new_v4(), 1, b"x");
+        let Body::Version(v) = &mut header.body else { unreachable!() };
+        v.file_name = "a".repeat(MAX_TEXT_BYTES + 1);
+        let result = seal(&ana, &header, &b"x"[..], &[&epoch.recipient()], io::sink());
+        assert!(matches!(result, Err(RecordError::Malformed("text length"))));
     }
 
     #[test]
