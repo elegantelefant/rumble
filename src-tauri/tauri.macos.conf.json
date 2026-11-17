@@ -4,7 +4,7 @@
     "externalBin": [],
     "macOS": {
       "files": {
-        "Helpers/rumble-sidecar": "sidecar/dist/rumble-sidecar"
+        "Helpers/rumble-sidecar.app": "sidecar/dist/rumble-sidecar.app"
       }
     }
   }

@@ -936,8 +936,8 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
 }
 
 /// Where the macOS sidecar lives, relative to the app bundle's Contents: a PyInstaller onedir
-/// helper sealed by the app's signature, so no library is unpacked to a temp folder (#157).
-const MACOS_HELPER: &str = "Helpers/rumble-sidecar/rumble-sidecar";
+/// helper app sealed by the app's signature, so no library is unpacked to a temp folder (#157).
+const MACOS_HELPER: &str = "Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar";
 
 /// The helper beside the app executable `exe` (Contents/MacOS/<exe>).
 fn bundled_helper(exe: &Path) -> Option<PathBuf> {
@@ -952,7 +952,7 @@ fn sidecar_command(app: &AppHandle) -> Result<tauri_plugin_shell::process::Comma
         let helper = bundled_helper(&exe).filter(|path| path.is_file());
         #[cfg(debug_assertions)]
         let helper = helper.or_else(|| {
-            Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("sidecar/dist/rumble-sidecar/rumble-sidecar"))
+            Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("sidecar/dist").join(MACOS_HELPER.trim_start_matches("Helpers/")))
         });
         let helper = helper.ok_or("the app bundle has no sidecar helper")?;
         return Ok(app.shell().command(helper));
@@ -3093,7 +3093,9 @@ mod tests {
         let exe = Path::new("/Applications/Elefant - Rumble.app/Contents/MacOS/elefant_rumble");
         assert_eq!(
             bundled_helper(exe),
-            Some(PathBuf::from("/Applications/Elefant - Rumble.app/Contents/Helpers/rumble-sidecar/rumble-sidecar"))
+            Some(PathBuf::from(
+                "/Applications/Elefant - Rumble.app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar"
+            ))
         );
     }
 

@@ -75,8 +75,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-# macOS: onedir, shipped as a helper inside the signed .app (Contents/Helpers), so nothing is
-# unpacked to a temp folder at launch and every library is sealed by the app's signature (#157).
+# macOS: onedir wrapped in its own app bundle (code in MacOS/Frameworks, data in Resources, as
+# Apple's bundle layout requires), shipped as a helper inside the signed .app (Contents/Helpers):
+# nothing is unpacked to a temp folder at launch, and every library is sealed by a signature (#157).
 # Elsewhere: onefile, shipped as a Tauri externalBin.
 ONEDIR = sys.platform == "darwin"
 
@@ -96,3 +97,10 @@ exe = EXE(
 
 if ONEDIR:
     coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, name="rumble-sidecar")
+    app = BUNDLE(
+        coll,
+        name="rumble-sidecar.app",
+        bundle_identifier="legal.elefant.rumble.sidecar",
+        # A background helper: no Dock icon, no menu bar.
+        info_plist={"LSBackgroundOnly": True},
+    )
