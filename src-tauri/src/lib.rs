@@ -1577,7 +1577,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, S
 
 // --- Templates folder ---
 
-/// The plan's macro-free allowlist (agent_docs/2026-11-17-team-sync-plan.md §5.4),
+/// The macro-free allowlist of the team sync plan (rumble PR #171, §5.4),
 /// narrowed to the types the sidecar's /extract reads; .xlsx and .pptx have no text path.
 const TEMPLATE_EXTENSIONS: &[&str] = &["docx", "pdf", "txt", "md"];
 /// Word writes `~$name.docx` owner files beside an open document.
@@ -1595,8 +1595,10 @@ fn templates_folder(settings: &Settings) -> Option<PathBuf> {
 }
 
 fn is_template_name(name: &str) -> bool {
+    // A colon names an NTFS alternate data stream.
     !name.starts_with('.')
         && !name.starts_with(WORD_OWNER_FILE_PREFIX)
+        && !name.contains(':')
         && Path::new(name).file_name() == Some(name.as_ref())
         && Path::new(name)
             .extension()
@@ -1615,7 +1617,8 @@ fn template_files(dir: &Path) -> Result<Vec<String>, String> {
     })?;
     let mut names: Vec<String> = entries
         .flatten()
-        .filter(|entry| entry.path().is_file())
+        // DirEntry::file_type doesn't follow symlinks, so a link out of the folder is skipped.
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
         .filter_map(|entry| entry.file_name().into_string().ok())
         .filter(|name| is_template_name(name))
         .collect();
@@ -1629,11 +1632,27 @@ fn template_bytes(dir: &Path, name: &str) -> Result<Vec<u8>, String> {
         return Err(format!("{name} isn't a template Rumble can read."));
     }
     let path = dir.join(name);
-    let unreadable = |e: std::io::Error| format!("Couldn't read {name} ({e}). {TEMPLATE_UNREADABLE_HINT}");
-    if std::fs::metadata(&path).map_err(unreadable)?.len() > MAX_UPLOAD_BYTES as u64 {
-        return Err(format!("{name} is larger than the {MAX_UPLOAD_MB} MB upload limit."));
+    let unreadable = |e: std::io::Error| match e.kind() {
+        std::io::ErrorKind::NotFound => format!("{name} is no longer in the templates folder."),
+        _ => format!("Couldn't read {name} ({e}). {TEMPLATE_UNREADABLE_HINT}"),
+    };
+    let too_large = || format!("{name} is larger than the {MAX_UPLOAD_MB} MB upload limit.");
+    let metadata = std::fs::symlink_metadata(&path).map_err(unreadable)?;
+    if !metadata.is_file() {
+        return Err(format!("{name} isn't a template Rumble can read."));
     }
-    std::fs::read(&path).map_err(unreadable)
+    if metadata.len() > MAX_UPLOAD_BYTES as u64 {
+        return Err(too_large());
+    }
+    // Bounded in case the file grew, or hydrated larger, after the size check.
+    let mut data = Vec::new();
+    std::fs::File::open(&path)
+        .and_then(|file| std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_UPLOAD_BYTES as u64 + 1), &mut data))
+        .map_err(unreadable)?;
+    if data.len() > MAX_UPLOAD_BYTES {
+        return Err(too_large());
+    }
+    Ok(data)
 }
 
 fn saved_templates_folder(app: &AppHandle) -> Result<Option<PathBuf>, String> {
@@ -3615,10 +3634,48 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn template_bytes_of_an_unreadable_file_suggests_making_it_available_offline() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locked.docx");
+        std::fs::write(&path, b"x").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let err = template_bytes(dir.path(), "locked.docx").unwrap_err();
+        assert!(err.contains("make it available offline"), "{err}");
+    }
+
+    #[test]
+    fn template_bytes_of_a_file_gone_since_listing_says_so() {
         let dir = tempfile::tempdir().unwrap();
         let err = template_bytes(dir.path(), "gone.docx").unwrap_err();
-        assert!(err.contains("make it available offline"), "{err}");
+        assert_eq!(err, "gone.docx is no longer in the templates folder.");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn template_bytes_refuses_a_symlink_out_of_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("secret"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("templates")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("secret"), dir.path().join("templates/link.txt")).unwrap();
+        let err = template_bytes(&dir.path().join("templates"), "link.txt").unwrap_err();
+        assert!(err.contains("isn't a template Rumble can read"), "{err}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn template_files_skips_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("secret"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("templates")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("secret"), dir.path().join("templates/link.txt")).unwrap();
+        assert!(template_files(&dir.path().join("templates")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn template_names_with_a_colon_are_refused() {
+        assert!(!is_template_name("nda.docx:stream.txt"));
     }
 
     #[test]
