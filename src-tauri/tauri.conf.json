@@ -33,7 +33,8 @@
     ],
     "externalBin": ["binaries/rumble-sidecar"],
     "macOS": {
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "entitlements": "./Entitlements.plist"
     }
   },
   "plugins": {
