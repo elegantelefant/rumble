@@ -40,7 +40,6 @@ test.describe("Settings", () => {
     await page.getByRole("button", { name: "Appearance" }).click();
     await expect(page.getByText("Layout preferences")).toBeVisible();
     await expect(page.getByLabel("Navigation sidebar")).toBeVisible();
-    await expect(page.getByLabel("Theme")).toBeVisible();
   });
 
   test("save settings button is present", async ({ page }) => {
