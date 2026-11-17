@@ -1,6 +1,7 @@
 // ABOUTME: E2e tests for the Research Assistant view.
 // ABOUTME: Validates thread management, model selection, prompt submission, and workflow tips.
 import { expect, test } from "@playwright/test";
+import { installResearchHost, LOCAL_MODEL, RESEARCH_ANSWER } from "./fake-host";
 import { gotoRoute } from "./helpers";
 
 test.describe("Research Assistant", () => {
@@ -22,9 +23,10 @@ test.describe("Research Assistant", () => {
     await expect(page.getByText("In Progress")).toBeVisible();
   });
 
-  test("model selector defaults to local model", async ({ page }) => {
-    const select = page.locator("select").first();
-    await expect(select).toHaveValue("elefant-local");
+  test("model selector defaults to the local model the sidecar lists", async ({ page }) => {
+    await installResearchHost(page);
+    await page.reload();
+    await expect(page.locator("select").first()).toHaveValue(LOCAL_MODEL.id);
   });
 
   test("new thread button creates a thread", async ({ page }) => {
@@ -37,11 +39,16 @@ test.describe("Research Assistant", () => {
     await expect(textarea).toBeVisible();
   });
 
-  test("can submit a research prompt", async ({ page }) => {
+  test("can submit a research prompt and see the answer", async ({ page }) => {
+    await installResearchHost(page);
+    await page.reload();
+    await expect(page.locator("select").first()).toHaveValue(LOCAL_MODEL.id);
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the key GDPR requirements for data retention?");
     await page.getByRole("button", { name: "Start Research" }).click();
     await expect(page.getByText("What are the key GDPR requirements for data retention?")).toBeVisible();
+    // Once as the thread's summary, once as the assistant's message.
+    await expect(page.getByText(RESEARCH_ANSWER)).toHaveCount(2);
   });
 
   test("workflow notes are displayed", async ({ page }) => {
