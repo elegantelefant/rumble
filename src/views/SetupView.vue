@@ -17,20 +17,28 @@ type SetupState = "checking" | "no-service" | "no-ollama" | "no-models" | "ready
 // may be migrating a large existing database (#159).
 const SIDECAR_START_WAIT_MS = 120_000;
 const SIDECAR_START_POLL_MS = 500;
+const SIDECAR_START_TIMED_OUT =
+  "Rumble's local service didn't finish starting within 2 minutes. Settings → Open logs folder has the details.";
 
 const router = useRouter();
 const state = ref<SetupState>("checking");
 const models = ref<{ id: string; name: string }[]>([]);
 const errorDetail = ref("");
 
+// Never "starting": a wait that runs out, or a status the host can't give, is a failure
+// of Rumble's own service, not a reason to send the user to Ollama.
 async function waitWhileStarting(): Promise<SidecarStatus> {
   const deadline = Date.now() + SIDECAR_START_WAIT_MS;
-  let status = await sidecarStatus();
-  while (status.state === "starting" && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, SIDECAR_START_POLL_MS));
-    status = await sidecarStatus();
+  try {
+    let status = await sidecarStatus();
+    while (status.state === "starting" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, SIDECAR_START_POLL_MS));
+      status = await sidecarStatus();
+    }
+    return status.state === "starting" ? { state: "failed", error: SIDECAR_START_TIMED_OUT } : status;
+  } catch (error) {
+    return { state: "failed", error: typeof error === "string" ? error : String(error) };
   }
-  return status;
 }
 
 async function checkStatus() {
@@ -276,7 +284,7 @@ onMounted(checkStatus);
       <p class="text-center text-xs text-[var(--primary-400)]">
         You can return to this page anytime from Settings.
         <button
-          v-if="state === 'no-service' || state === 'no-ollama' || state === 'no-models'"
+          v-if="state !== 'ready'"
           class="ml-1 underline"
           @click="proceed"
         >

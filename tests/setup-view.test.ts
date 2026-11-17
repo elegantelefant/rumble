@@ -173,4 +173,46 @@ describe("SetupView", () => {
       vi.useRealTimers()
     }
   })
+
+  it("ends a start-up wait that never finishes on Rumble's failure screen, not Ollama's", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(sidecarStatus).mockResolvedValue({ state: "starting", error: null })
+      vi.mocked(health).mockRejectedValue("sidecar not running")
+
+      const wrapper = mountSetup()
+      await vi.advanceTimersByTimeAsync(121_000)
+
+      expect([wrapper.text().includes("Rumble's local service didn't start"), wrapper.text().includes("didn't finish starting"), wrapper.text().includes("Install Ollama")]).toEqual([
+        true,
+        true,
+        false,
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("offers Skip for now while the local service is starting", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(sidecarStatus).mockResolvedValue({ state: "starting", error: null })
+
+      const wrapper = mountSetup()
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(wrapper.findAll("button").some((button) => button.text() === "Skip for now")).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("shows Rumble's failure screen when the host's status can't be read", async () => {
+    vi.mocked(sidecarStatus).mockRejectedValue("ipc unavailable")
+
+    const wrapper = mountSetup()
+    await flushPromises()
+
+    expect([wrapper.text().includes("Rumble's local service didn't start"), wrapper.text().includes("ipc unavailable")]).toEqual([true, true])
+  })
 })
