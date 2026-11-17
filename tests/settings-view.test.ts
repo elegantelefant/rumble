@@ -308,6 +308,15 @@ describe("SettingsView", () => {
       expect(savedPayload().appearance.showChatSidebarByDefault).toBe(true)
     })
 
+    it("describes the template library as what Document Draft reads, not a clause feed", async () => {
+      const wrapper = await mountAndLoad()
+      await openTab(wrapper, "Templates")
+      expect([
+        wrapper.text().includes("Document Draft lists the .docx, .pdf, .txt and .md files in this folder"),
+        wrapper.text().includes("reference the latest clauses"),
+      ]).toEqual([true, false])
+    })
+
     it("shows the host data directory as non-editable text in the storage tab", async () => {
       const dataDir = "/Users/test/Library/Application Support/com.elefant.rumble"
       mockCommands({

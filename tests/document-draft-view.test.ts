@@ -19,7 +19,7 @@ vi.mock("../src/api/sidecar", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(invoke).mockResolvedValue(true)
+  vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "list_templates" ? [] : true))
   backendMode.value = null
 })
 
@@ -346,16 +346,84 @@ describe("DocumentDraftView confidentiality notice", () => {
   })
 
   it("shows the local-mode notice once ollama resolves", async () => {
-    vi.mocked(invoke).mockResolvedValue("ollama")
+    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "list_templates" ? [] : "ollama"))
     const wrapper = mountDraft()
     await flushPromises()
     expect(wrapper.text()).toContain("Your data stays on this device.")
   })
 
   it("shows the byok-mode notice once byok resolves", async () => {
-    vi.mocked(invoke).mockResolvedValue("byok")
+    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "list_templates" ? [] : "byok"))
     const wrapper = mountDraft()
     await flushPromises()
     expect(wrapper.text()).toContain("Your data goes to your chosen provider using your API key.")
+  })
+})
+
+describe("DocumentDraftView templates folder", () => {
+  function mockFolder(extract: (fileName: string) => Promise<string>) {
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === "list_templates") return ["Firm NDA.docx"]
+      if (cmd === "extract_template") return extract((args as { fileName: string }).fileName)
+      return "ollama"
+    })
+  }
+
+  async function generateFromFolderTemplate() {
+    const wrapper = mountDraft()
+    await flushPromises()
+    await wrapper.findAll("aside button").find((b) => b.text() === "Firm NDA.docx")!.trigger("click")
+    await wrapper.find("button.btn-primary").trigger("click")
+    await flushPromises()
+    return wrapper
+  }
+
+  it("lists the folder's templates alongside the built-in ones", async () => {
+    mockFolder(async () => "")
+    const wrapper = mountDraft()
+    await flushPromises()
+    expect(wrapper.findAll("aside button").map((b) => b.text())).toEqual([
+      "Employment Agreement",
+      "Non-Disclosure Agreement",
+      "Service Contract",
+      "Firm NDA.docx",
+      "Browse Local Templates...",
+    ])
+  })
+
+  it("shows why the folder couldn't be listed, and keeps the built-in templates", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_templates") throw "The templates folder /firm/templates wasn't found. Choose another in Settings."
+      return "ollama"
+    })
+    const wrapper = mountDraft()
+    await flushPromises()
+    expect([
+      wrapper.text().includes("The templates folder /firm/templates wasn't found."),
+      wrapper.text().includes("Employment Agreement"),
+    ]).toEqual([true, true])
+  })
+
+  it("drafts from the folder template's extracted text", async () => {
+    mockFolder(async (fileName) => `Text of ${fileName}: the parties agree.`)
+    vi.mocked(createDraftJob).mockResolvedValue({ job_id: "job-1" } as never)
+    vi.mocked(waitForJob).mockResolvedValue({ status: "completed", result: { draft: "Draft.", warnings: [] } } as never)
+
+    await generateFromFolderTemplate()
+
+    expect(vi.mocked(createDraftJob).mock.calls[0][0].prompt).toContain("Text of Firm NDA.docx: the parties agree.")
+  })
+
+  it("shows the host's reason when a folder template can't be read", async () => {
+    mockFolder(async () => {
+      throw "Couldn't read Firm NDA.docx (offline). Make it available offline, then try again."
+    })
+
+    await generateFromFolderTemplate()
+
+    expect(mockAddToast).toHaveBeenCalledWith(
+      "Couldn't read Firm NDA.docx (offline). Make it available offline, then try again.",
+      "error",
+    )
   })
 })

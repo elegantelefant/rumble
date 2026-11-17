@@ -548,7 +548,9 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h2 class="text-base font-semibold text-[var(--primary-800)]">Template library</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Map Rumble to your firm template repository so drafting tools can reference the latest clauses.
+            Document Draft lists the .docx, .pdf, .txt and .md files in this folder beside its built-in templates.
+            To share templates with your team, choose a folder your firm syncs (OneDrive, SharePoint or Google Drive),
+            make it available offline, and save settings.
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">

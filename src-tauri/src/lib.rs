@@ -1575,6 +1575,124 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, S
         .map(|aside| aside.map(|p| p.display().to_string()))
 }
 
+// --- Templates folder ---
+
+/// The macro-free allowlist of the team sync plan (rumble PR #171, §5.4),
+/// narrowed to the types the sidecar's /extract reads; .xlsx and .pptx have no text path.
+const TEMPLATE_EXTENSIONS: &[&str] = &["docx", "pdf", "txt", "md"];
+/// Word writes `~$name.docx` owner files beside an open document.
+const WORD_OWNER_FILE_PREFIX: &str = "~$";
+const TEMPLATE_UNREADABLE_HINT: &str =
+    "If the folder syncs from OneDrive, SharePoint or Google Drive, make it available offline, then try again.";
+
+fn templates_folder(settings: &Settings) -> Option<PathBuf> {
+    let path = settings.get("workspace")?.get("templatesPath")?.as_str()?.trim();
+    match path.strip_prefix("~/") {
+        _ if path.is_empty() => None,
+        Some(rest) => dirs::home_dir().map(|home| home.join(rest)),
+        None => Some(PathBuf::from(path)),
+    }
+}
+
+fn is_template_name(name: &str) -> bool {
+    // A colon names an NTFS alternate data stream.
+    !name.starts_with('.')
+        && !name.starts_with(WORD_OWNER_FILE_PREFIX)
+        && !name.contains(':')
+        && Path::new(name).file_name() == Some(name.as_ref())
+        && Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| TEMPLATE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// File names of the templates in `dir`, sorted. Entries that can't be read are skipped.
+fn template_files(dir: &Path) -> Result<Vec<String>, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => format!(
+            "The templates folder {} wasn't found. Choose another in Settings.",
+            dir.display()
+        ),
+        _ => format!("Couldn't read the templates folder {}: {}", dir.display(), e),
+    })?;
+    let mut names: Vec<String> = entries
+        .flatten()
+        // DirEntry::file_type doesn't follow symlinks, so a link out of the folder is skipped.
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| is_template_name(name))
+        .collect();
+    names.sort_by_key(|name| name.to_lowercase());
+    Ok(names)
+}
+
+/// Reading an online-only placeholder makes the sync client download it; offline, the read fails.
+fn template_bytes(dir: &Path, name: &str) -> Result<Vec<u8>, String> {
+    if !is_template_name(name) {
+        return Err(format!("{name} isn't a template Rumble can read."));
+    }
+    let path = dir.join(name);
+    let unreadable = |e: std::io::Error| match e.kind() {
+        std::io::ErrorKind::NotFound => format!("{name} is no longer in the templates folder."),
+        _ => format!("Couldn't read {name} ({e}). {TEMPLATE_UNREADABLE_HINT}"),
+    };
+    let too_large = || format!("{name} is larger than the {MAX_UPLOAD_MB} MB upload limit.");
+    let metadata = std::fs::symlink_metadata(&path).map_err(unreadable)?;
+    if !metadata.is_file() {
+        return Err(format!("{name} isn't a template Rumble can read."));
+    }
+    if metadata.len() > MAX_UPLOAD_BYTES as u64 {
+        return Err(too_large());
+    }
+    // Bounded in case the file grew, or hydrated larger, after the size check.
+    let mut data = Vec::new();
+    std::fs::File::open(&path)
+        .and_then(|file| std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_UPLOAD_BYTES as u64 + 1), &mut data))
+        .map_err(unreadable)?;
+    if data.len() > MAX_UPLOAD_BYTES {
+        return Err(too_large());
+    }
+    Ok(data)
+}
+
+fn saved_templates_folder(app: &AppHandle) -> Result<Option<PathBuf>, String> {
+    Ok(read_settings(&settings_path(app)?)?.as_ref().and_then(templates_folder))
+}
+
+/// Empty when no templates folder has been saved.
+#[tauri::command]
+async fn list_templates(app: AppHandle) -> Result<Vec<String>, String> {
+    let Some(dir) = saved_templates_folder(&app)? else {
+        return Ok(Vec::new());
+    };
+    tauri::async_runtime::spawn_blocking(move || template_files(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn extract_template(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    file_name: String,
+) -> Result<String, String> {
+    let dir = saved_templates_folder(&app)?
+        .ok_or_else(|| "Choose a templates folder in Settings.".to_string())?;
+    let name = file_name.clone();
+    let data = tauri::async_runtime::spawn_blocking(move || template_bytes(&dir, &name))
+        .await
+        .map_err(|e| e.to_string())??;
+    post_extract_multipart(
+        &state.http,
+        &state.sidecar_url("")?,
+        &state.secret,
+        &file_name,
+        data,
+        Duration::from_secs(EXTRACT_TIMEOUT_SECS),
+    )
+    .await
+}
+
 // --- App entry ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1641,6 +1759,8 @@ pub fn run() {
             pick_templates_folder,
             load_settings,
             save_settings,
+            list_templates,
+            extract_template,
             open_logs_folder,
             // Local data lifecycle
             data_dir,
@@ -3441,5 +3561,129 @@ mod tests {
         let result = validate_user_path("/nonexistent/path/xyz");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid path"));
+    }
+
+    fn settings_with_templates_path(path: &str) -> Settings {
+        serde_json::from_value(serde_json::json!({"workspace": {"templatesPath": path}})).unwrap()
+    }
+
+    #[test]
+    fn templates_folder_comes_from_the_saved_workspace_setting() {
+        assert_eq!(
+            templates_folder(&settings_with_templates_path("/firm/templates")),
+            Some(PathBuf::from("/firm/templates"))
+        );
+    }
+
+    #[test]
+    fn templates_folder_expands_a_leading_tilde_to_home() {
+        assert_eq!(
+            templates_folder(&settings_with_templates_path("~/Templates")),
+            Some(dirs::home_dir().unwrap().join("Templates"))
+        );
+    }
+
+    #[test]
+    fn templates_folder_is_none_when_blank() {
+        assert_eq!(templates_folder(&settings_with_templates_path("  ")), None);
+    }
+
+    #[test]
+    fn template_files_lists_only_allowlisted_files_sorted() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["b.pdf", "A.DOCX", "notes.md", "plain.txt", "macro.docm", "link.lnk", "page.html", ".hidden.docx", "~$lock.docx"] {
+            std::fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        std::fs::create_dir(dir.path().join("folder.docx")).unwrap();
+
+        assert_eq!(
+            template_files(dir.path()).unwrap(),
+            vec!["A.DOCX", "b.pdf", "notes.md", "plain.txt"]
+        );
+    }
+
+    #[test]
+    fn template_files_of_a_missing_folder_is_an_error_naming_it() {
+        let err = template_files(Path::new("/nonexistent/templates")).unwrap_err();
+        assert!(err.contains("/nonexistent/templates wasn't found"), "{err}");
+    }
+
+    #[test]
+    fn template_bytes_reads_an_allowlisted_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("nda.docx"), b"docx bytes").unwrap();
+        assert_eq!(template_bytes(dir.path(), "nda.docx").unwrap(), b"docx bytes");
+    }
+
+    #[test]
+    fn template_bytes_refuses_a_name_outside_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside.docx");
+        std::fs::write(&outside, b"x").unwrap();
+        std::fs::create_dir(dir.path().join("templates")).unwrap();
+        let err = template_bytes(&dir.path().join("templates"), outside.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("isn't a template Rumble can read"), "{err}");
+    }
+
+    #[test]
+    fn template_bytes_refuses_a_type_off_the_allowlist() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("macro.docm"), b"x").unwrap();
+        let err = template_bytes(dir.path(), "macro.docm").unwrap_err();
+        assert!(err.contains("isn't a template Rumble can read"), "{err}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn template_bytes_of_an_unreadable_file_suggests_making_it_available_offline() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locked.docx");
+        std::fs::write(&path, b"x").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let err = template_bytes(dir.path(), "locked.docx").unwrap_err();
+        assert!(err.contains("make it available offline"), "{err}");
+    }
+
+    #[test]
+    fn template_bytes_of_a_file_gone_since_listing_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = template_bytes(dir.path(), "gone.docx").unwrap_err();
+        assert_eq!(err, "gone.docx is no longer in the templates folder.");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn template_bytes_refuses_a_symlink_out_of_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("secret"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("templates")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("secret"), dir.path().join("templates/link.txt")).unwrap();
+        let err = template_bytes(&dir.path().join("templates"), "link.txt").unwrap_err();
+        assert!(err.contains("isn't a template Rumble can read"), "{err}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn template_files_skips_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("secret"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("templates")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("secret"), dir.path().join("templates/link.txt")).unwrap();
+        assert!(template_files(&dir.path().join("templates")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn template_names_with_a_colon_are_refused() {
+        assert!(!is_template_name("nda.docx:stream.txt"));
+    }
+
+    #[test]
+    fn template_bytes_refuses_a_file_over_the_upload_limit_before_reading_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = std::fs::File::create(dir.path().join("huge.pdf")).unwrap();
+        file.set_len(MAX_UPLOAD_BYTES as u64 + 1).unwrap();
+        let err = template_bytes(dir.path(), "huge.pdf").unwrap_err();
+        assert!(err.contains("upload limit"), "{err}");
     }
 }
