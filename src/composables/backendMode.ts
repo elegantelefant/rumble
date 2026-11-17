@@ -50,7 +50,7 @@ export const STORAGE_NOTICES = {
   // #130: owner-approved at-rest claim; SECURITY.md documents its scope and migration limits.
   atRest: "Your chats and documents are encrypted on your computer; the key lives in your keychain.",
   workspaceData:
-    "Chats, messages and document review, draft and research jobs, including the document text, are kept in a database in this device's local app data folder, not in the workspace path below. Jobs are deleted the next time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.",
+    "Chats, messages and document review, draft and research jobs, including the document text, are kept in a database in the workspace path below. Jobs are deleted the next time Rumble starts after they turn 30 days old; chats stay until you delete all local data. Backups of this device copy the database too.",
 };
 
 export const MODE_TO_STATE: Record<BackendMode, ConfidentialityState> = {
