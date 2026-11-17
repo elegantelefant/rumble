@@ -620,15 +620,18 @@ describe("SettingsView processing mode", () => {
     expect((radio(wrapper, "byok").element as HTMLInputElement).checked).toBe(false)
   })
 
-  it("shows Premium as coming later, not selectable", async () => {
+  it("does not let Premium be selected", async () => {
     hostInMode("ollama")
     const wrapper = mountSettings()
     await vi.advanceTimersByTimeAsync(0)
-    const premium = radio(wrapper, "premium")
-    expect([(premium.element as HTMLInputElement).disabled, premium.element.closest("label")!.textContent!.includes("Coming later.")]).toEqual([
-      true,
-      true,
-    ])
+    expect((radio(wrapper, "premium").element as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it("says Premium is coming later", async () => {
+    hostInMode("ollama")
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio(wrapper, "premium").element.closest("label")!.textContent).toContain("Coming later.")
   })
 
   it("opens the plans page from Premium's quiet link", async () => {
