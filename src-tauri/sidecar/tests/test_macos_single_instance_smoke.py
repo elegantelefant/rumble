@@ -18,6 +18,18 @@ sleep 30 & wait
 """
 
 
+# Holds the lock like SINGLE_INSTANCE, but the second launch fails instead of exiting cleanly.
+SECOND_LAUNCH_FAILS = SINGLE_INSTANCE.replace('if [ -e "$lock" ]; then exit 0; fi', 'if [ -e "$lock" ]; then exit 3; fi')
+# The first instance quits as soon as a second one starts.
+FIRST_QUITS_WHEN_SECOND_STARTS = """#!/bin/bash
+lock="$(dirname "$0")/lock"
+if [ -e "$lock" ]; then touch "$lock.second"; exit 0; fi
+touch "$lock"
+trap 'rm -f "$lock" "$lock.second"' EXIT
+for _ in $(seq 300); do [ -e "$lock.second" ] && exit 0; sleep 0.1; done
+"""
+
+
 def _app(tmp_path: Path, body: str) -> Path:
     macos = tmp_path / "Rumble.app" / "Contents" / "MacOS"
     macos.mkdir(parents=True)
@@ -48,3 +60,13 @@ def test_the_smoke_fails_when_the_first_launch_does_not_stay_up(tmp_path):
 def test_the_smoke_passes_when_a_second_launch_exits_and_the_first_stays(tmp_path):
     result = _smoke(_app(tmp_path, SINGLE_INSTANCE))
     assert result.returncode == 0, result.stderr
+
+
+def test_the_smoke_fails_when_the_second_launch_exits_with_an_error(tmp_path):
+    result = _smoke(_app(tmp_path, SECOND_LAUNCH_FAILS))
+    assert (result.returncode, "second instance exited with code 3" in result.stderr) == (1, True)
+
+
+def test_the_smoke_fails_when_the_first_instance_quits_as_the_second_launches(tmp_path):
+    result = _smoke(_app(tmp_path, FIRST_QUITS_WHEN_SECOND_STARTS))
+    assert (result.returncode, "first instance exited when the second launched" in result.stderr) == (1, True)

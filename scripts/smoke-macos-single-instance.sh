@@ -16,7 +16,14 @@ binary="$1/Contents/MacOS/elefant_rumble"
 "$binary" >/dev/null 2>&1 &
 first=$!
 second=
-trap 'kill "$first" ${second:+"$second"} 2>/dev/null || true' EXIT
+
+# SIGTERM skips the app's exit hook, so its sidecar is stopped here too, by its bundle path.
+stop_instances() {
+  kill "$first" ${second:+"$second"} 2>/dev/null || true
+  wait "$first" 2>/dev/null || true
+  pkill -f "$1/Contents/MacOS/rumble-sidecar" 2>/dev/null || true
+}
+trap 'stop_instances "$1"' EXIT
 
 sleep "$SETTLE_SECONDS"
 if ! kill -0 "$first" 2>/dev/null; then

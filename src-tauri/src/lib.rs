@@ -1361,6 +1361,7 @@ async fn sidecar_status_value(http: &Client, port: Option<u16>, secret: &str) ->
 /// Brings the running instance forward when the user launches Rumble again.
 fn focus_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
