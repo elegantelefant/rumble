@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Stop'
 
 $SmokePort = if ($env:RUMBLE_SMOKE_PORT) { [int]$env:RUMBLE_SMOKE_PORT } else { 18765 }
 $HealthWaitSeconds = if ($env:RUMBLE_SMOKE_HEALTH_WAIT_SECONDS) { [int]$env:RUMBLE_SMOKE_HEALTH_WAIT_SECONDS } else { 90 }
+# msiexec's success codes: done, and done but a restart is pending.
+$MsiSuccess = @(0, 3010)
 # Where per-machine (MSI) and per-user (NSIS) installs land; searched, not assumed.
 $InstallRoots = @($env:ProgramFiles, $env:LOCALAPPDATA)
 
@@ -13,7 +15,7 @@ $before = @(Get-ChildItem -Path $InstallRoots -Filter rumble-sidecar.exe -Recurs
 if ($Installer -like '*.msi') {
   $log = Join-Path $env:RUNNER_TEMP 'rumble-msi.log'
   $install = Start-Process msiexec.exe -ArgumentList '/i', "`"$Installer`"", '/qn', '/l*v', "`"$log`"" -Wait -PassThru
-  if ($install.ExitCode -ne 0) { Get-Content $log -Tail 40; throw "msiexec exited with $($install.ExitCode)" }
+  if ($MsiSuccess -notcontains $install.ExitCode) { Get-Content $log -Tail 40; throw "msiexec exited with $($install.ExitCode)" }
 } else {
   $install = Start-Process $Installer -ArgumentList '/S' -Wait -PassThru
   if ($install.ExitCode -ne 0) { throw "$Installer exited with $($install.ExitCode)" }
@@ -36,13 +38,16 @@ $out = Join-Path $dataDir 'sidecar.out'
 $err = Join-Path $dataDir 'sidecar.err'
 $process = Start-Process $sidecar.FullName -ArgumentList '--port', $SmokePort, '--data-dir', "`"$dataDir`"" `
   -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+# Reading the handle now keeps ExitCode available once the process has gone.
+$null = $process.Handle
+$lastError = 'no answer yet'
 try {
   for ($i = 0; $i -lt $HealthWaitSeconds; $i++) {
     try {
       $health = Invoke-RestMethod -Uri "http://127.0.0.1:$SmokePort/health" -Headers @{ 'X-Rumble-Secret' = $secret } -TimeoutSec 2
       Write-Output "installed sidecar answered /health: $($health | ConvertTo-Json -Compress)"
       return
-    } catch {}
+    } catch { $lastError = $_.Exception.Message }
     if ($process.HasExited) {
       Get-Content $out, $err -ErrorAction SilentlyContinue
       throw "installed sidecar exited with code $($process.ExitCode) before /health answered"
@@ -50,8 +55,10 @@ try {
     Start-Sleep -Seconds 1
   }
   Get-Content $out, $err -ErrorAction SilentlyContinue
-  throw "installed sidecar did not answer /health within ${HealthWaitSeconds}s"
+  throw "installed sidecar did not answer /health within ${HealthWaitSeconds}s (last error: $lastError)"
 } finally {
   # The PyInstaller bootloader and its Python child: stop the whole tree.
   if (-not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
+  # taskkill fails if the sidecar exited on its own meanwhile; that must not fail the step.
+  $global:LASTEXITCODE = 0
 }
