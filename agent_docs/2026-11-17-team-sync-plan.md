@@ -1,6 +1,22 @@
 # Team sync: plan
 
-This is a design plan, not code. Refs #21. It was read against `main` at 2641249 on 2026-11-17. Sizes are S/M/L, never dates.
+**Status: ready to build** (owner decisions complete, 2026-11-17). This is a design plan, not code. Refs #21. It was read against `main` at 2641249 on 2026-11-17. Sizes are S/M/L, never dates.
+
+## 0. Ready to build
+
+**Settled** (each one is in §11):
+- **What a matter is.** A matter is the web app's briefcase: a set of versioned files of any type, with `.docx` first-class.
+- **Transport.** The firm's synced folder: the local folder of OneDrive/SharePoint or Google Drive for desktop. Rumble never contacts Google or Microsoft. Rumble Relay follows in phase 4; Business and Enterprise create relay matters, any plan joins, and self-hosting is free.
+- **Versions.** Every save is a version, written at once. Grouping and named versions are display only. Presence is advisory, never a lock. Forks are resolved by a person, and Combine in Word is manual first.
+- **Joining.** Invite links carry no keys. Keys are released only after both sides confirm the safety number. There are two admins, new members see history, and there is no key backup.
+- **Crypto.** `age` 0.12.1 plus `ed25519-dalek` 2.2 in the Rust host. Device keys are wrapped by the TPM (Windows first, the owner's platform) or the Secure Enclave. A labelled software key is allowed only where a matter permits it (decision 14). Post-quantum `age1pq` is adopted when Rust age ships it.
+- **Assurance.** A public spec with test vectors, continuous fuzzing, SLSA provenance, and `cargo-deny`, `cargo-vet` and `cargo-auditable`.
+
+**Build order:**
+1. **Spike (S–M).** Crypto checklist §5.6 items 1–8: the age round trip, streaming, `cargo tree`, signing, vectors, negative tests, PQ status, and hardware wrap on Windows TPM and the Secure Enclave. Also the folder checks in §3a′ (offline state, hydration-blocked state, rename on Google's drive) and the MOTW and Protected View check.
+2. **Prerequisites (S each).** The #169 single-instance guard, the `db_key` migration to the hardware wrap, and #144 templates (phase 0).
+3. **Phase 1 MVP (L), Windows first,** in four slices: keys and format; folder sync and index; working copies and versioning; versions and fork UI. The public spec and fuzzing ship with it.
+4. **Phases 2–4** as in §8.
 
 ## 1. The problem, in the owner's words
 
@@ -616,7 +632,7 @@ Decided 2026-11-17, recorded verbatim where quoted:
     - **SLSA provenance, `cargo-deny`, `cargo-vet` and `cargo-auditable`** (§12e).
     - **Deferred:** audit-funding programmes, a bug bounty, a paid audit of the crypto core.
 13. **Name: DECIDED.** "Let's just stick to Rumble Relay."
-14. **Machines without a usable TPM or Secure Enclave: OPEN.**
+14. **Machines without a usable TPM or Secure Enclave: DECIDED (b).** Owner: "Agree with B but it should be explained why a software key is inferior."
     - Who it affects: older PCs, Intel Macs without Touch ID, and **non-persistent VDI and Citrix desktops, which firms use often**, unless they provide a vTPM (Hyper-V's "Virtual TPM 2.0 is emulated in the guest VM"; [Windows 11 requirements](https://learn.microsoft.com/en-us/windows/whats-new/windows-11-requirements)).
     - The wrap protects against copying, not against a logged-in thief (row c), so refusing these machines gains little.
     - A non-persistent desktop can't keep a device key at all unless it travels with the user's profile.
@@ -624,7 +640,12 @@ Decided 2026-11-17, recorded verbatim where quoted:
       - (a) No chip, no sync.
       - (b) A **labelled software key** on such machines: per-user DPAPI. §12c rules DPAPI out for hardware machines precisely because it roams with the profile; on a non-persistent desktop, roaming is what's needed. Every member sees the device marked "software key". Each matter has a setting, **"Allow software-key devices"**, off by default; an admin can turn it on per matter or refuse a request.
       - (c) A software key allowed everywhere, unlabelled.
-    - **Recommend (b).** It keeps VDI firms in, keeps the stricter default, and makes the weaker device visible rather than hidden. (a) also creates a firm-wide rejoin risk after an fTPM-resetting firmware update, with no way to recover except new invites.
+    - **Decided: (b).** It keeps VDI firms in, keeps the stricter default, and makes the weaker device visible rather than hidden.
+    - **Why a software key is weaker, in plain words:** a software key is an ordinary file, so a backup, a roaming profile or a copied disk can carry it to another computer. A chip-held key never leaves the device it was made on.
+    - **PROPOSED UI copy:**
+      - *Member list badge:* **"Software key"**. On hover: "This device keeps its key as a file, which backups or roaming profiles can copy to another computer. Devices with a security chip keep their key on the chip, where it can't be copied."
+      - *Matter setting, "Allow software-key devices" (off by default):* "Lets people join from computers without a security chip, such as virtual desktops. Their keys are files that a backup or roaming profile could copy elsewhere, so this matter is slightly less protected while such a device is a member."
+      - *To the user of that device:* "This computer has no security chip Rumble can use, so your key is stored as a file. That works, but a backup or roaming profile could copy it to another computer, so an admin has to allow it for each matter."
 
 ## 12. Maximum assurance
 
