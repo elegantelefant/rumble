@@ -21,7 +21,7 @@ second=
 stop_instances() {
   kill "$first" ${second:+"$second"} 2>/dev/null || true
   wait "$first" 2>/dev/null || true
-  pkill -f "$1/Contents/MacOS/rumble-sidecar" 2>/dev/null || true
+  pkill -f "$1/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar" 2>/dev/null || true
 }
 trap 'stop_instances "$1"' EXIT
 
