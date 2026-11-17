@@ -1,11 +1,11 @@
 // ABOUTME: Tests for SetupView.vue's readiness messaging.
-// ABOUTME: Covers showing the sidecar's /ready reason instead of a generic "not responding", and the no-model path.
+// ABOUTME: Covers the sidecar's /ready reason, the no-model path, and Rumble's own service starting or failing.
 
 import { flushPromises, mount } from "@vue/test-utils"
 import { vi } from "vitest"
 import { defineComponent } from "vue"
 import { createMemoryHistory, createRouter, routerKey } from "vue-router"
-import { createReviewJob, extractDocument, health, listModels, ready, waitForJob } from "../src/api/sidecar"
+import { createReviewJob, extractDocument, health, listModels, ready, sidecarStatus, waitForJob } from "../src/api/sidecar"
 import SetupView from "../src/views/SetupView.vue"
 import DocumentReviewView from "../src/views/DocumentReviewView.vue"
 import sampleNda from "../src/assets/sample-nda.txt?raw"
@@ -28,6 +28,7 @@ vi.mock("../src/api/sidecar", () => ({
   createReviewJob: vi.fn(),
   extractDocument: vi.fn(),
   sendMessage: vi.fn(),
+  sidecarStatus: vi.fn(),
   streamMessage: vi.fn(),
   waitForJob: vi.fn(),
 }))
@@ -35,6 +36,7 @@ vi.mock("../src/api/sidecar", () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(health).mockResolvedValue({ status: "ok", mode: "ollama" })
+  vi.mocked(sidecarStatus).mockResolvedValue({ state: "running", error: null })
 })
 
 function mountSetup() {
@@ -128,5 +130,47 @@ describe("SetupView", () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain("Ollama is not responding")
+  })
+
+  it("blames Rumble's own service, not Ollama, when it refused to start", async () => {
+    const reason = "Rumble can't open your saved chats and reviews: their encryption key is missing from the system keychain."
+    vi.mocked(sidecarStatus).mockResolvedValue({ state: "failed", error: reason })
+    // What the routed calls answer while no sidecar runs.
+    vi.mocked(health).mockRejectedValue("sidecar not running")
+
+    const wrapper = mountSetup()
+    await flushPromises()
+
+    expect([wrapper.text().includes("Rumble's local service didn't start"), wrapper.text().includes(reason), wrapper.text().includes("Install Ollama")]).toEqual([
+      true,
+      true,
+      false,
+    ])
+  })
+
+  it("waits for a starting local service instead of reporting Ollama unreachable", async () => {
+    vi.useFakeTimers()
+    try {
+      let starting = true
+      vi.mocked(sidecarStatus).mockImplementation(async () =>
+        starting ? { state: "starting", error: null } : { state: "running", error: null },
+      )
+      vi.mocked(health).mockImplementation(async () => {
+        if (starting) throw "sidecar not running"
+        return { status: "ok", mode: "ollama" }
+      })
+      vi.mocked(ready).mockResolvedValue({ status: "ready", mode: "ollama" })
+      vi.mocked(listModels).mockResolvedValue({ models: [{ id: "llama3.2", provider: "ollama", name: "llama3.2", default: true }] })
+
+      const wrapper = mountSetup()
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(wrapper.text()).toContain("Checking your setup")
+
+      starting = false
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(wrapper.text()).toContain("You're all set")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

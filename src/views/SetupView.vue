@@ -1,26 +1,49 @@
 <script setup lang="ts">
-// ABOUTME: First-launch setup page — checks Ollama status and guides the user.
+// ABOUTME: First-launch setup page — checks Rumble's local service, then Ollama, and guides the user.
 // ABOUTME: Accessible at /setup, auto-redirected to on first launch if Ollama isn't ready.
 
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { health, ready, listModels } from "../api/sidecar";
+import { health, ready, listModels, sidecarStatus, type SidecarStatus } from "../api/sidecar";
 import { setupVerified } from "../router";
 // Setup only ever configures Ollama — it runs before any other mode is
 // reachable — so it reads the local state directly rather than the current
 // (possibly still-unread) backend mode.
 import { CONFIDENTIALITY } from "../composables/backendMode";
 
-type SetupState = "checking" | "no-ollama" | "no-models" | "ready";
+type SetupState = "checking" | "no-service" | "no-ollama" | "no-models" | "ready";
+
+// How long setup waits for the local service to finish starting: a first launch
+// may be encrypting a large existing database (#159).
+const SIDECAR_START_WAIT_MS = 120_000;
+const SIDECAR_START_POLL_MS = 500;
 
 const router = useRouter();
 const state = ref<SetupState>("checking");
 const models = ref<{ id: string; name: string }[]>([]);
 const errorDetail = ref("");
 
+async function waitWhileStarting(): Promise<SidecarStatus> {
+  const deadline = Date.now() + SIDECAR_START_WAIT_MS;
+  let status = await sidecarStatus();
+  while (status.state === "starting" && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, SIDECAR_START_POLL_MS));
+    status = await sidecarStatus();
+  }
+  return status;
+}
+
 async function checkStatus() {
   state.value = "checking";
   errorDetail.value = "";
+
+  const service = await waitWhileStarting();
+  if (service.state === "failed") {
+    // Rumble's own service is down: Ollama is not the problem, so don't send the user there.
+    state.value = "no-service";
+    errorDetail.value = service.error ?? "";
+    return;
+  }
 
   try {
     await health();
@@ -92,6 +115,25 @@ onMounted(checkStatus);
       >
         <div class="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary-200)] border-t-[var(--accent-500)]" />
         <p class="text-[var(--primary-600)]">Checking your setup...</p>
+      </div>
+
+      <!-- Rumble's local service refused to start or exited -->
+      <div
+        v-else-if="state === 'no-service'"
+        class="rounded-xl border border-[var(--primary-200)] bg-white p-8 shadow-sm"
+      >
+        <div class="space-y-6">
+          <div>
+            <h2 class="text-xl font-semibold text-[var(--primary-900)]">Rumble's local service didn't start</h2>
+            <p class="mt-1 text-sm text-[var(--primary-500)]">
+              This is a problem inside Rumble, not with Ollama. Fix what it says below, then quit and reopen Rumble.
+            </p>
+          </div>
+
+          <p v-if="errorDetail" class="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+            {{ errorDetail }}
+          </p>
+        </div>
       </div>
 
       <!-- Ollama not installed / not running -->
@@ -234,7 +276,7 @@ onMounted(checkStatus);
       <p class="text-center text-xs text-[var(--primary-400)]">
         You can return to this page anytime from Settings.
         <button
-          v-if="state === 'no-ollama' || state === 'no-models'"
+          v-if="state === 'no-service' || state === 'no-ollama' || state === 'no-models'"
           class="ml-1 underline"
           @click="proceed"
         >
