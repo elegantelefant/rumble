@@ -184,6 +184,8 @@ impl AppState {
     fn next_sidecar_generation(&self) -> u64 {
         let mut generation = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
         *generation += 1;
+        // The new sidecar has not failed; an earlier one's reason no longer applies.
+        self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).take();
         *generation
     }
 
@@ -200,13 +202,13 @@ impl AppState {
     }
 
     /// Records that `generation`'s sidecar has exited, if it is still current: no port,
-    /// no child to stop, and a failure unless one is already recorded.
+    /// and a failure unless one is already recorded.
     fn mark_terminated_if_current(&self, generation: u64, code: Option<i32>) {
-        if !self.set_port_if_current(generation, None) {
-            return;
+        let current = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        if *current == generation {
+            *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            self.record_sidecar_failure(sidecar_exited_message(code));
         }
-        self.sidecar_child.lock().unwrap_or_else(|e| e.into_inner()).take();
-        self.record_sidecar_failure(sidecar_exited_message(code));
     }
 
     /// Keeps the first recorded failure: a refused respawn stops the running sidecar,
@@ -215,8 +217,23 @@ impl AppState {
         self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(message);
     }
 
-    fn clear_sidecar_failure(&self) {
-        self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).take();
+    /// Records `generation`'s sidecar as failed, if it is still current, and hands back
+    /// its child for the caller to stop: a sidecar that never answered must not keep
+    /// the database open while the screen says it failed.
+    fn fail_if_current(&self, generation: u64, message: String) -> Option<CommandChild> {
+        let current = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        if *current != generation {
+            return None;
+        }
+        *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.record_sidecar_failure(message);
+        self.sidecar_child.lock().unwrap_or_else(|e| e.into_inner()).take()
+    }
+
+    /// Whether a sidecar may have the database open: anything but "failed", which is
+    /// recorded only once no sidecar of ours runs (refused, exited, or stopped unhealthy).
+    fn may_hold_database(&self) -> bool {
+        self.sidecar_phase().0 != "failed"
     }
 
     /// "running" with a port, else "failed" with a recorded failure, else "starting".
@@ -1058,7 +1075,6 @@ fn start_sidecar(app: &AppHandle) -> Result<(), String> {
         let mut sidecar_child = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner());
         *sidecar_child = Some(child);
     }
-    state.clear_sidecar_failure();
 
     // Read stdout in a background task, looking for PORT: confirmation
     let port_clone = port;
@@ -1086,6 +1102,10 @@ fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                                     }
                                     Err(e) => {
                                         log::error!("[sidecar] health check failed: {}", e);
+                                        let st = state_handle.state::<AppState>();
+                                        if let Some(child) = st.fail_if_current(generation, SIDECAR_UNHEALTHY_MESSAGE.to_string()) {
+                                            let _ = child.kill();
+                                        }
                                     }
                                 }
                             }
@@ -1153,6 +1173,8 @@ const DB_KEY_MISSING_MESSAGE: &str = "Rumble can't open your saved chats and rev
      in Settings to start again.";
 /// The first bytes of an unencrypted SQLite database (an encrypted one's are random).
 const PLAINTEXT_SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+const SIDECAR_UNHEALTHY_MESSAGE: &str =
+    "Rumble's local service started but didn't answer. Settings → Open logs folder has the details.";
 const SIDECAR_EXITED_MESSAGE: &str = "Rumble's local service stopped";
 const SIDECAR_EXITED_DETAILS: &str = "Settings → Open logs folder has the details.";
 const SIDECAR_RESTART_FAILED_MESSAGE: &str =
@@ -1324,11 +1346,12 @@ async fn wait_for_sidecar_exit(pidfile: &Path, timeout: Duration) -> bool {
 /// host records the port after PORT:, which follows the pidfile write) and its pidfile
 /// is there to wait on. A missing pidfile beside a running sidecar means another
 /// instance on this data dir overwrote it and then removed it on exit, so its absence
-/// would no longer mean "database closed". With no sidecar spawned (it refused to start,
-/// e.g. a missing database key) there is nothing to stop: the delete still waits for a
-/// pidfile a just-stopped sidecar may not have removed yet.
-fn check_ready_to_delete(sidecar_spawned: bool, port_known: bool, pidfile: &Path) -> Result<(), String> {
-    if !sidecar_spawned {
+/// would no longer mean "database closed". When no sidecar may hold the database (it
+/// refused to start, e.g. a missing database key, exited, or was stopped unhealthy) there
+/// is nothing to stop: the delete still waits for a pidfile a just-stopped sidecar may
+/// not have removed yet.
+fn check_ready_to_delete(sidecar_may_hold_db: bool, port_known: bool, pidfile: &Path) -> Result<(), String> {
+    if !sidecar_may_hold_db {
         return Ok(());
     }
     if !port_known {
@@ -1384,8 +1407,7 @@ async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
     let (old, new) = data_dirs(&app)?;
     let active = active_data_dir(&old, &new);
     let port_known = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_some();
-    let sidecar_spawned = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner()).is_some();
-    check_ready_to_delete(sidecar_spawned, port_known, &active.join(SIDECAR_PIDFILE))?;
+    check_ready_to_delete(state.may_hold_database(), port_known, &active.join(SIDECAR_PIDFILE))?;
     kill_sidecar(&state);
     // The old dir too, so a database left there can't be migrated back in.
     let deleted = delete_after_sidecar_exit(&active.join(SIDECAR_PIDFILE), &[&new, &old], SIDECAR_STOP_TIMEOUT).await;
@@ -1871,6 +1893,45 @@ mod tests {
         state.next_sidecar_generation();
         state.mark_terminated_if_current(replaced, Some(1));
         assert_eq!(state.sidecar_phase(), ("running", None));
+    }
+
+    #[test]
+    fn a_new_generation_starts_without_the_previous_failure() {
+        let state = make_state(BackendMode::Ollama, None);
+        state.record_sidecar_failure(DB_KEY_MISSING_MESSAGE.to_string());
+        state.next_sidecar_generation();
+        assert_eq!(state.sidecar_phase(), ("starting", None));
+    }
+
+    #[test]
+    fn a_sidecar_that_fails_its_health_check_is_failed_with_that_reason() {
+        let state = make_state(BackendMode::Ollama, None);
+        assert!(state.fail_if_current(0, SIDECAR_UNHEALTHY_MESSAGE.to_string()).is_none());
+        assert_eq!(state.sidecar_phase(), ("failed", Some(SIDECAR_UNHEALTHY_MESSAGE.to_string())));
+    }
+
+    #[test]
+    fn a_replaced_sidecars_failed_health_check_leaves_the_current_one_starting() {
+        let state = make_state(BackendMode::Ollama, None);
+        let replaced = 0;
+        state.next_sidecar_generation();
+        state.fail_if_current(replaced, SIDECAR_UNHEALTHY_MESSAGE.to_string());
+        assert_eq!(state.sidecar_phase(), ("starting", None));
+    }
+
+    #[test]
+    fn a_starting_or_running_sidecar_may_hold_the_database() {
+        assert_eq!(
+            [make_state(BackendMode::Ollama, None).may_hold_database(), make_state(BackendMode::Ollama, Some(4242)).may_hold_database()],
+            [true, true]
+        );
+    }
+
+    #[test]
+    fn an_exited_sidecar_no_longer_holds_the_database() {
+        let state = make_state(BackendMode::Ollama, Some(4242));
+        state.mark_terminated_if_current(0, Some(1));
+        assert!(!state.may_hold_database());
     }
 
     #[test]
