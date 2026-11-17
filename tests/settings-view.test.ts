@@ -308,6 +308,15 @@ describe("SettingsView", () => {
       expect(savedPayload().appearance.showChatSidebarByDefault).toBe(true)
     })
 
+    it("labels the template library as coming soon, since drafting doesn't read the folder yet", async () => {
+      const wrapper = await mountAndLoad()
+      await openTab(wrapper, "Templates")
+      expect([wrapper.text().includes("Template library (coming soon)"), wrapper.text().includes("reference the latest clauses")]).toEqual([
+        true,
+        false,
+      ])
+    })
+
     it("shows the host data directory as non-editable text in the storage tab", async () => {
       const dataDir = "/Users/test/Library/Application Support/com.elefant.rumble"
       mockCommands({

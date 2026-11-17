@@ -547,9 +547,9 @@ const selectedProviderDetails = computed(() =>
 
       <section v-else-if="activeTab === 'storage'" class="space-y-5">
         <div>
-          <h2 class="text-base font-semibold text-[var(--primary-800)]">Template library</h2>
+          <h2 class="text-base font-semibold text-[var(--primary-800)]">Template library (coming soon)</h2>
           <p class="text-xs text-[var(--primary-500)]">
-            Map Rumble to your firm template repository so drafting tools can reference the latest clauses.
+            Document Draft doesn't read this folder yet; it uses its built-in templates. The folder you choose is saved for when it does.
           </p>
         </div>
         <label class="text-sm font-medium text-[var(--primary-700)]">
