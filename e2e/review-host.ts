@@ -5,11 +5,12 @@ import { installFakeHost } from "./fake-host";
 
 export const REVIEWED_FILE = "Contract_2024.txt";
 export const REVIEW_SUMMARY = "Renewal clauses flagged: the term renews automatically each year.";
+export const EXTRACTED_TEXT = "MASTER SERVICES AGREEMENT. 1. Term. This agreement renews automatically each year.";
 export const FOLLOW_UP_REPLY = "Either party may terminate on 90 days' notice.";
 
 export function installReviewHost(page: Page) {
   return installFakeHost(page, {
-    extractedText: "MASTER SERVICES AGREEMENT. 1. Term. This agreement renews automatically each year.",
+    extractedText: EXTRACTED_TEXT,
     routes: {
       "POST /review": { job_id: "review-1", poll_url: "/review/review-1/result" },
       "GET /review/review-1/result": { id: "review-1", status: "completed", result: { summary: REVIEW_SUMMARY, issues: [] } },
@@ -20,14 +21,15 @@ export function installReviewHost(page: Page) {
   });
 }
 
-/** Uploads a document on /review and waits for the fake host's review to land. */
+/** Uploads a document on /review and waits until its review is ready to chat about. */
 export async function uploadReviewedDocument(page: Page) {
-  // The input exists before the view's change handler is wired up; wait for the mounted view.
+  // Wait for the mounted view, so the upload lands after a reload or navigation has settled.
   await expect(page.getByRole("heading", { name: "Start a new review" })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles({
     name: REVIEWED_FILE,
     mimeType: "text/plain",
     buffer: Buffer.from("MASTER SERVICES AGREEMENT"),
   });
-  await expect(page.getByText(REVIEW_SUMMARY).first()).toBeVisible();
+  // "Summary ready" shows only once the chat exists, so a follow-up can be sent; the summary alone shows earlier.
+  await expect(page.getByText("Summary ready")).toBeVisible();
 }

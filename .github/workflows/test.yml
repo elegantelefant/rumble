@@ -1,5 +1,5 @@
 # ABOUTME: CI workflow that runs frontend, Python, and Rust tests on every push/PR.
-# ABOUTME: Parallel jobs on ubuntu-latest: Vitest, Playwright, pytest and cargo test.
+# ABOUTME: Parallel jobs on ubuntu: Vitest, Playwright, pytest and cargo test.
 
 name: Test
 
@@ -42,6 +42,12 @@ jobs:
       - run: pnpm install
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e --workers=1
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
 
   python:
     name: Python (pytest)

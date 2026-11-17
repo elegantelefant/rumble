@@ -2,7 +2,8 @@
 // ABOUTME: Validates file upload UI, session list, chat interface, and workflow display.
 import { expect, test } from "@playwright/test";
 import { gotoRoute } from "./helpers";
-import { FOLLOW_UP_REPLY, installReviewHost, REVIEW_SUMMARY, REVIEWED_FILE, uploadReviewedDocument } from "./review-host";
+import { fakeHostCalls } from "./fake-host";
+import { EXTRACTED_TEXT, FOLLOW_UP_REPLY, installReviewHost, REVIEW_SUMMARY, REVIEWED_FILE, uploadReviewedDocument } from "./review-host";
 
 test.describe("Document Review", () => {
   test.beforeEach(async ({ page }) => {
@@ -44,6 +45,11 @@ test.describe("Document Review", () => {
       await expect(page.getByText("Summary ready")).toBeVisible();
     });
 
+    test("sends the extracted document text for review", async ({ page }) => {
+      const review = (await fakeHostCalls(page)).find((call) => call.path === "/review");
+      expect(review?.body).toMatchObject({ text: EXTRACTED_TEXT });
+    });
+
     test("shows the review in the chat", async ({ page }) => {
       await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
       // Once in the session list, once as the assistant's first message.
@@ -60,6 +66,8 @@ test.describe("Document Review", () => {
       await page.getByRole("button", { name: "Send" }).click();
       await expect(page.getByText("What are the termination clauses?")).toBeVisible();
       await expect(page.getByText(FOLLOW_UP_REPLY)).toBeVisible();
+      const streamed = (await fakeHostCalls(page)).find((call) => call.cmd === "stream_message");
+      expect(streamed).toMatchObject({ chatId: "chat-1", text: "What are the termination clauses?" });
     });
   });
 

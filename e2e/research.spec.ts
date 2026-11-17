@@ -1,7 +1,7 @@
 // ABOUTME: E2e tests for the Research Assistant view.
 // ABOUTME: Validates thread management, model selection, prompt submission, and workflow tips.
 import { expect, test } from "@playwright/test";
-import { installResearchHost, LOCAL_MODEL, RESEARCH_ANSWER } from "./fake-host";
+import { fakeHostCalls, installResearchHost, LOCAL_MODEL, RESEARCH_ANSWER } from "./fake-host";
 import { gotoRoute } from "./helpers";
 
 test.describe("Research Assistant", () => {
@@ -49,6 +49,11 @@ test.describe("Research Assistant", () => {
     await expect(page.getByText("What are the key GDPR requirements for data retention?")).toBeVisible();
     // Once as the thread's summary, once as the assistant's message.
     await expect(page.getByText(RESEARCH_ANSWER)).toHaveCount(2);
+    const research = (await fakeHostCalls(page)).find((call) => call.path === "/research");
+    expect(research?.body).toMatchObject({
+      question: "What are the key GDPR requirements for data retention?",
+      model: LOCAL_MODEL.id,
+    });
   });
 
   test("workflow notes are displayed", async ({ page }) => {

@@ -1,7 +1,7 @@
 // ABOUTME: Full interactive UX walkthrough — acts as a new user.
 // ABOUTME: Screenshots every page and exercises every clickable/typable interaction.
 import { expect, test } from "@playwright/test";
-import { installResearchHost, LOCAL_MODEL } from "./fake-host";
+import { installResearchHost, LOCAL_MODEL, RESEARCH_ANSWER } from "./fake-host";
 import { gotoRoute } from "./helpers";
 import { FOLLOW_UP_REPLY, installReviewHost, REVIEW_SUMMARY, REVIEWED_FILE, uploadReviewedDocument } from "./review-host";
 
@@ -399,6 +399,8 @@ test.describe("6. Research Assistant", () => {
     await page.screenshot({ path: S("06e-research-typing-prompt"), fullPage: true });
     await page.getByRole("button", { name: "Start Research" }).click();
     await expect(page.getByText("PDPA compliance")).toBeVisible();
+    // Once as the thread's summary, once as the assistant's message.
+    await expect(page.getByText(RESEARCH_ANSWER)).toHaveCount(2);
     await page.screenshot({ path: S("06f-research-prompt-submitted"), fullPage: true });
   });
 
