@@ -14,7 +14,7 @@ import { CONFIDENTIALITY } from "../composables/backendMode";
 type SetupState = "checking" | "no-service" | "no-ollama" | "no-models" | "ready";
 
 // How long setup waits for the local service to finish starting: a first launch
-// may be encrypting a large existing database (#159).
+// may be migrating a large existing database (#159).
 const SIDECAR_START_WAIT_MS = 120_000;
 const SIDECAR_START_POLL_MS = 500;
 
