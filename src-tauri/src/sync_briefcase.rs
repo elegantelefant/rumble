@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::sync_crypto::{
-    self, Body, DeviceFields, DeviceKeys, Epoch, Hash, Header, KeyFields, Member, Membership, PublicKey,
-    RecordError, VersionFields,
+    self, Body, DeviceFields, DeviceKeys, Epoch, Hash, Header, KeyFields, Link, Member, Membership, PublicKey,
+    RecordError, RequestFields, VersionFields,
 };
 
 /// Opens the plaintext genesis file, which holds a nonce and the creator's admin key and nothing else.
@@ -24,6 +24,13 @@ const UUID_CHARS: usize = 36;
 const RESTORE_HASH_HEX: usize = 8;
 const FIRST_EPOCH: u64 = 1;
 const READ_CHUNK_BYTES: usize = 64 * 1024;
+/// An invite stops admitting requests this long after its admin issued it, by that admin's clock.
+const INVITE_TTL_DAYS: i64 = 7;
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+/// The signed link this device answered, kept locally to compute its side of the safety number.
+const LINK_FILE: &str = "link";
+/// Present once this device's user tapped "Numbers match" (or created the matter): writes allowed.
+const CONFIRMED_FILE: &str = "confirmed";
 
 /// A verified record in this device's store: its signature, uuid and matter have been checked.
 struct Record {
@@ -50,6 +57,14 @@ struct Opened {
     /// Every epoch a verified `key` record carries, accepted or not: enough to decrypt, not to write.
     epochs: Vec<Epoch>,
     seen: HashSet<(Uuid, Hash)>,
+}
+
+/// The admin chain as it stood at some heads.
+#[derive(Default)]
+struct View {
+    membership: Membership,
+    invites: HashMap<Uuid, Vec<u8>>,
+    closed: HashSet<Uuid>,
 }
 
 /// One file's version graph. Identical versions (same parents, same content) count once.
@@ -82,7 +97,14 @@ pub struct State {
     pub epochs: Vec<Epoch>,
     /// Device → (seq, fields) of its newest self-description.
     pub devices: HashMap<PublicKey, (u64, DeviceFields)>,
-    pub requests: HashMap<PublicKey, (u64, DeviceFields)>,
+    /// The admins' inbox: device → (the open invite it answered, its newest request). Never matter state.
+    pub requests: HashMap<PublicKey, (Uuid, DeviceFields)>,
+    /// Open invites that two devices answered: "Two people answered this invite". Neither is approvable.
+    pub contested: BTreeSet<Uuid>,
+    /// Every invite issued in the admin chain → its signed link bytes.
+    invites: HashMap<Uuid, Vec<u8>>,
+    /// Invites approved or revoked.
+    closed: HashSet<Uuid>,
     pub versions: HashMap<Hash, Header>,
     pub files: BTreeMap<Uuid, FileHistory>,
     pub held: Vec<Uuid>,
@@ -126,22 +148,54 @@ impl State {
 
     /// Membership as the admin chain stood at `heads`: their ancestors' approvals, plus every cutoff.
     fn membership_at(&self, heads: &[Hash]) -> Membership {
-        let mut m = Membership { removed: self.roll.removed.clone(), ..Membership::default() };
-        m.admins.extend(self.genesis_admin);
-        m.members.extend(self.genesis_admin);
+        Membership { removed: self.roll.removed.clone(), ..self.view(heads).membership }
+    }
+
+    /// Every accepted admin file `heads` reach, `heads` included.
+    fn ancestors(&self, heads: &[Hash]) -> Vec<&Header> {
         let mut stack = heads.to_vec();
         let mut visited = HashSet::new();
+        let mut chain = Vec::new();
         while let Some(h) = stack.pop() {
             let Some(header) = self.admin.get(&h).filter(|_| visited.insert(h)) else { continue };
-            if let Body::Member(Member::Approve { device, admin, invite: None }) = &header.body {
-                m.members.insert(*device);
-                if *admin {
-                    m.admins.insert(*device);
-                }
-            }
+            chain.push(header);
             stack.extend(&header.parents);
         }
-        m
+        chain
+    }
+
+    /// The admin chain as it stood at `heads`: who is an admin or a member, and which invites exist.
+    fn view(&self, heads: &[Hash]) -> View {
+        let mut v = View::default();
+        v.membership.admins.extend(self.genesis_admin);
+        v.membership.members.extend(self.genesis_admin);
+        for header in self.ancestors(heads) {
+            match &header.body {
+                Body::Member(Member::Approve { device, admin, invite }) => {
+                    v.membership.members.insert(*device);
+                    if *admin {
+                        v.membership.admins.insert(*device);
+                    }
+                    v.closed.extend(invite);
+                }
+                Body::Member(Member::Invite { link }) => {
+                    let invite = Link::verify(link).expect("accepted invites verify").invite;
+                    v.invites.insert(invite, link.clone());
+                }
+                Body::Member(Member::Revoke { invite }) => {
+                    v.closed.insert(*invite);
+                }
+                _ => {}
+            }
+        }
+        v
+    }
+
+    /// The admin's side of the safety number for a request: computed from its own stored `invite`
+    /// record, never from the link the request carries.
+    pub fn safety_number(&self, device: &PublicKey) -> Option<String> {
+        let (invite, _) = self.requests.get(device)?;
+        Some(sync_crypto::safety_number(self.invites.get(invite)?, device))
     }
 
     /// The receiving keys of every device approved and not removed, as their own records describe them.
@@ -179,6 +233,7 @@ pub struct Briefcase<'k> {
     pub id: Hash,
     keys: &'k DeviceKeys,
     transport: PathBuf,
+    root: PathBuf,
     store: PathBuf,
     temp: PathBuf,
 }
@@ -189,7 +244,7 @@ impl<'k> Briefcase<'k> {
         let (store, temp) = (root.join("store"), root.join("tmp"));
         fs::create_dir_all(&store)?;
         fs::create_dir_all(&temp)?;
-        Ok(Briefcase { id, keys, transport: transport.into(), store, temp })
+        Ok(Briefcase { id, keys, transport: transport.into(), root, store, temp })
     }
 
     /// Start a briefcase: the genesis file, the first epoch's `key` file, and this device's own record.
@@ -198,6 +253,7 @@ impl<'k> Briefcase<'k> {
         rand_core::OsRng.fill_bytes(&mut nonce);
         let genesis = [GENESIS_MAGIC, &nonce, &keys.signer()].concat();
         let briefcase = Briefcase::open(Sha256::digest(&genesis).into(), keys, transport, data)?;
+        fs::write(briefcase.root.join(CONFIRMED_FILE), b"")?;
         briefcase.publish(Uuid::new_v4(), |out| Ok(io::Write::write_all(out, &genesis)?))?;
         let mut state = briefcase.sync()?;
         let epoch = Epoch::generate(FIRST_EPOCH);
@@ -208,22 +264,85 @@ impl<'k> Briefcase<'k> {
         Ok(briefcase)
     }
 
-    /// A join request: this device's own record, readable by members through the link's epoch recipient.
-    pub fn request(&self, epoch: &x25519::Recipient, display_name: &str) -> Result<Hash, RecordError> {
-        let mut state = self.sync()?;
-        self.describe(&mut state, epoch, display_name)
+    /// Issue an invite in the admin chain; returns the signed link bytes, which carry no key.
+    pub fn invite(&self, invitee_name: &str) -> Result<Vec<u8>, RecordError> {
+        let mut state = self.writable_as_admin()?;
+        if !state.invites.is_empty() && state.roll.admins.len() < 2 {
+            return Err(RecordError::NeedsSecondAdmin);
+        }
+        let me = self.keys.signer();
+        let link = Link {
+            invite: Uuid::new_v4(),
+            briefcase_id: self.id,
+            epoch_recipient: state.current_epoch().ok_or(RecordError::NotMember)?.recipient().to_string(),
+            admin: me,
+            admin_name: state.devices.get(&me).map(|(_, d)| d.display_name.clone()).unwrap_or_default(),
+            invitee_name: invitee_name.into(),
+            issued_at_ms: chrono::Utc::now().timestamp_millis(),
+        }
+        .sign(self.keys)?;
+        self.admin_record(&mut state, Member::Invite { link: link.clone() })?;
+        Ok(link)
     }
 
-    pub fn approve(&self, device: PublicKey, admin: bool) -> Result<Hash, RecordError> {
+    pub fn revoke(&self, invite: Uuid) -> Result<Hash, RecordError> {
         let mut state = self.writable_as_admin()?;
-        let (_, fields) = state.requests.get(&device).ok_or(RecordError::Malformed("no request from that device"))?;
+        self.admin_record(&mut state, Member::Revoke { invite })
+    }
+
+    /// A join request answering `link`: this device's own record and the link, readable by members only
+    /// (through the link's epoch recipient). The link is kept locally for this side's safety number.
+    pub fn request(&self, link: &[u8], display_name: &str) -> Result<Hash, RecordError> {
+        let parsed = Link::verify(link)?;
+        if parsed.briefcase_id != self.id {
+            return Err(RecordError::ForeignMatter);
+        }
+        let epoch: x25519::Recipient = parsed.epoch_recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
+        fs::write(self.root.join(LINK_FILE), link)?;
+        let mut state = self.sync()?;
+        let me = self.keys.recipient();
+        let device = DeviceFields { display_name: display_name.into(), recipient: me.to_string() };
+        let body = Body::Request(RequestFields { device, link: link.into() });
+        let head = Some(state.admin_head(&self.keys.signer()));
+        self.seal_record(&mut state, vec![], head, body, |header, out| {
+            sync_crypto::seal(self.keys, header, io::empty(), &[&epoch, &me], out)
+        })
+    }
+
+    /// The joiner's side of the safety number, from the link it holds.
+    pub fn safety_number(&self) -> Result<String, RecordError> {
+        Ok(sync_crypto::safety_number(&fs::read(self.root.join(LINK_FILE))?, &self.keys.signer()))
+    }
+
+    /// The joiner taps "Numbers match": only then does this device write to the matter.
+    pub fn confirm(&self, number: &str) -> Result<(), RecordError> {
+        if number != self.safety_number()? {
+            return Err(RecordError::SafetyNumberMismatch);
+        }
+        Ok(fs::write(self.root.join(CONFIRMED_FILE), b"")?)
+    }
+
+    /// The admin taps "Numbers match": approve the device, closing its invite, and wrap every epoch to it.
+    pub fn approve(&self, device: PublicKey, admin: bool, number: &str) -> Result<Hash, RecordError> {
+        let mut state = self.writable_as_admin()?;
+        if state.safety_number(&device).as_deref() != Some(number) {
+            return Err(RecordError::SafetyNumberMismatch);
+        }
+        let (invite, fields) = &state.requests[&device];
+        let invite = Some(*invite);
         let joiner: x25519::Recipient = fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
-        let approval = self.admin_record(&mut state, Member::Approve { device, admin, invite: None })?;
+        let approval = self.admin_record(&mut state, Member::Approve { device, admin, invite })?;
         let devices = [vec![joiner], state.member_recipients()?].concat();
         for epoch in state.epochs.clone() {
             self.write_key_file(&mut state, vec![approval], &epoch, &devices)?;
         }
         Ok(approval)
+    }
+
+    /// Make a member an admin.
+    pub fn promote(&self, device: PublicKey) -> Result<Hash, RecordError> {
+        let mut state = self.writable_as_admin()?;
+        self.admin_record(&mut state, Member::Approve { device, admin: true, invite: None })
     }
 
     /// Remove a device after its last record this device accepted, then move the matter to a new epoch.
@@ -284,7 +403,8 @@ impl<'k> Briefcase<'k> {
             let opened = self.open_store()?;
             let (imported, present, unverified) = self.import(&opened)?;
             if imported == 0 {
-                let state = fold(self.id, self.keys.signer(), opened, unverified);
+                let now_ms = chrono::Utc::now().timestamp_millis();
+                let state = fold(self.id, self.keys.signer(), now_ms, opened, unverified);
                 self.write_back(&state, &present)?;
                 return Ok(state);
             }
@@ -298,6 +418,9 @@ impl<'k> Briefcase<'k> {
         }
         if !state.is_member(&self.keys.signer()) {
             return Err(RecordError::NotMember);
+        }
+        if !self.root.join(CONFIRMED_FILE).exists() {
+            return Err(RecordError::NotConfirmed);
         }
         Ok(state)
     }
@@ -554,7 +677,7 @@ impl Opened {
 
 /// Judge every verified record: the admin chain from genesis, removal cutoffs, `key` records, then
 /// device and version records at their own `admin_head`. Order of arrival never matters.
-fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, RecordError)>) -> State {
+fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(String, RecordError)>) -> State {
     let mut state = State { id, unverified, ..State::default() };
     state.own = opened.records.iter().filter(|r| r.header.signer == me).max_by_key(|r| r.header.seq).map(|r| (r.header.seq, r.header.record_hash()));
     let Some(genesis) = opened.genesis else { return state };
@@ -613,12 +736,7 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
             if parents.is_empty() || !parents.iter().all(|p| state.knows_admin_file(p)) {
                 return true;
             }
-            let at = state.membership_at(parents);
-            let verdict = match &r.header.body {
-                _ if !at.admins.contains(&r.header.signer) => Err(RecordError::NotAdmin),
-                Body::Member(Member::Remove { device, .. }) if at.admins.contains(device) => Err(RecordError::RemovesTheLastAdmin),
-                _ => Ok(()),
-            };
+            let verdict = judge_admin_file(&state.view(parents), &r.header);
             match verdict {
                 Ok(()) => {
                     state.admin.insert(*hash, r.header.clone());
@@ -647,8 +765,9 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
         state.roll.removed.entry(device).and_modify(|k| k.retain(|h| kept.contains(h))).or_insert(kept);
     }
     let all: Vec<Hash> = state.admin.keys().copied().collect();
-    let Membership { admins, members, .. } = state.membership_at(&all);
-    (state.roll.admins, state.roll.members) = (admins, members);
+    let View { membership: Membership { admins, members, .. }, invites, closed } = state.view(&all);
+    (state.roll.admins, state.roll.members, state.invites, state.closed) = (admins, members, invites, closed);
+    let mut answers: HashMap<Uuid, HashMap<PublicKey, (u64, DeviceFields)>> = HashMap::new();
 
     let mut by_kind: Vec<(&Hash, &Record)> = records.iter().filter(|(_, r)| !matches!(r.header.body, Body::Member(_))).collect();
     // `key` records first: versions need the accepted epochs.
@@ -691,10 +810,24 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
                     continue;
                 }
                 match &h.body {
+                    // A request from a device not yet approved goes to the inbox, and only for an open invite.
+                    Body::Request(RequestFields { device, link }) if !state.roll.members.contains(&h.signer) => {
+                        if let Some(invite) = open_invite(&state, link, now_ms) {
+                            insert_newest(answers.entry(invite).or_default(), h, device);
+                        }
+                        continue;
+                    }
+                    // An approved device's request is its first self-description, judged at this device's head.
+                    Body::Request(RequestFields { device: fields, .. }) => {
+                        let verdict = state.roll.admit(h);
+                        if verdict.is_ok() {
+                            insert_newest(&mut state.devices, h, fields);
+                        }
+                        verdict
+                    }
                     // A device describes itself before it is approved, so it is judged at this device's head.
                     Body::Device(fields) => {
                         if !state.roll.members.contains(&h.signer) && !state.roll.removed.contains_key(&h.signer) {
-                            insert_newest(&mut state.requests, h, fields);
                             continue;
                         }
                         let verdict = state.roll.admit(h);
@@ -715,7 +848,6 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
                             false => Err(RecordError::WrongEpoch),
                         }
                     }),
-                    Body::Request(_) => continue,
                     Body::Key(_) | Body::Member(_) => unreachable!("sorted out above"),
                 }
             }
@@ -725,8 +857,53 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
             Err(e) => state.rejected.push((r.uuid, e)),
         }
     }
+    // Two devices answering one invite means someone else holds the link: neither can be approved.
+    for (invite, devices) in answers {
+        match devices.len() {
+            1 => state.requests.extend(devices.into_iter().map(|(d, (_, fields))| (d, (invite, fields)))),
+            _ => {
+                state.contested.insert(invite);
+            }
+        }
+    }
     state.files = histories(&state.versions);
     state
+}
+
+/// Whether an admin file is valid where its parents stand: an admin signs it, and it acts on what exists.
+fn judge_admin_file(at: &View, h: &Header) -> Result<(), RecordError> {
+    let m = &at.membership;
+    let open = |invite: &Uuid| at.invites.contains_key(invite) && !at.closed.contains(invite);
+    if !m.admins.contains(&h.signer) {
+        return Err(RecordError::NotAdmin);
+    }
+    match &h.body {
+        Body::Member(Member::Remove { device, .. }) if m.admins.contains(device) => Err(RecordError::RemovesTheLastAdmin),
+        Body::Member(Member::Approve { invite: Some(invite), .. }) if !open(invite) => Err(RecordError::InviteNotOpen),
+        Body::Member(Member::Approve { device, invite: None, .. }) if !m.members.contains(device) => Err(RecordError::NotMember),
+        Body::Member(Member::Revoke { invite }) if !open(invite) => Err(RecordError::InviteNotOpen),
+        Body::Member(Member::Invite { link }) => {
+            let parsed = Link::verify(link)?;
+            if parsed.admin != h.signer || parsed.briefcase_id != h.briefcase_id || at.invites.contains_key(&parsed.invite) {
+                return Err(RecordError::Malformed("invite"));
+            }
+            // A second admin before the second invite: one lost laptop must not strand the matter.
+            match !at.invites.is_empty() && m.admins.len() < 2 {
+                true => Err(RecordError::NeedsSecondAdmin),
+                false => Ok(()),
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The invite a request answers: only if its link is exactly one an admin of this matter issued in the
+/// admin chain, still open, and younger than `INVITE_TTL_DAYS` by this device's clock.
+fn open_invite(state: &State, link: &[u8], now_ms: i64) -> Option<Uuid> {
+    let parsed = Link::verify(link).ok()?;
+    let issued = state.invites.get(&parsed.invite).filter(|issued| issued.as_slice() == link)?;
+    let fresh = now_ms.saturating_sub(Link::verify(issued).ok()?.issued_at_ms) <= INVITE_TTL_DAYS * DAY_MS;
+    (!state.closed.contains(&parsed.invite) && fresh).then_some(parsed.invite)
 }
 
 /// A device may describe itself more than once; its highest-seq record wins, whatever the read order.
@@ -871,20 +1048,36 @@ mod tests {
         }
     }
 
-    /// The link's epoch recipient goes to the joiner out of band; the joiner requests; an admin approves.
-    fn join(admin: &Laptop, joiner: &Laptop, id: Hash, t: &Path, name: &str) {
-        let link = admin.on(id, t).sync().unwrap().current_epoch().unwrap().recipient();
+    /// An admin invites; the link goes to the joiner out of band; the joiner requests. Returns the
+    /// joiner's safety number.
+    fn ask(admin: &Laptop, joiner: &Laptop, id: Hash, t: &Path, name: &str) -> String {
+        let link = admin.on(id, t).invite(name).unwrap();
         joiner.on(id, t).request(&link, name).unwrap();
-        admin.on(id, t).approve(joiner.keys.signer(), false).unwrap();
+        joiner.on(id, t).safety_number().unwrap()
     }
 
-    /// Ana creates a briefcase; every other laptop joins it.
+    /// Ask, then both sides tap "Numbers match".
+    fn join_as(admin: &Laptop, joiner: &Laptop, id: Hash, t: &Path, name: &str, as_admin: bool) {
+        let number = ask(admin, joiner, id, t, name);
+        admin.on(id, t).approve(joiner.keys.signer(), as_admin, &number).unwrap();
+        joiner.on(id, t).confirm(&number).unwrap();
+    }
+
+    fn join(admin: &Laptop, joiner: &Laptop, id: Hash, t: &Path, name: &str) {
+        join_as(admin, joiner, id, t, name, false);
+    }
+
+    /// Ana creates a briefcase; every other laptop joins it. With a third, the second is made an admin
+    /// first, as the second-admin rule asks.
     fn team(n: usize) -> (tempfile::TempDir, Hash, Vec<Laptop>) {
         let t = tempfile::tempdir().unwrap();
         let laptops: Vec<Laptop> = (0..n).map(|_| Laptop::new()).collect();
         let id = Briefcase::create(&laptops[0].keys, t.path(), laptops[0].data.path(), "Ana Lim").unwrap().id;
         for (i, joiner) in laptops.iter().enumerate().skip(1) {
             join(&laptops[0], joiner, id, t.path(), &format!("Member {i}"));
+            if i == 1 && n > 2 {
+                laptops[0].on(id, t.path()).promote(joiner.keys.signer()).unwrap();
+            }
         }
         (t, id, laptops)
     }
@@ -959,16 +1152,21 @@ mod tests {
         // Ana creates the matter, adds nda.docx as v1 and stops.
         let id = Briefcase::create(&ana.keys, t, ana.data.path(), "Ana Lim").unwrap().id;
         let v1 = ana.save(id, t, b"NDA v1 by Ana", vec![]);
-        let link = ana.on(id, t).sync().unwrap().current_epoch().unwrap().recipient();
+        let link = ana.on(id, t).invite("Ben Tan").unwrap();
 
-        // Ben opens the link, requests and stops; he can open nothing yet.
+        // Ben opens the link, requests, sees the number and stops; he can open nothing yet.
         ben.on(id, t).request(&link, "Ben Tan").unwrap();
+        let bens_number = ben.on(id, t).safety_number().unwrap();
         assert!(ben.on(id, t).sync().unwrap().versions.is_empty());
 
-        // Ana starts, sees the request, approves and stops.
+        // Ana starts, sees the request with the same number, taps "Numbers match" and stops.
         let state = ana.on(id, t).sync().unwrap();
         assert_eq!(state.requests[&ben.keys.signer()].1.display_name, "Ben Tan");
-        ana.on(id, t).approve(ben.keys.signer(), false).unwrap();
+        assert_eq!(state.safety_number(&ben.keys.signer()).unwrap(), bens_number);
+        ana.on(id, t).approve(ben.keys.signer(), false, &bens_number).unwrap();
+
+        // Ben starts and taps "Numbers match" too.
+        ben.on(id, t).confirm(&bens_number).unwrap();
 
         // Ben starts, is in, and saves v2 on top of v1.
         assert!(ben.on(id, t).sync().unwrap().is_member(&ben.keys.signer()));
@@ -1244,12 +1442,185 @@ mod tests {
     fn removing_an_admin_is_rejected() {
         let (t, id, laptops) = team(1);
         let (ana, bea) = (&laptops[0], Laptop::new());
-        let link = ana.on(id, t.path()).sync().unwrap().current_epoch().unwrap().recipient();
-        bea.on(id, t.path()).request(&link, "Bea").unwrap();
-        ana.on(id, t.path()).approve(bea.keys.signer(), true).unwrap();
+        join_as(ana, &bea, id, t.path(), "Bea", true);
         ana.on(id, t.path()).remove(bea.keys.signer()).unwrap();
         let state = ana.on(id, t.path()).sync().unwrap();
         assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesTheLastAdmin)));
+    }
+
+    // ---- joining: no keys in the link, a safety number both sides confirm ----
+
+    /// A link Ana signs for this matter but never records as an invite, issued `days_ago`.
+    fn unrecorded_link(ana: &Laptop, state: &State, days_ago: i64) -> (Link, Vec<u8>) {
+        let link = Link {
+            invite: Uuid::new_v4(),
+            briefcase_id: state.id,
+            epoch_recipient: state.current_epoch().unwrap().recipient().to_string(),
+            admin: ana.keys.signer(),
+            admin_name: "Ana Lim".into(),
+            invitee_name: "Ben Tan".into(),
+            issued_at_ms: chrono::Utc::now().timestamp_millis() - days_ago * DAY_MS,
+        };
+        let signed = link.sign(&ana.keys).unwrap();
+        (link, signed)
+    }
+
+    /// Ana records `link` as an invite in the admin chain, as a client without the API's checks would.
+    fn record_invite(t: &Path, ana: &Laptop, state: &State, link: Vec<u8>) -> Header {
+        let epoch = state.current_epoch().unwrap().recipient();
+        forge_body(t, &ana.keys, state, state.tips(), None, Body::Member(Member::Invite { link }), b"", &[&epoch])
+    }
+
+    #[test]
+    fn stolen_link_opens_nothing() {
+        let (t, id, laptops) = team(1);
+        laptops[0].save(id, t.path(), b"v1", vec![]);
+        let thief = Laptop::new();
+        let link = laptops[0].on(id, t.path()).invite("Ben Tan").unwrap();
+        thief.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        let state = thief.on(id, t.path()).sync().unwrap();
+        assert!(state.epochs.is_empty() && state.versions.is_empty() && state.admin.is_empty());
+    }
+
+    #[test]
+    fn approved_joiner_cannot_write_before_tapping_numbers_match() {
+        let (t, id, laptops) = team(1);
+        let ben = Laptop::new();
+        let number = ask(&laptops[0], &ben, id, t.path(), "Ben Tan");
+        laptops[0].on(id, t.path()).approve(ben.keys.signer(), false, &number).unwrap();
+        let saved = ben.on(id, t.path()).save_version(FILE, "nda.docx", DOCX, &ben.doc(b"x"), vec![]);
+        assert!(matches!(saved, Err(RecordError::NotConfirmed)));
+    }
+
+    #[test]
+    fn joiner_cannot_confirm_a_number_that_differs() {
+        let (t, id, laptops) = team(1);
+        let ben = Laptop::new();
+        ask(&laptops[0], &ben, id, t.path(), "Ben Tan");
+        let other = sync_crypto::safety_number(b"another link", &ben.keys.signer());
+        assert!(matches!(ben.on(id, t.path()).confirm(&other), Err(RecordError::SafetyNumberMismatch)));
+    }
+
+    #[test]
+    fn admin_cannot_approve_with_a_number_that_differs() {
+        let (t, id, laptops) = team(1);
+        let ben = Laptop::new();
+        ask(&laptops[0], &ben, id, t.path(), "Ben Tan");
+        let other = sync_crypto::safety_number(b"another link", &ben.keys.signer());
+        assert!(matches!(laptops[0].on(id, t.path()).approve(ben.keys.signer(), false, &other), Err(RecordError::SafetyNumberMismatch)));
+    }
+
+    /// Someone re-signs Ben's link as its admin, keeping the invite id and the epoch recipient.
+    #[test]
+    fn request_answering_a_swapped_link_is_ignored() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben, mal) = (&laptops[0], Laptop::new(), Laptop::new());
+        let genuine = Link::verify(&ana.on(id, t.path()).invite("Ben Tan").unwrap()).unwrap();
+        let swapped = Link { admin: mal.keys.signer(), ..genuine }.sign(&mal.keys).unwrap();
+        ben.on(id, t.path()).request(&swapped, "Ben Tan").unwrap();
+        assert!(ana.on(id, t.path()).sync().unwrap().requests.is_empty());
+    }
+
+    #[test]
+    fn two_requests_on_one_invite_leave_neither_approvable() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben, mal) = (&laptops[0], Laptop::new(), Laptop::new());
+        let link = ana.on(id, t.path()).invite("Ben Tan").unwrap();
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        mal.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(state.requests.is_empty() && state.contested.contains(&Link::verify(&link).unwrap().invite));
+    }
+
+    #[test]
+    fn request_for_an_approved_invite_is_ignored() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben, mal) = (&laptops[0], Laptop::new(), Laptop::new());
+        let link = ana.on(id, t.path()).invite("Ben Tan").unwrap();
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        let number = ben.on(id, t.path()).safety_number().unwrap();
+        ana.on(id, t.path()).approve(ben.keys.signer(), false, &number).unwrap();
+        mal.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(state.requests.is_empty() && state.contested.is_empty());
+    }
+
+    #[test]
+    fn request_for_a_revoked_invite_is_ignored() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben) = (&laptops[0], Laptop::new());
+        let link = ana.on(id, t.path()).invite("Ben Tan").unwrap();
+        ana.on(id, t.path()).revoke(Link::verify(&link).unwrap().invite).unwrap();
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        assert!(ana.on(id, t.path()).sync().unwrap().requests.is_empty());
+    }
+
+    #[test]
+    fn request_for_an_expired_invite_is_ignored() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben) = (&laptops[0], Laptop::new());
+        let state = ana.on(id, t.path()).sync().unwrap();
+        let (_, link) = unrecorded_link(ana, &state, INVITE_TTL_DAYS + 1);
+        record_invite(t.path(), ana, &state, link.clone());
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        assert!(ana.on(id, t.path()).sync().unwrap().requests.is_empty());
+    }
+
+    #[test]
+    fn request_for_an_invite_never_recorded_is_ignored() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben) = (&laptops[0], Laptop::new());
+        let (_, link) = unrecorded_link(ana, &ana.on(id, t.path()).sync().unwrap(), 0);
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        assert!(ana.on(id, t.path()).sync().unwrap().requests.is_empty());
+    }
+
+    #[test]
+    fn second_invite_needs_a_second_admin() {
+        let (t, id, laptops) = team(2);
+        assert!(matches!(laptops[0].on(id, t.path()).invite("Cam"), Err(RecordError::NeedsSecondAdmin)));
+    }
+
+    #[test]
+    fn second_invite_is_issued_once_a_member_is_made_an_admin() {
+        let (t, id, laptops) = team(2);
+        laptops[0].on(id, t.path()).promote(laptops[1].keys.signer()).unwrap();
+        assert!(laptops[0].on(id, t.path()).invite("Cam").is_ok());
+    }
+
+    #[test]
+    fn second_invite_recorded_with_one_admin_is_rejected() {
+        let (t, id, laptops) = team(2);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let (_, link) = unrecorded_link(&laptops[0], &state, 0);
+        let forged = record_invite(t.path(), &laptops[0], &state, link);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::NeedsSecondAdmin)));
+    }
+
+    #[test]
+    fn approval_of_a_device_that_answered_no_invite_is_rejected() {
+        let (t, id, laptops) = team(1);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let epoch = state.current_epoch().unwrap().recipient();
+        let body = Body::Member(Member::Approve { device: DeviceKeys::generate().signer(), admin: false, invite: None });
+        let forged = forge_body(t.path(), &laptops[0].keys, &state, state.tips(), None, body, b"", &[&epoch]);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::NotMember)));
+    }
+
+    #[test]
+    fn approval_naming_a_revoked_invite_is_rejected() {
+        let (t, id, laptops) = team(1);
+        let ana = &laptops[0];
+        let invite = Link::verify(&ana.on(id, t.path()).invite("Ben Tan").unwrap()).unwrap().invite;
+        ana.on(id, t.path()).revoke(invite).unwrap();
+        let state = ana.on(id, t.path()).sync().unwrap();
+        let epoch = state.current_epoch().unwrap().recipient();
+        let body = Body::Member(Member::Approve { device: DeviceKeys::generate().signer(), admin: false, invite: Some(invite) });
+        let forged = forge_body(t.path(), &ana.keys, &state, state.tips(), None, body, b"", &[&epoch]);
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::InviteNotOpen)));
     }
 
     // ---- removal rotates the epoch ----
@@ -1376,19 +1747,16 @@ mod tests {
         for _ in 0..6 {
             let (t, id, laptops) = team(1);
             let t = t.path();
-            let (ana, bea, dee) = (&laptops[0], Laptop::new(), Laptop::new());
-            let link = ana.on(id, t).sync().unwrap().current_epoch().unwrap().recipient();
-            bea.on(id, t).request(&link, "Bea").unwrap();
-            ana.on(id, t).approve(bea.keys.signer(), true).unwrap();
-            let cam = Laptop::new();
-            cam.on(id, t).request(&link, "Cam").unwrap();
-            dee.on(id, t).request(&link, "Dee").unwrap();
-            bea.on(id, t).sync().unwrap();
+            let (ana, bea, cam, dee) = (&laptops[0], Laptop::new(), Laptop::new(), Laptop::new());
+            join_as(ana, &bea, id, t, "Bea", true);
+            let cams = ask(ana, &cam, id, t, "Cam");
+            let dees = ask(&bea, &dee, id, t, "Dee");
             let before = transport_names(t);
-            ana.on(id, t).approve(cam.keys.signer(), false).unwrap();
+            ana.on(id, t).approve(cam.keys.signer(), false, &cams).unwrap();
             let aside = withhold(t, &before);
-            bea.on(id, t).approve(dee.keys.signer(), false).unwrap();
+            bea.on(id, t).approve(dee.keys.signer(), false, &dees).unwrap();
             deliver(aside, t);
+            dee.on(id, t).confirm(&dees).unwrap();
             let v = dee.save(id, t, b"by Dee", vec![]);
             assert!(ana.on(id, t).sync().unwrap().versions.contains_key(&v));
         }
