@@ -134,6 +134,15 @@ impl State {
         m
     }
 
+    /// The receiving keys of every device approved and not removed, as their own records describe them.
+    fn member_recipients(&self) -> Result<Vec<x25519::Recipient>, RecordError> {
+        self.devices
+            .iter()
+            .filter(|(signer, _)| self.is_member(signer))
+            .map(|(_, (_, fields))| fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient")))
+            .collect()
+    }
+
     fn knows_admin_file(&self, h: &Hash) -> bool {
         *h == self.id || self.admin.contains_key(h)
     }
@@ -200,23 +209,28 @@ impl<'k> Briefcase<'k> {
         let (_, fields) = state.requests.get(&device).ok_or(RecordError::Malformed("no request from that device"))?;
         let joiner: x25519::Recipient = fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
         let approval = self.admin_record(&mut state, Member::Approve { device, admin, invite: None })?;
-        let mut devices = vec![joiner];
-        for (signer, (_, fields)) in &state.devices {
-            if state.is_member(signer) {
-                devices.push(fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?);
-            }
-        }
+        let devices = [vec![joiner], state.member_recipients()?].concat();
         for epoch in state.epochs.clone() {
             self.write_key_file(&mut state, vec![approval], &epoch, &devices)?;
         }
         Ok(approval)
     }
 
-    /// Remove a device after its last record this device accepted. Rotating the epoch is a later slice.
+    /// Remove a device after its last record this device accepted, then move the matter to a new epoch.
     pub fn remove(&self, device: PublicKey) -> Result<Hash, RecordError> {
         let mut state = self.writable_as_admin()?;
         let cutoff = state.last_accepted(&device);
-        self.admin_record(&mut state, Member::Remove { device, cutoff })
+        let removal = self.admin_record(&mut state, Member::Remove { device, cutoff })?;
+        self.rotate(removal)?;
+        Ok(removal)
+    }
+
+    /// A fresh epoch after `admin_file`, wrapped only to devices approved and not removed.
+    fn rotate(&self, admin_file: Hash) -> Result<Hash, RecordError> {
+        let mut state = self.sync()?;
+        let number = state.epochs.iter().map(|e| e.number).max().unwrap_or(0) + 1;
+        let devices = state.member_recipients()?;
+        self.write_key_file(&mut state, vec![admin_file], &Epoch::generate(number), &devices)
     }
 
     pub fn save_version(
@@ -1202,6 +1216,30 @@ mod tests {
         ana.on(id, t.path()).remove(bea.keys.signer()).unwrap();
         let state = ana.on(id, t.path()).sync().unwrap();
         assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesTheLastAdmin)));
+    }
+
+    // ---- removal rotates the epoch ----
+
+    /// Ana removes Dan, then Ben saves: what Ben writes is sealed to an epoch Dan was never given.
+    fn saved_after_a_removal() -> (tempfile::TempDir, Hash, Vec<Laptop>, Hash) {
+        let (t, id, laptops) = team(3);
+        laptops[0].on(id, t.path()).remove(laptops[2].keys.signer()).unwrap();
+        let v = laptops[1].save(id, t.path(), b"after Dan left", vec![]);
+        (t, id, laptops, v)
+    }
+
+    #[test]
+    fn removed_device_cannot_open_a_version_saved_after_its_removal() {
+        let (t, id, laptops, v) = saved_after_a_removal();
+        let uuid = uuid_of(&laptops[1].on(id, t.path()).sync().unwrap(), &v);
+        let dan = laptops[2].on(id, t.path()).sync().unwrap();
+        assert!(dan.epochs.iter().all(|e| !opens_with(&file_of(t.path(), uuid), &e.identity).unwrap()));
+    }
+
+    #[test]
+    fn remaining_member_reads_a_version_saved_after_a_removal() {
+        let (t, id, laptops, v) = saved_after_a_removal();
+        assert!(laptops[0].on(id, t.path()).sync().unwrap().versions.contains_key(&v));
     }
 
     // ---- regressions from the adversarial review ----
