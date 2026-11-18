@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { FileText, Edit3, Microscope, BookOpen, Globe, Settings, ArrowUp, ArrowDown } from "lucide-vue-next";
+import { FileText, Edit3, Microscope, BookOpen, Globe, Briefcase, Settings, ArrowUp, ArrowDown } from "lucide-vue-next";
 import { currentUser } from "../../composables/user";
 import { backendMode, CONFIDENTIALITY, confidentialityOf, loadBackendMode } from "../../composables/backendMode";
 
@@ -42,6 +42,7 @@ const reorderableToolDefinitions: ToolDefinition[] = [
     sublabel: "Coming Soon",
   },
   { label: "Translation", icon: Globe, path: "/translation" },
+  { label: "Matters", icon: Briefcase, path: "/matters" },
 ];
 
 const fixedToolDefinitions: ToolDefinition[] = [

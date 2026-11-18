@@ -134,6 +134,11 @@ pub struct State {
 }
 
 impl State {
+    /// The folder holds this briefcase's genesis file.
+    pub fn has_genesis(&self) -> bool {
+        self.genesis_admin.is_some()
+    }
+
     pub fn is_member(&self, device: &PublicKey) -> bool {
         self.roll.members.contains(device) && !self.roll.removed.contains_key(device)
     }
@@ -374,6 +379,11 @@ impl<'k> Briefcase<'k> {
         }
         let epoch: x25519::Recipient = parsed.epoch_recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
         fs::write(self.root.join(LINK_FILE), link)?;
+        // A confirmation was of the previous link's number; this link's number is confirmed afresh.
+        match fs::remove_file(self.root.join(CONFIRMED_FILE)) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e.into()),
+            _ => {}
+        }
         let mut state = self.sync()?;
         let me = self.keys.recipient();
         let device = DeviceFields { display_name: display_name.into(), recipient: me.to_string() };
@@ -387,6 +397,16 @@ impl<'k> Briefcase<'k> {
     /// The joiner's side of the safety number, from the link it holds.
     pub fn safety_number(&self) -> Result<String, RecordError> {
         Ok(sync_crypto::safety_number(&fs::read(self.root.join(LINK_FILE))?, &self.keys.signer()))
+    }
+
+    /// The link this device answered, if it joined rather than created the matter.
+    pub fn answered(&self) -> Option<Link> {
+        Link::verify(&fs::read(self.root.join(LINK_FILE)).ok()?).ok()
+    }
+
+    /// This device's user tapped "Numbers match", or created the matter.
+    pub fn confirmed(&self) -> bool {
+        self.root.join(CONFIRMED_FILE).exists()
     }
 
     /// The joiner taps "Numbers match": only then does this device write to the matter.
