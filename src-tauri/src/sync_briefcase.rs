@@ -61,6 +61,15 @@ pub struct FileHistory {
     pub forks: BTreeSet<Hash>,
 }
 
+/// Why admins are told about a device.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Flag {
+    /// Two different records with one signer and seq: the device is compromised.
+    Equivocation,
+    /// It and another admin removed each other concurrently; both removals are void.
+    MutualRemoval,
+}
+
 /// What this device makes of the briefcase after one fold. Derived from the store alone, every time.
 #[derive(Default)]
 pub struct State {
@@ -82,6 +91,7 @@ pub struct State {
     pub unverified: Vec<(String, RecordError)>,
     /// An admin file a member's record names that this device hasn't seen: new writes wait for it.
     pub write_block: Option<Hash>,
+    pub flags: BTreeSet<(PublicKey, Flag)>,
     own: Option<(u64, Hash)>,
     accepted: HashMap<Hash, (Uuid, Hash, PathBuf)>,
     /// Every accepted record's header, for walking a signer's own chain.
@@ -567,6 +577,26 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
         let r = records.remove(&hash).expect("collected from records");
         state.rejected.push((r.uuid, RecordError::Malformed("seq")));
     }
+    // Two different records with one signer and seq mean the device is compromised: everything it
+    // signed from that seq on is held until an admin decides. Admin and `key` records are held here;
+    // the rest below, unless the device is removed, when its cutoff already decides.
+    let mut slots: HashMap<(PublicKey, u64), Hash> = HashMap::new();
+    let mut twinned: HashMap<PublicKey, u64> = HashMap::new();
+    for (hash, r) in &records {
+        let (signer, seq) = (r.header.signer, r.header.seq);
+        if slots.insert((signer, seq), *hash).is_some() {
+            twinned.entry(signer).and_modify(|s| *s = (*s).min(seq)).or_insert(seq);
+        }
+    }
+    let held_from = |twinned: &HashMap<PublicKey, u64>, h: &Header| twinned.get(&h.signer).is_some_and(|seq| h.seq >= *seq);
+    records.retain(|_, r| match matches!(r.header.body, Body::Member(_) | Body::Key(_)) && held_from(&twinned, &r.header) {
+        true => {
+            state.held.push(r.uuid);
+            false
+        }
+        false => true,
+    });
+    state.flags.extend(twinned.keys().map(|d| (*d, Flag::Equivocation)));
     fn accept(state: &mut State, hash: Hash, r: &Record) {
         state.accepted.insert(hash, (r.uuid, r.ciphertext, r.path.clone()));
         state.signed.insert(hash, r.header.clone());
@@ -625,6 +655,10 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
     by_kind.sort_by_key(|(_, r)| !matches!(r.header.body, Body::Key(_)));
     for (hash, r) in by_kind {
         let h = &r.header;
+        if held_from(&twinned, h) && !state.roll.removed.contains_key(&h.signer) {
+            state.held.push(r.uuid);
+            continue;
+        }
         let verdict = match &h.body {
             Body::Key(_) => {
                 if h.parents.is_empty() || !h.parents.iter().all(|p| state.knows_admin_file(p)) {
@@ -1240,6 +1274,59 @@ mod tests {
     fn remaining_member_reads_a_version_saved_after_a_removal() {
         let (t, id, laptops, v) = saved_after_a_removal();
         assert!(laptops[0].on(id, t.path()).sync().unwrap().versions.contains_key(&v));
+    }
+
+    // ---- equivocation ----
+
+    /// Ben signs two different versions that both claim his next seq.
+    fn equivocated() -> (tempfile::TempDir, Hash, Vec<Laptop>, [Header; 2]) {
+        let (t, id, laptops) = team(2);
+        let state = laptops[1].on(id, t.path()).sync().unwrap();
+        let (seq, prev) = state.own.unwrap();
+        let (epoch, head) = (state.current_epoch().unwrap(), state.admin_head(&laptops[1].keys.signer()));
+        let twins = [0, 1].map(|_| forge(t.path(), &laptops[1].keys, id, seq + 1, Some(prev), head, epoch));
+        (t, id, laptops, twins)
+    }
+
+    #[test]
+    fn two_records_with_one_signer_and_seq_flag_the_device_compromised() {
+        let (t, id, laptops, _) = equivocated();
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(state.flags.contains(&(laptops[1].keys.signer(), Flag::Equivocation)));
+    }
+
+    #[test]
+    fn equivocating_records_are_held_not_accepted() {
+        let (t, id, laptops, twins) = equivocated();
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(twins.iter().all(|h| !state.versions.contains_key(&h.record_hash()) && state.held.contains(&h.uuid)));
+    }
+
+    #[test]
+    fn equivocating_admin_records_are_held_not_accepted() {
+        let (t, id, laptops) = team(2);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let (ben, epoch) = (laptops[1].keys.signer(), state.current_epoch().unwrap().recipient());
+        for _ in 0..2 {
+            let body = Body::Member(Member::Remove { device: ben, cutoff: state.last_accepted(&ben) });
+            forge_body(t.path(), &laptops[0].keys, &state, state.tips(), None, body, b"", &[&epoch]);
+        }
+        assert!(laptops[0].on(id, t.path()).sync().unwrap().is_member(&ben));
+    }
+
+    #[test]
+    fn honest_reencryption_of_one_record_is_not_equivocation() {
+        let (t, id, laptops) = team(2);
+        let v1 = laptops[1].save(id, t.path(), b"v1", vec![]);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let uuid = uuid_of(&state, &v1);
+        let epoch = state.current_epoch().unwrap();
+        let plain = age::decrypt(&epoch.identity, &fs::read(file_of(t.path(), uuid)).unwrap()).unwrap();
+        let again = age::encrypt(&epoch.recipient(), &plain).unwrap();
+        let hash8 = &hex::encode(Sha256::digest(&again))[..RESTORE_HASH_HEX];
+        fs::write(t.path().join(format!("{uuid}-{hash8}.rumble")), again).unwrap();
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(state.flags.is_empty() && state.versions.contains_key(&v1));
     }
 
     // ---- regressions from the adversarial review ----
