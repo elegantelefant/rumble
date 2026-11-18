@@ -24,6 +24,11 @@ const COPY_CHUNK_BYTES: usize = 64 * 1024;
 /// Decrypted plaintext is readable by the owner only while it waits in the temp folder.
 #[cfg(unix)]
 const TEMP_FILE_MODE: u32 = 0o600;
+/// Opens every invite link, so link bytes can never verify as a record header.
+const LINK_MAGIC: &[u8; 14] = b"rumble-link-v1";
+const SIGNATURE_BYTES: usize = 64;
+/// Bounds a signed link carried inside an `invite` or `request` record.
+const MAX_LINK_BYTES: usize = 4 * 1024;
 const SAFETY_DOMAIN: &[u8] = b"rumble-safety-v1";
 const SAFETY_DIGITS: usize = 60;
 const SAFETY_GROUP_DIGITS: usize = 5;
@@ -32,8 +37,11 @@ const KIND_VERSION: u8 = 1;
 const KIND_KEY: u8 = 2;
 const KIND_MEMBER: u8 = 3;
 const KIND_DEVICE: u8 = 4;
+const KIND_REQUEST: u8 = 5;
 const MEMBER_APPROVE: u8 = 1;
 const MEMBER_REMOVE: u8 = 2;
+const MEMBER_INVITE: u8 = 3;
+const MEMBER_REVOKE: u8 = 4;
 
 pub type Hash = [u8; 32];
 pub type PublicKey = [u8; 32];
@@ -52,7 +60,11 @@ pub enum RecordError {
     NotMember,
     NotAdmin,
     AfterRemovalCutoff,
-    RemovesAnAdmin,
+    RemovesTheLastAdmin,
+    NeedsSecondAdmin,
+    InviteNotOpen,
+    SafetyNumberMismatch,
+    NotConfirmed,
     WaitingForMembershipUpdate,
     EpochKeyMismatch,
     WrongEpoch,
@@ -137,11 +149,15 @@ pub struct KeyFields {
     pub epoch_recipient: String,
 }
 
-/// An admin's change to who may sign: approve a device, or remove it after its last accepted record.
+/// An admin's change to who may sign: approve a device (closing the invite it answered, or none to make
+/// a member an admin), remove it after its last accepted record, or issue or revoke an invite.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Member {
-    Approve { device: PublicKey, admin: bool },
+    Approve { device: PublicKey, admin: bool, invite: Option<Uuid> },
     Remove { device: PublicKey, cutoff: Option<Hash> },
+    /// The signed link bytes, kept so every admin computes the safety number from its own copy.
+    Invite { link: Vec<u8> },
+    Revoke { invite: Uuid },
 }
 
 /// A device describing itself; from a device not yet approved, it is a join request.
@@ -151,12 +167,20 @@ pub struct DeviceFields {
     pub recipient: String,
 }
 
+/// A join request: the joiner's self-description and the signed link it answers. Never matter state.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RequestFields {
+    pub device: DeviceFields,
+    pub link: Vec<u8>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
     Version(VersionFields),
     Key(KeyFields),
     Member(Member),
     Device(DeviceFields),
+    Request(RequestFields),
 }
 
 /// Every signed field of a record. `encode` is the one canonical form the signature covers.
@@ -184,6 +208,7 @@ impl Header {
             Body::Key(_) => KIND_KEY,
             Body::Member(_) => KIND_MEMBER,
             Body::Device(_) => KIND_DEVICE,
+            Body::Request(_) => KIND_REQUEST,
         });
         out.extend_from_slice(self.uuid.as_bytes());
         out.extend_from_slice(&self.signer);
@@ -207,19 +232,33 @@ impl Header {
                 out.extend_from_slice(&k.epoch.to_be_bytes());
                 put_text(&mut out, &k.epoch_recipient);
             }
-            Body::Member(Member::Approve { device, admin }) => {
+            Body::Member(Member::Approve { device, admin, invite }) => {
                 out.push(MEMBER_APPROVE);
                 out.extend_from_slice(device);
                 out.push(u8::from(*admin));
+                put_uuid_option(&mut out, invite);
             }
             Body::Member(Member::Remove { device, cutoff }) => {
                 out.push(MEMBER_REMOVE);
                 out.extend_from_slice(device);
                 put_hash_option(&mut out, cutoff);
             }
+            Body::Member(Member::Invite { link }) => {
+                out.push(MEMBER_INVITE);
+                put_text(&mut out, link);
+            }
+            Body::Member(Member::Revoke { invite }) => {
+                out.push(MEMBER_REVOKE);
+                out.extend_from_slice(invite.as_bytes());
+            }
             Body::Device(d) => {
                 put_text(&mut out, &d.display_name);
                 put_text(&mut out, &d.recipient);
+            }
+            Body::Request(r) => {
+                put_text(&mut out, &r.device.display_name);
+                put_text(&mut out, &r.device.recipient);
+                put_text(&mut out, &r.link);
             }
         }
         out
@@ -255,11 +294,17 @@ impl Header {
             }),
             KIND_KEY => Body::Key(KeyFields { epoch: r.u64()?, epoch_recipient: r.text()? }),
             KIND_MEMBER => Body::Member(match r.take(1)?[0] {
-                MEMBER_APPROVE => Member::Approve { device: r.array()?, admin: r.flag()? },
+                MEMBER_APPROVE => Member::Approve { device: r.array()?, admin: r.flag()?, invite: r.uuid_option()? },
                 MEMBER_REMOVE => Member::Remove { device: r.array()?, cutoff: r.hash_option()? },
+                MEMBER_INVITE => Member::Invite { link: r.bytes(MAX_LINK_BYTES, "link length")? },
+                MEMBER_REVOKE => Member::Revoke { invite: Uuid::from_bytes(r.array()?) },
                 _ => return Err(RecordError::Malformed("member action")),
             }),
             KIND_DEVICE => Body::Device(DeviceFields { display_name: r.text()?, recipient: r.text()? }),
+            KIND_REQUEST => Body::Request(RequestFields {
+                device: DeviceFields { display_name: r.text()?, recipient: r.text()? },
+                link: r.bytes(MAX_LINK_BYTES, "link length")?,
+            }),
             _ => return Err(RecordError::Malformed("kind")),
         };
         if !r.0.is_empty() {
@@ -284,9 +329,20 @@ fn put_hash_option(out: &mut Vec<u8>, h: &Option<Hash>) {
     }
 }
 
-fn put_text(out: &mut Vec<u8>, s: &str) {
+fn put_uuid_option(out: &mut Vec<u8>, u: &Option<Uuid>) {
+    match u {
+        Some(u) => {
+            out.push(1);
+            out.extend_from_slice(u.as_bytes());
+        }
+        None => out.push(0),
+    }
+}
+
+fn put_text(out: &mut Vec<u8>, s: impl AsRef<[u8]>) {
+    let s = s.as_ref();
     out.extend_from_slice(&(s.len() as u32).to_be_bytes());
-    out.extend_from_slice(s.as_bytes());
+    out.extend_from_slice(s);
 }
 
 struct Cursor<'a>(&'a [u8]);
@@ -322,12 +378,21 @@ impl<'a> Cursor<'a> {
             true => Ok(Some(self.array()?)),
         }
     }
-    fn text(&mut self) -> Result<String, RecordError> {
-        let len = self.u32()? as usize;
-        if len > MAX_TEXT_BYTES {
-            return Err(RecordError::Malformed("text length"));
+    fn uuid_option(&mut self) -> Result<Option<Uuid>, RecordError> {
+        match self.flag()? {
+            false => Ok(None),
+            true => Ok(Some(Uuid::from_bytes(self.array()?))),
         }
-        String::from_utf8(self.take(len)?.to_vec()).map_err(|_| RecordError::Malformed("utf8"))
+    }
+    fn bytes(&mut self, max: usize, what: &'static str) -> Result<Vec<u8>, RecordError> {
+        let len = self.u32()? as usize;
+        if len > max {
+            return Err(RecordError::Malformed(what));
+        }
+        Ok(self.take(len)?.to_vec())
+    }
+    fn text(&mut self) -> Result<String, RecordError> {
+        String::from_utf8(self.bytes(MAX_TEXT_BYTES, "text length")?).map_err(|_| RecordError::Malformed("utf8"))
     }
 }
 
@@ -536,6 +601,84 @@ fn copy_hashed(from: &mut impl Read, to: &mut File) -> Result<(u64, Hash), Recor
     }
 }
 
+/// An invite link: everything a joiner needs to ask, and no key that opens anything. No matter name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Link {
+    pub invite: Uuid,
+    pub briefcase_id: Hash,
+    /// The epoch's public recipient, so the request is readable by members only.
+    pub epoch_recipient: String,
+    pub admin: PublicKey,
+    pub admin_name: String,
+    pub invitee_name: String,
+    /// The issuing admin's clock; that admin's own clock decides when the invite expires.
+    pub issued_at_ms: i64,
+}
+
+impl Link {
+    fn encode(&self) -> Vec<u8> {
+        let mut out = LINK_MAGIC.to_vec();
+        out.extend_from_slice(self.invite.as_bytes());
+        out.extend_from_slice(&self.briefcase_id);
+        put_text(&mut out, &self.epoch_recipient);
+        out.extend_from_slice(&self.admin);
+        put_text(&mut out, &self.admin_name);
+        put_text(&mut out, &self.invitee_name);
+        out.extend_from_slice(&self.issued_at_ms.to_be_bytes());
+        out
+    }
+
+    /// The signed link bytes: the canonical link, then the admin's signature over it.
+    pub fn sign(&self, admin: &DeviceKeys) -> Result<Vec<u8>, RecordError> {
+        if self.admin != admin.signer() {
+            return Err(RecordError::SignerMismatch);
+        }
+        let mut bytes = self.encode();
+        // Refuse to sign what no peer could decode (oversized names).
+        Link::decode(&bytes)?;
+        if bytes.len() + SIGNATURE_BYTES > MAX_LINK_BYTES {
+            return Err(RecordError::Malformed("link length"));
+        }
+        let signature = admin.signing.sign(&bytes);
+        bytes.extend_from_slice(&signature.to_bytes());
+        Ok(bytes)
+    }
+
+    /// Decode signed link bytes, only if the admin key they name signed exactly these bytes.
+    pub fn verify(signed: &[u8]) -> Result<Link, RecordError> {
+        if signed.len() > MAX_LINK_BYTES || signed.len() < SIGNATURE_BYTES {
+            return Err(RecordError::Malformed("link length"));
+        }
+        let (bytes, sig) = signed.split_at(signed.len() - SIGNATURE_BYTES);
+        let link = Link::decode(bytes)?;
+        let sig: [u8; SIGNATURE_BYTES] = sig.try_into().expect("split at the signature length");
+        VerifyingKey::from_bytes(&link.admin)
+            .and_then(|k| k.verify_strict(bytes, &Signature::from_bytes(&sig)))
+            .map_err(|_| RecordError::BadSignature)?;
+        Ok(link)
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Link, RecordError> {
+        let mut r = Cursor(bytes);
+        if r.take(LINK_MAGIC.len())? != LINK_MAGIC {
+            return Err(RecordError::Malformed("link magic"));
+        }
+        let link = Link {
+            invite: Uuid::from_bytes(r.array()?),
+            briefcase_id: r.array()?,
+            epoch_recipient: r.text()?,
+            admin: r.array()?,
+            admin_name: r.text()?,
+            invitee_name: r.text()?,
+            issued_at_ms: r.u64()? as i64,
+        };
+        if !r.0.is_empty() {
+            return Err(RecordError::Malformed("link trailing bytes"));
+        }
+        Ok(link)
+    }
+}
+
 /// v1: `SHA-256("rumble-safety-v1" ‖ signed link bytes ‖ joiner's Ed25519 key)`, read as a big-endian
 /// integer mod 10^60, zero-padded, in 12 groups of 5 digits.
 pub fn safety_number(signed_link: &[u8], joiner: &PublicKey) -> String {
@@ -705,7 +848,14 @@ mod tests {
     #[test]
     fn member_and_device_headers_decode_to_themselves() {
         let bodies = [
-            Body::Member(Member::Approve { device: [0x77; 32], admin: true }),
+            Body::Member(Member::Approve { device: [0x77; 32], admin: true, invite: Some(Uuid::from_bytes([0x66; 16])) }),
+            Body::Member(Member::Approve { device: [0x77; 32], admin: false, invite: None }),
+            Body::Member(Member::Invite { link: vec![0x55; 300] }),
+            Body::Member(Member::Revoke { invite: Uuid::from_bytes([0x66; 16]) }),
+            Body::Request(RequestFields {
+                device: DeviceFields { display_name: "Ben Tan".into(), recipient: "age1x".into() },
+                link: vec![0x55; 300],
+            }),
             Body::Member(Member::Remove { device: [0x77; 32], cutoff: Some([0x88; 32]) }),
             Body::Member(Member::Remove { device: [0x77; 32], cutoff: None }),
             Body::Device(DeviceFields { display_name: "Ben Tan".into(), recipient: "age1x".into() }),
@@ -737,6 +887,40 @@ mod tests {
         let n = safety_number(b"", &[0u8; 32]);
         let groups: Vec<_> = n.split(' ').collect();
         assert!(groups.len() == 12 && groups.iter().all(|g| g.len() == 5 && g.bytes().all(|b| b.is_ascii_digit())));
+    }
+
+    fn link(admin: &DeviceKeys) -> Link {
+        Link {
+            invite: Uuid::from_bytes([0x66; 16]),
+            briefcase_id: BRIEFCASE,
+            epoch_recipient: "age1x".into(),
+            admin: admin.signer(),
+            admin_name: "Ana Lim".into(),
+            invitee_name: "Ben Tan".into(),
+            issued_at_ms: 1_763_337_600_000,
+        }
+    }
+
+    #[test]
+    fn signed_link_verifies_to_the_link_its_admin_signed() {
+        let admin = DeviceKeys::generate();
+        assert_eq!(Link::verify(&link(&admin).sign(&admin).unwrap()).unwrap(), link(&admin));
+    }
+
+    #[test]
+    fn link_with_a_changed_byte_fails_its_signature() {
+        let admin = DeviceKeys::generate();
+        let mut signed = link(&admin).sign(&admin).unwrap();
+        signed[LINK_MAGIC.len()] ^= 1;
+        assert!(matches!(Link::verify(&signed), Err(RecordError::BadSignature)));
+    }
+
+    #[test]
+    fn link_naming_an_admin_other_than_its_signer_fails_its_signature() {
+        let (admin, other) = (DeviceKeys::generate(), DeviceKeys::generate());
+        let mut bytes = link(&admin).encode();
+        bytes.extend_from_slice(&other.signing.sign(&bytes).to_bytes());
+        assert!(matches!(Link::verify(&bytes), Err(RecordError::BadSignature)));
     }
 
     #[test]

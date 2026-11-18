@@ -123,7 +123,7 @@ impl State {
         let mut visited = HashSet::new();
         while let Some(h) = stack.pop() {
             let Some(header) = self.admin.get(&h).filter(|_| visited.insert(h)) else { continue };
-            if let Body::Member(Member::Approve { device, admin }) = &header.body {
+            if let Body::Member(Member::Approve { device, admin, invite: None }) = &header.body {
                 m.members.insert(*device);
                 if *admin {
                     m.admins.insert(*device);
@@ -199,7 +199,7 @@ impl<'k> Briefcase<'k> {
         let mut state = self.writable_as_admin()?;
         let (_, fields) = state.requests.get(&device).ok_or(RecordError::Malformed("no request from that device"))?;
         let joiner: x25519::Recipient = fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
-        let approval = self.admin_record(&mut state, Member::Approve { device, admin })?;
+        let approval = self.admin_record(&mut state, Member::Approve { device, admin, invite: None })?;
         let mut devices = vec![joiner];
         for (signer, (_, fields)) in &state.devices {
             if state.is_member(signer) {
@@ -572,7 +572,7 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
             let at = state.membership_at(parents);
             let verdict = match &r.header.body {
                 _ if !at.admins.contains(&r.header.signer) => Err(RecordError::NotAdmin),
-                Body::Member(Member::Remove { device, .. }) if at.admins.contains(device) => Err(RecordError::RemovesAnAdmin),
+                Body::Member(Member::Remove { device, .. }) if at.admins.contains(device) => Err(RecordError::RemovesTheLastAdmin),
                 _ => Ok(()),
             };
             match verdict {
@@ -667,6 +667,7 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
                             false => Err(RecordError::WrongEpoch),
                         }
                     }),
+                    Body::Request(_) => continue,
                     Body::Key(_) | Body::Member(_) => unreachable!("sorted out above"),
                 }
             }
@@ -1146,7 +1147,7 @@ mod tests {
         let ben = &laptops[1];
         let state = ben.on(id, t.path()).sync().unwrap();
         let epoch = state.current_epoch().unwrap().recipient();
-        let body = Body::Member(Member::Approve { device: DeviceKeys::generate().signer(), admin: true });
+        let body = Body::Member(Member::Approve { device: DeviceKeys::generate().signer(), admin: true, invite: None });
         let forged = forge_body(t.path(), &ben.keys, &state, state.tips(), None, body, b"", &[&epoch]);
         let state = laptops[0].on(id, t.path()).sync().unwrap();
         assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::NotAdmin)));
@@ -1200,7 +1201,7 @@ mod tests {
         ana.on(id, t.path()).approve(bea.keys.signer(), true).unwrap();
         ana.on(id, t.path()).remove(bea.keys.signer()).unwrap();
         let state = ana.on(id, t.path()).sync().unwrap();
-        assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesAnAdmin)));
+        assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesTheLastAdmin)));
     }
 
     // ---- regressions from the adversarial review ----
