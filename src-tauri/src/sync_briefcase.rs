@@ -65,6 +65,11 @@ struct View {
     membership: Membership,
     invites: HashMap<Uuid, Vec<u8>>,
     closed: HashSet<Uuid>,
+    named: HashSet<(u64, String)>,
+    /// Admin files that count for nothing here: a removal whose signer another removal removed past it
+    /// (two admins removing each other concurrently both lose), and anything else an effectively
+    /// removed admin signed past its cutoff (no backdated branch).
+    void: HashSet<Hash>,
 }
 
 /// One file's version graph. Identical versions (same parents, same content) count once.
@@ -115,9 +120,16 @@ pub struct State {
     pub write_block: Option<Hash>,
     pub flags: BTreeSet<(PublicKey, Flag)>,
     own: Option<(u64, Hash)>,
+    own_signer: Option<PublicKey>,
     accepted: HashMap<Hash, (Uuid, Hash, PathBuf)>,
     /// Every accepted record's header, for walking a signer's own chain.
     signed: HashMap<Hash, Header>,
+    /// Every verified record's header, accepted or not: what a removal cutoff's `prev` chain walks.
+    verified: HashMap<Hash, Header>,
+    /// Accepted admin files with no effect in the merged chain (see `View::void`).
+    void: HashSet<Hash>,
+    /// Every epoch an admin file names: (number, public recipient).
+    named: HashSet<(u64, String)>,
     restorable_genesis: Option<(Uuid, PathBuf)>,
 }
 
@@ -152,24 +164,48 @@ impl State {
     }
 
     /// Every accepted admin file `heads` reach, `heads` included.
-    fn ancestors(&self, heads: &[Hash]) -> Vec<&Header> {
+    fn ancestors(&self, heads: &[Hash]) -> Vec<(Hash, &Header)> {
         let mut stack = heads.to_vec();
         let mut visited = HashSet::new();
         let mut chain = Vec::new();
         while let Some(h) = stack.pop() {
             let Some(header) = self.admin.get(&h).filter(|_| visited.insert(h)) else { continue };
-            chain.push(header);
+            chain.push((h, header));
             stack.extend(&header.parents);
         }
         chain
     }
 
     /// The admin chain as it stood at `heads`: who is an admin or a member, and which invites exist.
+    /// Files void in the whole merged chain count for nothing in any part of it.
     fn view(&self, heads: &[Hash]) -> View {
         let mut v = View::default();
+        let chain = self.ancestors(heads);
+        let removals: HashMap<Hash, Removal> = chain
+            .iter()
+            .filter_map(|(hash, h)| match h.body {
+                Body::Member(Member::Remove { device, cutoff }) => {
+                    let seen = self.ancestors(&[*hash]).into_iter().map(|(a, _)| a).collect();
+                    Some((*hash, Removal { signer: h.signer, device, kept: kept_chain(&self.verified, device, cutoff), seen }))
+                }
+                _ => None,
+            })
+            .collect();
+        v.void.extend(removals.iter().filter(|(hash, r)| removed_past(&removals, hash, &r.signer)).map(|(h, _)| *h));
+        v.void.extend(&self.void);
+        let effective: HashMap<Hash, Removal> =
+            removals.iter().filter(|(hash, _)| !v.void.contains(*hash)).map(|(h, r)| (*h, r.clone())).collect();
+        for (hash, h) in &chain {
+            if !removals.contains_key(hash) && removed_past(&effective, hash, &h.signer) {
+                v.void.insert(*hash);
+            }
+        }
+        for r in effective.values() {
+            v.membership.removed.entry(r.device).and_modify(|k| k.retain(|h| r.kept.contains(h))).or_insert_with(|| r.kept.clone());
+        }
         v.membership.admins.extend(self.genesis_admin);
         v.membership.members.extend(self.genesis_admin);
-        for header in self.ancestors(heads) {
+        for (_, header) in chain.iter().filter(|(hash, _)| !v.void.contains(hash)) {
             match &header.body {
                 Body::Member(Member::Approve { device, admin, invite }) => {
                     v.membership.members.insert(*device);
@@ -185,9 +221,14 @@ impl State {
                 Body::Member(Member::Revoke { invite }) => {
                     v.closed.insert(*invite);
                 }
+                Body::Member(Member::Rotate { epoch, recipient }) => {
+                    v.named.insert((*epoch, recipient.clone()));
+                }
                 _ => {}
             }
         }
+        let removed = &v.membership.removed;
+        v.membership.admins.retain(|a| !removed.contains_key(a));
         v
     }
 
@@ -198,11 +239,11 @@ impl State {
         Some(sync_crypto::safety_number(self.invites.get(invite)?, device))
     }
 
-    /// The receiving keys of every device approved and not removed, as their own records describe them.
+    /// The receiving keys of every other device approved and not removed, as their own records say.
     fn member_recipients(&self) -> Result<Vec<x25519::Recipient>, RecordError> {
         self.devices
             .iter()
-            .filter(|(signer, _)| self.is_member(signer))
+            .filter(|(signer, _)| self.is_member(signer) && Some(**signer) != self.own_signer)
             .map(|(_, (_, fields))| fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient")))
             .collect()
     }
@@ -217,7 +258,7 @@ impl State {
         let next: HashMap<Option<Hash>, Hash> = self
             .signed
             .iter()
-            .filter(|(_, h)| h.signer == *device)
+            .filter(|(_, h)| h.signer == *device && !matches!(h.body, Body::Key(_)))
             .map(|(hash, h)| (h.prev, *hash))
             .collect();
         let mut tip = next.get(&None).copied();
@@ -256,8 +297,7 @@ impl<'k> Briefcase<'k> {
         fs::write(briefcase.root.join(CONFIRMED_FILE), b"")?;
         briefcase.publish(Uuid::new_v4(), |out| Ok(io::Write::write_all(out, &genesis)?))?;
         let mut state = briefcase.sync()?;
-        let epoch = Epoch::generate(FIRST_EPOCH);
-        briefcase.write_key_file(&mut state, vec![briefcase.id], &epoch, &[keys.recipient()])?;
+        briefcase.rotate(&mut state)?;
         let mut state = briefcase.sync()?;
         let epoch = state.current_epoch().ok_or(RecordError::NotMember)?.recipient();
         briefcase.describe(&mut state, &epoch, display_name)?;
@@ -331,8 +371,8 @@ impl<'k> Briefcase<'k> {
         let (invite, fields) = &state.requests[&device];
         let invite = Some(*invite);
         let joiner: x25519::Recipient = fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
+        let devices = [vec![joiner, self.keys.recipient()], state.member_recipients()?].concat();
         let approval = self.admin_record(&mut state, Member::Approve { device, admin, invite })?;
-        let devices = [vec![joiner], state.member_recipients()?].concat();
         for epoch in state.epochs.clone() {
             self.write_key_file(&mut state, vec![approval], &epoch, &devices)?;
         }
@@ -349,17 +389,21 @@ impl<'k> Briefcase<'k> {
     pub fn remove(&self, device: PublicKey) -> Result<Hash, RecordError> {
         let mut state = self.writable_as_admin()?;
         let cutoff = state.last_accepted(&device);
-        let removal = self.admin_record(&mut state, Member::Remove { device, cutoff })?;
-        self.rotate(removal)?;
-        Ok(removal)
+        self.admin_record(&mut state, Member::Remove { device, cutoff })
     }
 
-    /// A fresh epoch after `admin_file`, wrapped only to devices approved and not removed.
-    fn rotate(&self, admin_file: Hash) -> Result<Hash, RecordError> {
-        let mut state = self.sync()?;
-        let number = state.epochs.iter().map(|e| e.number).max().unwrap_or(0) + 1;
-        let devices = state.member_recipients()?;
-        self.write_key_file(&mut state, vec![admin_file], &Epoch::generate(number), &devices)
+    /// A fresh epoch, named in the admin chain on every tip and wrapped only to devices approved and not
+    /// removed. Leaves `state` freshly synced.
+    fn rotate(&self, state: &mut State) -> Result<Hash, RecordError> {
+        *state = self.sync()?;
+        let tips = state.tips();
+        let epoch = Epoch::generate(next_epoch(&state.view(&tips)));
+        let body = Body::Member(Member::Rotate { epoch: epoch.number, recipient: epoch.recipient().to_string() });
+        let rotation = self.seal_record(state, tips, None, body, |header, out| {
+            sync_crypto::seal(self.keys, header, io::empty(), &[&epoch.recipient()], out)
+        })?;
+        let devices = [vec![self.keys.recipient()], state.member_recipients()?].concat();
+        self.write_key_file(state, vec![rotation], &epoch, &devices)
     }
 
     pub fn save_version(
@@ -442,12 +486,19 @@ impl<'k> Briefcase<'k> {
         })
     }
 
+    /// Write an admin file on every tip. A removal, or a file that merges admin branches, then moves the
+    /// matter to a fresh epoch, so no device removed in any branch reads what follows.
     fn admin_record(&self, state: &mut State, member: Member) -> Result<Hash, RecordError> {
         let epoch = state.current_epoch().ok_or(RecordError::NotMember)?.recipient();
         let parents = state.tips();
-        self.seal_record(state, parents, None, Body::Member(member), |header, out| {
+        let rotates = parents.len() > 1 || matches!(member, Member::Remove { .. });
+        let hash = self.seal_record(state, parents, None, Body::Member(member), |header, out| {
             sync_crypto::seal(self.keys, header, io::empty(), &[&epoch], out)
-        })
+        })?;
+        if rotates {
+            self.rotate(state)?;
+        }
+        Ok(hash)
     }
 
     fn write_key_file(
@@ -472,19 +523,24 @@ impl<'k> Briefcase<'k> {
         body: Body,
         seal: impl FnOnce(&Header, &mut File) -> Result<(), RecordError>,
     ) -> Result<Hash, RecordError> {
+        // `key` files stand outside the signer's chain: they are wrapped to some devices only, so a chain
+        // through them would break for everyone else. The admin file that names their epoch orders them.
+        let chained = !matches!(body, Body::Key(_));
         let header = Header {
             briefcase_id: self.id,
             uuid: Uuid::new_v4(),
             signer: self.keys.signer(),
-            seq: state.own.map_or(1, |(seq, _)| seq + 1),
-            prev: state.own.map(|(_, h)| h),
+            seq: if chained { state.own.map_or(1, |(seq, _)| seq + 1) } else { 0 },
+            prev: state.own.filter(|_| chained).map(|(_, h)| h),
             parents,
             admin_head,
             body,
         };
         self.publish(header.uuid, |out| seal(&header, out))?;
         let hash = header.record_hash();
-        state.own = Some((header.seq, hash));
+        if chained {
+            state.own = Some((header.seq, hash));
+        }
         Ok(hash)
     }
 
@@ -678,8 +734,8 @@ impl Opened {
 /// Judge every verified record: the admin chain from genesis, removal cutoffs, `key` records, then
 /// device and version records at their own `admin_head`. Order of arrival never matters.
 fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(String, RecordError)>) -> State {
-    let mut state = State { id, unverified, ..State::default() };
-    state.own = opened.records.iter().filter(|r| r.header.signer == me).max_by_key(|r| r.header.seq).map(|r| (r.header.seq, r.header.record_hash()));
+    let mut state = State { id, unverified, own_signer: Some(me), ..State::default() };
+    state.own = opened.records.iter().filter(|r| r.header.signer == me && !matches!(r.header.body, Body::Key(_))).max_by_key(|r| r.header.seq).map(|r| (r.header.seq, r.header.record_hash()));
     let Some(genesis) = opened.genesis else { return state };
     state.genesis_admin = Some(genesis.admin);
     state.restorable_genesis = Some((genesis.uuid, genesis.path));
@@ -690,6 +746,7 @@ fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(S
     // Each signer's records form one chain: seq 1 has no prev, and every prev sits exactly one seq below.
     let broken: Vec<Hash> = records
         .iter()
+        .filter(|(_, r)| !matches!(r.header.body, Body::Key(_)))
         .filter(|(_, r)| match r.header.prev {
             None => r.header.seq != 1,
             Some(p) => records.get(&p).is_some_and(|q| q.header.signer != r.header.signer || q.header.seq + 1 != r.header.seq),
@@ -701,18 +758,20 @@ fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(S
         state.rejected.push((r.uuid, RecordError::Malformed("seq")));
     }
     // Two different records with one signer and seq mean the device is compromised: everything it
-    // signed from that seq on is held until an admin decides. Admin and `key` records are held here;
-    // the rest below, unless the device is removed, when its cutoff already decides.
+    // signed from that seq on is held until an admin decides. Admin files are held here; the rest
+    // below, unless the device is removed, when its cutoff already decides.
     let mut slots: HashMap<(PublicKey, u64), Hash> = HashMap::new();
     let mut twinned: HashMap<PublicKey, u64> = HashMap::new();
-    for (hash, r) in &records {
+    for (hash, r) in records.iter().filter(|(_, r)| !matches!(r.header.body, Body::Key(_))) {
         let (signer, seq) = (r.header.signer, r.header.seq);
         if slots.insert((signer, seq), *hash).is_some() {
             twinned.entry(signer).and_modify(|s| *s = (*s).min(seq)).or_insert(seq);
         }
     }
-    let held_from = |twinned: &HashMap<PublicKey, u64>, h: &Header| twinned.get(&h.signer).is_some_and(|seq| h.seq >= *seq);
-    records.retain(|_, r| match matches!(r.header.body, Body::Member(_) | Body::Key(_)) && held_from(&twinned, &r.header) {
+    let held_from = |twinned: &HashMap<PublicKey, u64>, h: &Header| {
+        !matches!(h.body, Body::Key(_)) && twinned.get(&h.signer).is_some_and(|seq| h.seq >= *seq)
+    };
+    records.retain(|_, r| match matches!(r.header.body, Body::Member(_)) && held_from(&twinned, &r.header) {
         true => {
             state.held.push(r.uuid);
             false
@@ -720,6 +779,7 @@ fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(S
         false => true,
     });
     state.flags.extend(twinned.keys().map(|d| (*d, Flag::Equivocation)));
+    state.verified = records.iter().map(|(hash, r)| (*hash, r.header.clone())).collect();
     fn accept(state: &mut State, hash: Hash, r: &Record) {
         state.accepted.insert(hash, (r.uuid, r.ciphertext, r.path.clone()));
         state.signed.insert(hash, r.header.clone());
@@ -752,21 +812,15 @@ fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(S
     }
     state.held.extend(pending.iter().map(|h| records[h].uuid));
 
-    let removals: Vec<(PublicKey, Option<Hash>)> = state
-        .admin
-        .values()
-        .filter_map(|h| match h.body {
-            Body::Member(Member::Remove { device, cutoff }) => Some((device, cutoff)),
-            _ => None,
-        })
-        .collect();
-    for (device, cutoff) in removals {
-        let kept = kept_chain(&records, device, cutoff);
-        state.roll.removed.entry(device).and_modify(|k| k.retain(|h| kept.contains(h))).or_insert(kept);
-    }
+    // The merged chain: every branch's removals, void files set aside for every later judgment.
     let all: Vec<Hash> = state.admin.keys().copied().collect();
-    let View { membership: Membership { admins, members, .. }, invites, closed } = state.view(&all);
-    (state.roll.admins, state.roll.members, state.invites, state.closed) = (admins, members, invites, closed);
+    let View { membership, invites, closed, named, void } = state.view(&all);
+    for hash in &void {
+        if let Body::Member(Member::Remove { .. }) = state.admin[hash].body {
+            state.flags.insert((state.admin[hash].signer, Flag::MutualRemoval));
+        }
+    }
+    (state.roll, state.invites, state.closed, state.named, state.void) = (membership, invites, closed, named, void);
     let mut answers: HashMap<Uuid, HashMap<PublicKey, (u64, DeviceFields)>> = HashMap::new();
 
     let mut by_kind: Vec<(&Hash, &Record)> = records.iter().filter(|(_, r)| !matches!(r.header.body, Body::Member(_))).collect();
@@ -784,7 +838,9 @@ fn fold(id: Hash, me: PublicKey, now_ms: i64, opened: Opened, unverified: Vec<(S
                     state.held.push(r.uuid);
                     continue;
                 }
-                match state.membership_at(&h.parents).admins.contains(&h.signer) {
+                let Body::Key(fields) = &h.body else { unreachable!("matched above") };
+                let named = state.named.contains(&(fields.epoch, fields.epoch_recipient.clone()));
+                match state.membership_at(&h.parents).admins.contains(&h.signer) && named {
                     true => {
                         let epoch = r.epoch.clone().expect("key records carry an epoch");
                         let recipient = epoch.recipient().to_string();
@@ -878,10 +934,14 @@ fn judge_admin_file(at: &View, h: &Header) -> Result<(), RecordError> {
         return Err(RecordError::NotAdmin);
     }
     match &h.body {
-        Body::Member(Member::Remove { device, .. }) if m.admins.contains(device) => Err(RecordError::RemovesTheLastAdmin),
+        // With concurrent counter-removals void, this keeps at least one admin: never zero admins.
+        Body::Member(Member::Remove { device, .. }) if *device == h.signer => Err(RecordError::RemovesItself),
         Body::Member(Member::Approve { invite: Some(invite), .. }) if !open(invite) => Err(RecordError::InviteNotOpen),
-        Body::Member(Member::Approve { device, invite: None, .. }) if !m.members.contains(device) => Err(RecordError::NotMember),
+        Body::Member(Member::Approve { device, invite: None, .. }) if !m.members.contains(device) || m.removed.contains_key(device) => {
+            Err(RecordError::NotMember)
+        }
         Body::Member(Member::Revoke { invite }) if !open(invite) => Err(RecordError::InviteNotOpen),
+        Body::Member(Member::Rotate { epoch, .. }) if *epoch != next_epoch(at) => Err(RecordError::WrongEpoch),
         Body::Member(Member::Invite { link }) => {
             let parsed = Link::verify(link)?;
             if parsed.admin != h.signer || parsed.briefcase_id != h.briefcase_id || at.invites.contains_key(&parsed.invite) {
@@ -895,6 +955,11 @@ fn judge_admin_file(at: &View, h: &Header) -> Result<(), RecordError> {
         }
         _ => Ok(()),
     }
+}
+
+/// The number the next epoch takes where `at` stands: one past every epoch named there.
+fn next_epoch(at: &View) -> u64 {
+    at.named.iter().map(|(n, _)| n + 1).max().unwrap_or(FIRST_EPOCH)
 }
 
 /// The invite a request answers: only if its link is exactly one an admin of this matter issued in the
@@ -913,14 +978,29 @@ fn insert_newest(map: &mut HashMap<PublicKey, (u64, DeviceFields)>, h: &Header, 
     }
 }
 
+#[derive(Clone)]
+struct Removal {
+    signer: PublicKey,
+    device: PublicKey,
+    /// The device's records that stay accepted: its cutoff's `prev` chain.
+    kept: HashSet<Hash>,
+    /// The admin files the remover had seen: a removed admin's admin files stand only if among them.
+    seen: HashSet<Hash>,
+}
+
+/// Whether a removal other than admin file `hash` removes its `signer` without having seen `hash`.
+fn removed_past(removals: &HashMap<Hash, Removal>, hash: &Hash, signer: &PublicKey) -> bool {
+    removals.iter().any(|(r, removal)| r != hash && removal.device == *signer && !removal.seen.contains(hash))
+}
+
 /// The records of a removed device that stay accepted: its cutoff and what the cutoff's `prev` chain
 /// reaches (each link one seq below the last, checked at import). A record the device signs later can't
 /// join that chain, whatever `seq` it claims, because the cutoff hash already fixes every link. The chain
 /// ends at the first link this device doesn't hold, which is not kept: what nobody saw before stays out.
-fn kept_chain(records: &HashMap<Hash, Record>, device: PublicKey, cutoff: Option<Hash>) -> HashSet<Hash> {
+fn kept_chain(records: &HashMap<Hash, Header>, device: PublicKey, cutoff: Option<Hash>) -> HashSet<Hash> {
     let mut kept = HashSet::new();
     let mut next = cutoff;
-    while let Some(h) = next.and_then(|hash| records.get(&hash)).map(|r| &r.header).filter(|h| h.signer == device) {
+    while let Some(h) = next.and_then(|hash| records.get(&hash)).filter(|h| h.signer == device) {
         kept.insert(next.expect("walked from a hash"));
         next = h.prev;
     }
@@ -1439,13 +1519,97 @@ mod tests {
     }
 
     #[test]
-    fn removing_an_admin_is_rejected() {
-        let (t, id, laptops) = team(1);
-        let (ana, bea) = (&laptops[0], Laptop::new());
-        join_as(ana, &bea, id, t.path(), "Bea", true);
-        ana.on(id, t.path()).remove(bea.keys.signer()).unwrap();
+    fn admin_removed_by_another_admin_is_no_longer_a_member() {
+        let (t, id, laptops) = team(3);
+        laptops[0].on(id, t.path()).remove(laptops[1].keys.signer()).unwrap();
+        let state = laptops[2].on(id, t.path()).sync().unwrap();
+        assert!(!state.is_member(&laptops[1].keys.signer()) && !state.roll.admins.contains(&laptops[1].keys.signer()));
+    }
+
+    /// Never zero admins: an admin is removed only by another admin.
+    #[test]
+    fn admin_cannot_remove_itself() {
+        let (t, id, laptops) = team(2);
+        let ana = &laptops[0];
+        ana.on(id, t.path()).remove(ana.keys.signer()).unwrap();
         let state = ana.on(id, t.path()).sync().unwrap();
-        assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesTheLastAdmin)));
+        assert!(state.roll.admins.contains(&ana.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesItself)));
+    }
+
+    /// Ana and Ben, both admins, remove each other while offline; Dan sees both removals.
+    fn mutual_removal() -> (tempfile::TempDir, Hash, Vec<Laptop>, State) {
+        let (t, id, laptops) = team(3);
+        let (ana, ben) = (&laptops[0], &laptops[1]);
+        let before = transport_names(t.path());
+        ana.on(id, t.path()).remove(ben.keys.signer()).unwrap();
+        let aside = withhold(t.path(), &before);
+        ben.on(id, t.path()).remove(ana.keys.signer()).unwrap();
+        deliver(aside, t.path());
+        let state = laptops[2].on(id, t.path()).sync().unwrap();
+        (t, id, laptops, state)
+    }
+
+    #[test]
+    fn concurrent_mutual_admin_removals_are_both_void() {
+        let (_t, _, laptops, state) = mutual_removal();
+        assert!(laptops[..2].iter().all(|l| state.is_member(&l.keys.signer()) && state.roll.admins.contains(&l.keys.signer())));
+    }
+
+    #[test]
+    fn concurrent_mutual_admin_removals_flag_both_admins() {
+        let (_t, _, laptops, state) = mutual_removal();
+        assert!(laptops[..2].iter().all(|l| state.flags.contains(&(l.keys.signer(), Flag::MutualRemoval))));
+    }
+
+    /// Ana removes Cam while Ben, offline, removes Dan; then Ana writes the next admin file.
+    #[test]
+    fn merging_admin_branches_moves_to_an_epoch_no_device_removed_in_either_holds() {
+        let (t, id, laptops) = team(4);
+        let (ana, ben, cam, dan) = (&laptops[0], &laptops[1], &laptops[2], &laptops[3]);
+        let before = transport_names(t.path());
+        ana.on(id, t.path()).remove(cam.keys.signer()).unwrap();
+        let aside = withhold(t.path(), &before);
+        ben.on(id, t.path()).remove(dan.keys.signer()).unwrap();
+        deliver(aside, t.path());
+        ana.on(id, t.path()).invite("Eve").unwrap();
+        let current = ana.on(id, t.path()).sync().unwrap().current_epoch().unwrap().recipient().to_string();
+        let held = |l: &Laptop| l.on(id, t.path()).sync().unwrap().epochs.iter().any(|e| e.recipient().to_string() == current);
+        assert!(!held(cam) && !held(dan) && held(ben));
+    }
+
+    /// Ana removes Ben, an admin; Ben then signs admin files on the chain as it stood before.
+    fn removed_admin_backdates() -> (tempfile::TempDir, Hash, Vec<Laptop>, State) {
+        let (t, id, laptops) = team(3);
+        let (ana, ben) = (&laptops[0], &laptops[1]);
+        let before = ben.on(id, t.path()).sync().unwrap();
+        ana.on(id, t.path()).remove(ben.keys.signer()).unwrap();
+        (t, id, laptops, before)
+    }
+
+    #[test]
+    fn removed_admin_cannot_issue_an_epoch_below_its_cutoff() {
+        let (t, id, laptops, before) = removed_admin_backdates();
+        let (ana, ben, dan) = (&laptops[0], &laptops[1], &laptops[2]);
+        let rogue = Epoch::generate(2);
+        let recipient = rogue.recipient().to_string();
+        let body = Body::Member(Member::Rotate { epoch: 2, recipient: recipient.clone() });
+        let rotation = forge_body(t.path(), &ben.keys, &before, before.tips(), None, body, b"", &[&rogue.recipient()]).record_hash();
+        let body = Body::Key(KeyFields { epoch: 2, epoch_recipient: recipient.clone() });
+        let line = format!("{}\n", age::secrecy::ExposeSecret::expose_secret(&rogue.identity.to_string()));
+        let to = [ana.keys.recipient(), ben.keys.recipient(), dan.keys.recipient()];
+        forge_body(t.path(), &ben.keys, &before, vec![rotation], None, body, line.as_bytes(), &[&to[0], &to[1], &to[2]]);
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(state.epochs.iter().all(|e| e.recipient().to_string() != recipient));
+    }
+
+    #[test]
+    fn removed_admin_cannot_make_an_admin_below_its_cutoff() {
+        let (t, id, laptops, before) = removed_admin_backdates();
+        let dan = laptops[2].keys.signer();
+        let epoch = before.current_epoch().unwrap().recipient();
+        let body = Body::Member(Member::Approve { device: dan, admin: true, invite: None });
+        forge_body(t.path(), &laptops[1].keys, &before, before.tips(), None, body, b"", &[&epoch]);
+        assert!(!laptops[0].on(id, t.path()).sync().unwrap().roll.admins.contains(&dan));
     }
 
     // ---- joining: no keys in the link, a safety number both sides confirm ----
@@ -1768,9 +1932,8 @@ mod tests {
         let (ana, ben) = (&laptops[0], &laptops[1]);
         let a = ana.on(id, t.path());
         let mut state = a.sync().unwrap();
-        let second = Epoch::generate(2);
-        let tips = state.tips();
-        a.write_key_file(&mut state, tips, &second, &[ana.keys.recipient(), ben.keys.recipient()]).unwrap();
+        a.rotate(&mut state).unwrap();
+        let second = a.sync().unwrap().current_epoch().unwrap().clone();
         let state = ben.on(id, t.path()).sync().unwrap();
         let first = state.epochs.iter().find(|e| e.number == 1).unwrap().recipient();
         let content = b"sealed to both epochs";

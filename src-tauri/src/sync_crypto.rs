@@ -42,6 +42,7 @@ const MEMBER_APPROVE: u8 = 1;
 const MEMBER_REMOVE: u8 = 2;
 const MEMBER_INVITE: u8 = 3;
 const MEMBER_REVOKE: u8 = 4;
+const MEMBER_ROTATE: u8 = 5;
 
 pub type Hash = [u8; 32];
 pub type PublicKey = [u8; 32];
@@ -60,7 +61,7 @@ pub enum RecordError {
     NotMember,
     NotAdmin,
     AfterRemovalCutoff,
-    RemovesTheLastAdmin,
+    RemovesItself,
     NeedsSecondAdmin,
     InviteNotOpen,
     SafetyNumberMismatch,
@@ -158,6 +159,8 @@ pub enum Member {
     /// The signed link bytes, kept so every admin computes the safety number from its own copy.
     Invite { link: Vec<u8> },
     Revoke { invite: Uuid },
+    /// Name the matter's next epoch in the admin chain; `key` files only deliver epochs named here.
+    Rotate { epoch: u64, recipient: String },
 }
 
 /// A device describing itself; from a device not yet approved, it is a join request.
@@ -251,6 +254,11 @@ impl Header {
                 out.push(MEMBER_REVOKE);
                 out.extend_from_slice(invite.as_bytes());
             }
+            Body::Member(Member::Rotate { epoch, recipient }) => {
+                out.push(MEMBER_ROTATE);
+                out.extend_from_slice(&epoch.to_be_bytes());
+                put_text(&mut out, recipient);
+            }
             Body::Device(d) => {
                 put_text(&mut out, &d.display_name);
                 put_text(&mut out, &d.recipient);
@@ -298,6 +306,7 @@ impl Header {
                 MEMBER_REMOVE => Member::Remove { device: r.array()?, cutoff: r.hash_option()? },
                 MEMBER_INVITE => Member::Invite { link: r.bytes(MAX_LINK_BYTES, "link length")? },
                 MEMBER_REVOKE => Member::Revoke { invite: Uuid::from_bytes(r.array()?) },
+                MEMBER_ROTATE => Member::Rotate { epoch: r.u64()?, recipient: r.text()? },
                 _ => return Err(RecordError::Malformed("member action")),
             }),
             KIND_DEVICE => Body::Device(DeviceFields { display_name: r.text()?, recipient: r.text()? }),
@@ -852,6 +861,7 @@ mod tests {
             Body::Member(Member::Approve { device: [0x77; 32], admin: false, invite: None }),
             Body::Member(Member::Invite { link: vec![0x55; 300] }),
             Body::Member(Member::Revoke { invite: Uuid::from_bytes([0x66; 16]) }),
+            Body::Member(Member::Rotate { epoch: 2, recipient: "age1x".into() }),
             Body::Request(RequestFields {
                 device: DeviceFields { display_name: "Ben Tan".into(), recipient: "age1x".into() },
                 link: vec![0x55; 300],
