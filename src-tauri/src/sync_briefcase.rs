@@ -138,8 +138,28 @@ impl State {
         self.roll.members.contains(device) && !self.roll.removed.contains_key(device)
     }
 
+    /// The epoch to write under: the settled rotation's, or while unsettled (only admins write then, to
+    /// settle it) the highest held.
     pub fn current_epoch(&self) -> Option<&Epoch> {
-        self.epochs.iter().max_by_key(|e| (e.number, e.recipient().to_string()))
+        match self.rotation() {
+            Some((n, r)) => self.epochs.iter().find(|e| e.number == n && e.recipient().to_string() == r),
+            None => self.epochs.iter().max_by_key(|e| (e.number, e.recipient().to_string())),
+        }
+    }
+
+    /// The one rotation that has seen every other rotation and every removal in force. None while a
+    /// removal awaits its epoch, or two admin branches rotated apart: then members wait for an admin.
+    fn rotation(&self) -> Option<(u64, String)> {
+        let live: Vec<(&Hash, &Header)> = self
+            .admin
+            .iter()
+            .filter(|(h, r)| !self.void.contains(*h) && matches!(r.body, Body::Member(Member::Remove { .. } | Member::Rotate { .. })))
+            .collect();
+        live.iter().find_map(|(hash, h)| {
+            let Body::Member(Member::Rotate { epoch, recipient }) = &h.body else { return None };
+            let seen: HashSet<Hash> = self.ancestors(&[**hash]).into_iter().map(|(a, _)| a).collect();
+            live.iter().all(|(other, _)| seen.contains(*other)).then(|| (*epoch, recipient.clone()))
+        })
     }
 
     fn tips(&self) -> Vec<Hash> {
@@ -191,7 +211,7 @@ impl State {
                 _ => None,
             })
             .collect();
-        v.void.extend(removals.iter().filter(|(hash, r)| removed_past(&removals, hash, &r.signer)).map(|(h, _)| *h));
+        v.void.extend(removals.iter().filter(|(hash, r)| counter_removed(&removals, hash, r)).map(|(h, _)| *h));
         v.void.extend(&self.void);
         let effective: HashMap<Hash, Removal> =
             removals.iter().filter(|(hash, _)| !v.void.contains(*hash)).map(|(h, r)| (*h, r.clone())).collect();
@@ -230,7 +250,8 @@ impl State {
                 }
                 Body::Member(Member::Invite { link }) => {
                     let invite = Link::verify(link).expect("accepted invites verify").invite;
-                    v.invites.insert(invite, link.clone());
+                    // Two branches can't name one invite differently on two devices: the smaller link wins.
+                    v.invites.entry(invite).and_modify(|l| *l = l.clone().min(link.clone())).or_insert_with(|| link.clone());
                 }
                 Body::Member(Member::Revoke { invite }) => {
                     v.closed.insert(*invite);
@@ -321,7 +342,7 @@ impl<'k> Briefcase<'k> {
     /// Issue an invite in the admin chain; returns the signed link bytes, which carry no key.
     pub fn invite(&self, invitee_name: &str) -> Result<Vec<u8>, RecordError> {
         let mut state = self.writable_as_admin()?;
-        if !state.invites.is_empty() && state.roll.admins.len() < 2 {
+        if needs_second_admin(&state.roll) {
             return Err(RecordError::NeedsSecondAdmin);
         }
         let me = self.keys.signer();
@@ -470,6 +491,27 @@ impl<'k> Briefcase<'k> {
     }
 
     fn writable(&self) -> Result<State, RecordError> {
+        let state = self.signable()?;
+        match state.rotation() {
+            Some(_) => Ok(state),
+            None => Err(RecordError::WaitingForMembershipUpdate),
+        }
+    }
+
+    /// An admin settles the epoch before any admin file: a removal left without its rotation (a crash
+    /// between the two) or two branches that rotated apart get a fresh epoch first.
+    fn writable_as_admin(&self) -> Result<State, RecordError> {
+        let mut state = self.signable()?;
+        if !state.roll.admins.contains(&self.keys.signer()) {
+            return Err(RecordError::NotAdmin);
+        }
+        if state.rotation().is_none() {
+            self.rotate(&mut state)?;
+        }
+        Ok(state)
+    }
+
+    fn signable(&self) -> Result<State, RecordError> {
         let state = self.sync()?;
         if state.write_block.is_some() {
             return Err(RecordError::WaitingForMembershipUpdate);
@@ -481,14 +523,6 @@ impl<'k> Briefcase<'k> {
             return Err(RecordError::NotConfirmed);
         }
         Ok(state)
-    }
-
-    fn writable_as_admin(&self) -> Result<State, RecordError> {
-        let state = self.writable()?;
-        match state.roll.admins.contains(&self.keys.signer()) {
-            true => Ok(state),
-            false => Err(RecordError::NotAdmin),
-        }
     }
 
     fn describe(&self, state: &mut State, epoch: &x25519::Recipient, display_name: &str) -> Result<Hash, RecordError> {
@@ -960,14 +994,19 @@ fn judge_admin_file(at: &View, h: &Header) -> Result<(), RecordError> {
             if parsed.admin != h.signer || parsed.briefcase_id != h.briefcase_id || at.invites.contains_key(&parsed.invite) {
                 return Err(RecordError::Malformed("invite"));
             }
-            // A second admin before the second invite: one lost laptop must not strand the matter.
-            match !at.invites.is_empty() && m.admins.len() < 2 {
+            match needs_second_admin(m) {
                 true => Err(RecordError::NeedsSecondAdmin),
                 false => Ok(()),
             }
         }
         _ => Ok(()),
     }
+}
+
+/// A second admin before the third member is invited: one lost laptop must not strand the matter.
+/// Counted in members, not invites, so a revoked, expired or contested invite costs nothing.
+fn needs_second_admin(m: &Membership) -> bool {
+    m.members.iter().filter(|d| !m.removed.contains_key(*d)).count() >= 2 && m.admins.len() < 2
 }
 
 /// The number the next epoch takes where `at` stands: one past every epoch named there.
@@ -999,6 +1038,14 @@ struct Removal {
     kept: HashSet<Hash>,
     /// The admin files the remover had seen: a removed admin's admin files stand only if among them.
     seen: HashSet<Hash>,
+}
+
+/// Whether another removal, concurrent with `removal` (neither saw the other), removes its signer:
+/// two admins removing each other offline both lose. A removal that saw it does not count.
+fn counter_removed(removals: &HashMap<Hash, Removal>, hash: &Hash, removal: &Removal) -> bool {
+    removals.iter().any(|(r, other)| {
+        r != hash && other.device == removal.signer && !other.seen.contains(hash) && !removal.seen.contains(r)
+    })
 }
 
 /// Whether a removal other than admin file `hash` removes its `signer` without having seen `hash`.
@@ -1905,6 +1952,66 @@ mod tests {
     }
 
     // ---- regressions from the adversarial review ----
+
+    #[test]
+    fn sole_admin_reissues_an_invite_two_people_answered() {
+        let (t, id, laptops) = team(1);
+        let (ana, ben, mal) = (&laptops[0], Laptop::new(), Laptop::new());
+        let link = ana.on(id, t.path()).invite("Ben Tan").unwrap();
+        ben.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        mal.on(id, t.path()).request(&link, "Ben Tan").unwrap();
+        ana.on(id, t.path()).revoke(Link::verify(&link).unwrap().invite).unwrap();
+        assert!(ana.on(id, t.path()).invite("Ben Tan").is_ok());
+    }
+
+    #[test]
+    fn admins_remove_again_after_a_mutual_removal() {
+        let (t, id, laptops, _) = mutual_removal();
+        laptops[0].on(id, t.path()).remove(laptops[2].keys.signer()).unwrap();
+        assert!(!laptops[0].on(id, t.path()).sync().unwrap().is_member(&laptops[2].keys.signer()));
+    }
+
+    /// Ana removes Dan; Ben has the removal but not yet the new epoch's files.
+    #[test]
+    fn member_waits_for_the_epoch_that_follows_a_removal() {
+        let (t, id, laptops) = team(3);
+        let before = transport_names(t.path());
+        let removal = laptops[0].on(id, t.path()).remove(laptops[2].keys.signer()).unwrap();
+        let uuid = laptops[0].on(id, t.path()).sync().unwrap().accepted[&removal].0;
+        let mut keep = before.clone();
+        keep.insert(format!("{uuid}{RECORD_SUFFIX}"));
+        let _aside = withhold(t.path(), &keep);
+        let ben = &laptops[1];
+        let saved = ben.on(id, t.path()).save_version(FILE, "nda.docx", DOCX, &ben.doc(b"x"), vec![]);
+        assert!(matches!(saved, Err(RecordError::WaitingForMembershipUpdate)));
+    }
+
+    /// Ana's laptop wrote a removal and stopped before its rotation; her next admin file settles it.
+    #[test]
+    fn admin_settles_a_removal_left_without_its_epoch() {
+        let (t, id, laptops) = team(3);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let dan = laptops[2].keys.signer();
+        let epoch = state.current_epoch().unwrap().recipient();
+        let body = Body::Member(Member::Remove { device: dan, cutoff: state.last_accepted(&dan) });
+        forge_body(t.path(), &laptops[0].keys, &state, state.tips(), None, body, b"", &[&epoch]);
+        laptops[0].on(id, t.path()).invite("Eve").unwrap();
+        assert!(laptops[1].on(id, t.path()).save_version(FILE, "nda.docx", DOCX, &laptops[1].doc(b"x"), vec![]).is_ok());
+    }
+
+    /// Ana removes Dan while Ben, offline, removes Cam: Ben's epoch is wrapped to Dan.
+    #[test]
+    fn member_waits_while_admin_branches_rotated_apart() {
+        let (t, id, laptops) = team(5);
+        let before = transport_names(t.path());
+        laptops[0].on(id, t.path()).remove(laptops[3].keys.signer()).unwrap();
+        let aside = withhold(t.path(), &before);
+        laptops[1].on(id, t.path()).remove(laptops[2].keys.signer()).unwrap();
+        deliver(aside, t.path());
+        let eve = &laptops[4];
+        let saved = eve.on(id, t.path()).save_version(FILE, "nda.docx", DOCX, &eve.doc(b"x"), vec![]);
+        assert!(matches!(saved, Err(RecordError::WaitingForMembershipUpdate)));
+    }
 
     #[test]
     fn squatted_restore_name_does_not_stop_a_restore() {
