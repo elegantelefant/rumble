@@ -1473,13 +1473,14 @@ async fn export_draft_docx(app: AppHandle, text: String) -> Result<bool, String>
 
 #[tauri::command]
 async fn pick_templates_folder(app: AppHandle) -> Result<Option<String>, String> {
+    Ok(pick_folder(&app)?.map(|path| path.to_string_lossy().into_owned()))
+}
+
+fn pick_folder(app: &AppHandle) -> Result<Option<PathBuf>, String> {
     let Some(path) = app.dialog().file().blocking_pick_folder() else {
         return Ok(None);
     };
-    let path = path
-        .into_path()
-        .map_err(|e| format!("invalid templates folder path: {}", e))?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    path.into_path().map(Some).map_err(|e| format!("invalid folder path: {}", e))
 }
 
 /// Lives in app_local_data_dir, not app_data_dir: on Windows the latter is the
@@ -1581,6 +1582,104 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, S
         .map(|aside| aside.map(|p| p.display().to_string()))
 }
 
+// --- Team sync: matters ---
+
+type SyncSession = Mutex<sync_matters::Session>;
+
+fn hash_arg(hex_id: &str) -> Result<[u8; 32], String> {
+    hex::decode(hex_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| format!("not a matter, device or version id: {hex_id}"))
+}
+
+fn uuid_arg(id: &str) -> Result<Uuid, String> {
+    id.parse().map_err(|_| format!("not a file id: {id}"))
+}
+
+#[tauri::command]
+async fn sync_matters(session: State<'_, SyncSession>) -> Result<Vec<sync_matters::MatterSummary>, String> {
+    session.lock().unwrap().matters().map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_matter(session: State<'_, SyncSession>, id: String) -> Result<sync_matters::MatterDetail, String> {
+    session.lock().unwrap().detail(hash_arg(&id)?).map_err(sync_matters::say)
+}
+
+/// Cancel is not success: `None` when the folder picker is dismissed.
+#[tauri::command]
+async fn sync_create_matter(app: AppHandle, session: State<'_, SyncSession>, your_name: String) -> Result<Option<sync_matters::MatterSummary>, String> {
+    let Some(folder) = pick_folder(&app)? else { return Ok(None) };
+    session.lock().unwrap().create(&folder, &your_name).map(Some).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_join_matter(app: AppHandle, session: State<'_, SyncSession>, link: String, your_name: String) -> Result<Option<sync_matters::MatterSummary>, String> {
+    let link = hex::decode(link.trim()).map_err(|_| "That invite link isn't valid. Ask for a fresh one.".to_string())?;
+    let Some(folder) = pick_folder(&app)? else { return Ok(None) };
+    session.lock().unwrap().join(&folder, &link, &your_name).map(Some).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_add_file(app: AppHandle, session: State<'_, SyncSession>, id: String) -> Result<bool, String> {
+    let id = hash_arg(&id)?;
+    let Some(path) = app.dialog().file().blocking_pick_file() else { return Ok(false) };
+    let path = path.into_path().map_err(|e| format!("invalid file path: {}", e))?;
+    session.lock().unwrap().add_file(id, &path).map(|_| true).map_err(sync_matters::say)
+}
+
+/// Opens the working copy in its own app, or for a type Rumble never opens, shows it in its folder.
+/// Returns whether it was opened.
+#[tauri::command]
+async fn sync_open_file(app: AppHandle, session: State<'_, SyncSession>, id: String, file_id: String) -> Result<bool, String> {
+    let path = session.lock().unwrap().check_out(hash_arg(&id)?, uuid_arg(&file_id)?).map_err(sync_matters::say)?;
+    open_or_reveal(&app, &path)
+}
+
+fn open_or_reveal(app: &AppHandle, path: &Path) -> Result<bool, String> {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    match sync_matters::openable(&name) {
+        true => app.opener().open_path(path.to_string_lossy().into_owned(), None::<&str>).map(|_| true),
+        false => app.opener().reveal_item_in_dir(path).map(|_| false),
+    }
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn sync_combine(app: AppHandle, session: State<'_, SyncSession>, id: String, file_id: String) -> Result<bool, String> {
+    let paths = session.lock().unwrap().combine(hash_arg(&id)?, uuid_arg(&file_id)?).map_err(sync_matters::say)?;
+    let mut opened = true;
+    for path in paths {
+        opened &= open_or_reveal(&app, &path)?;
+    }
+    Ok(opened)
+}
+
+#[tauri::command]
+async fn sync_resolve(session: State<'_, SyncSession>, id: String, file_id: String, version: String) -> Result<(), String> {
+    let (id, file, version) = (hash_arg(&id)?, uuid_arg(&file_id)?, hash_arg(&version)?);
+    session.lock().unwrap().resolve(id, file, version).map(|_| ()).map_err(sync_matters::say)
+}
+
+/// The invite link, as text to send to the invitee.
+#[tauri::command]
+async fn sync_invite(session: State<'_, SyncSession>, id: String, invitee_name: String) -> Result<String, String> {
+    session.lock().unwrap().invite(hash_arg(&id)?, &invitee_name).map(hex::encode).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_confirm(session: State<'_, SyncSession>, id: String, number: String) -> Result<(), String> {
+    session.lock().unwrap().confirm(hash_arg(&id)?, &number).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_approve(session: State<'_, SyncSession>, id: String, device: String, number: String) -> Result<(), String> {
+    session.lock().unwrap().approve(hash_arg(&id)?, hash_arg(&device)?, &number).map(|_| ()).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_promote(session: State<'_, SyncSession>, id: String, device: String) -> Result<(), String> {
+    session.lock().unwrap().promote(hash_arg(&id)?, hash_arg(&device)?).map(|_| ()).map_err(sync_matters::say)
+}
+
 // --- App entry ---
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1613,6 +1712,10 @@ pub fn run() {
                     .build(app)?;
                 app.manage(tray);
             }
+
+            // Team sync keeps its device keys in memory for this launch (no hardware-wrapped store yet).
+            let sync_base = app.path().app_local_data_dir()?.join("sync");
+            app.manage::<SyncSession>(Mutex::new(sync_matters::Session::new(&sync_base)));
 
             // Spawn sidecar (non-fatal — app works in Premium mode without it)
             if let Err(e) = spawn_sidecar(&handle) {
@@ -1651,6 +1754,19 @@ pub fn run() {
             // Local data lifecycle
             data_dir,
             delete_all_local_data,
+            // Team sync
+            sync_matters,
+            sync_matter,
+            sync_create_matter,
+            sync_join_matter,
+            sync_add_file,
+            sync_open_file,
+            sync_combine,
+            sync_resolve,
+            sync_invite,
+            sync_confirm,
+            sync_approve,
+            sync_promote,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

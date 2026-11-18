@@ -123,7 +123,7 @@ impl Session {
 
     /// Answer an invite link: write a join request into the matter folder the link belongs to.
     pub fn join(&mut self, folder: &Path, link: &[u8], your_name: &str) -> Result<MatterSummary, RecordError> {
-        let id = Link::verify(link)?.briefcase_id;
+        let id = Link::verify(link).map_err(|_| io::Error::other("That invite link isn't valid. Ask for a fresh one."))?.briefcase_id;
         Briefcase::open(id, &self.keys, folder, &self.root)?.request(link, your_name)?;
         self.folders.insert(id, folder.into());
         self.summary(id)
@@ -441,6 +441,21 @@ fn media_type(name: &str) -> &'static str {
         Some("txt") => "text/plain",
         Some("md") => "text/markdown",
         _ => "application/octet-stream",
+    }
+}
+
+/// What the matter screens tell the person when a sync step refuses.
+pub fn say(e: RecordError) -> String {
+    match e {
+        RecordError::Io(e) => e.to_string(),
+        RecordError::NeedsSecondAdmin => "Make a colleague a second admin before inviting a third person. If this laptop is lost, nobody else could add or remove people.".into(),
+        RecordError::SafetyNumberMismatch => "The numbers don't match. Don't let them in: send a fresh invite instead.".into(),
+        RecordError::NotMember | RecordError::NotConfirmed => "You're not in this matter yet.".into(),
+        RecordError::NotAdmin => "Only an admin of this matter can do that.".into(),
+        RecordError::WaitingForMembershipUpdate => "Waiting for the latest change to who's in this matter to arrive in the folder. Try again shortly.".into(),
+        RecordError::InviteNotOpen => "This invite has already been used or withdrawn. Ask for a fresh one.".into(),
+        RecordError::ForeignMatter => "This invite is for a different matter folder.".into(),
+        other => other.to_string(),
     }
 }
 
