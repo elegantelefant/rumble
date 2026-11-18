@@ -15,6 +15,7 @@ import {
   makeAdmin,
   openFile,
   resolveFork,
+  withdrawInvite,
   type FileView,
   type MatterDetail,
   type VersionView,
@@ -27,6 +28,7 @@ const detail = ref<MatterDetail | null>(null);
 const busy = ref(false);
 const invitee = ref("");
 const inviteLink = ref("");
+const invitedName = ref("");
 const dismissed = ref<string[]>([]);
 
 const waiting = computed(() => detail.value?.matter.standing === "waiting");
@@ -75,8 +77,13 @@ const open = (file: FileView) =>
 
 const combine = (file: FileView) =>
   run(async () => {
-    await combineFile(props.id, file.id);
-    addToast("Both versions are open. Bring the changes across, then press Save in yours.", "info");
+    const opened = await combineFile(props.id, file.id);
+    addToast(
+      opened
+        ? "Both versions are open. Bring the changes across, then press Save in yours."
+        : "Both versions are shown in their folder. Bring the changes across, then save yours.",
+      "info",
+    );
   });
 
 const use = (file: FileView, version: VersionView) =>
@@ -92,7 +99,8 @@ const add = () =>
 
 const invite = () =>
   run(async () => {
-    inviteLink.value = await createInvite(props.id, invitee.value.trim());
+    invitedName.value = invitee.value.trim();
+    inviteLink.value = await createInvite(props.id, invitedName.value);
   });
 
 const copyLink = () =>
@@ -104,6 +112,12 @@ const copyLink = () =>
 const confirm = (number: string) =>
   run(async () => {
     await confirmNumber(props.id, number);
+  });
+
+const withdraw = (invite: string) =>
+  run(async () => {
+    await withdrawInvite(props.id, invite);
+    addToast("Invite withdrawn. Send a fresh one to the person you meant.", "success");
   });
 
 const approve = (device: string, number: string) =>
@@ -140,27 +154,32 @@ const promote = (device: string) =>
     </section>
 
     <template v-else>
+      <section v-for="invite in detail.contested" :key="invite" class="card space-y-3 text-sm text-[var(--primary-700)]">
+        <p class="font-semibold text-[var(--primary-800)]">Two people answered this invite.</p>
+        <p>Neither can be let in. Withdraw it, then send a fresh invite to the person you meant.</p>
+        <button class="btn-secondary" type="button" :disabled="busy" @click="withdraw(invite)">Withdraw this invite</button>
+      </section>
+
+      <section v-if="detail.notRecorded.length" class="card text-sm text-[var(--primary-700)]" role="status">
+        Your saved changes to {{ detail.notRecorded.join(", ") }} couldn't be added as a new version yet. They are kept
+        in your working copy; Rumble tries again each time you come back.
+      </section>
+
       <section v-for="request in requests" :key="request.device" class="card space-y-3 text-sm text-[var(--primary-700)]">
-        <template v-if="request.contested">
-          <p class="font-semibold text-[var(--primary-800)]">Two people answered this invite.</p>
-          <p>Neither can be let in. Send a fresh invite to the person you meant.</p>
-        </template>
-        <template v-else>
-          <p class="font-semibold text-[var(--primary-800)]">{{ request.name }} is waiting to join {{ detail.matter.name }}.</p>
-          <p>Call {{ request.name }} on a number you already know, and check you both see the same number.</p>
-          <p class="font-mono text-base tracking-wide text-[var(--primary-800)]">{{ request.safetyNumber }}</p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              class="btn-primary"
-              type="button"
-              :disabled="busy || !request.safetyNumber"
-              @click="approve(request.device, request.safetyNumber ?? '')"
-            >
-              Numbers match: let {{ request.name }} in
-            </button>
-            <button class="btn-secondary" type="button" @click="dismissed.push(request.device)">Not now</button>
-          </div>
-        </template>
+        <p class="font-semibold text-[var(--primary-800)]">{{ request.name }} is waiting to join {{ detail.matter.name }}.</p>
+        <p>Call {{ request.name }} on a number you already know, and check you both see the same number.</p>
+        <p class="font-mono text-base tracking-wide text-[var(--primary-800)]">{{ request.safetyNumber }}</p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="btn-primary"
+            type="button"
+            :disabled="busy || !request.safetyNumber"
+            @click="approve(request.device, request.safetyNumber ?? '')"
+          >
+            Numbers match: let {{ request.name }} in
+          </button>
+          <button class="btn-secondary" type="button" @click="dismissed.push(request.device)">Not now</button>
+        </div>
       </section>
 
       <section class="card space-y-4">
@@ -214,7 +233,7 @@ const promote = (device: string) =>
             <textarea name="invite-link" class="input w-full font-mono text-xs" rows="3" readonly :value="inviteLink" />
             <button class="btn-secondary text-xs" type="button" @click="copyLink">Copy link</button>
             <p class="text-xs text-[var(--primary-500)]">
-              Send this to {{ invitee }}. It opens nothing by itself: they ask to join, then you compare a number on a call
+              Send this to {{ invitedName }}. It opens nothing by itself: they ask to join, then you compare a number on a call
               before they're in.
             </p>
           </template>

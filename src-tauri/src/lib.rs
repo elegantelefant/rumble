@@ -1591,7 +1591,7 @@ fn hash_arg(hex_id: &str) -> Result<[u8; 32], String> {
 }
 
 fn uuid_arg(id: &str) -> Result<Uuid, String> {
-    id.parse().map_err(|_| format!("not a file id: {id}"))
+    id.parse().map_err(|_| format!("not a file or invite id: {id}"))
 }
 
 #[tauri::command]
@@ -1663,6 +1663,12 @@ async fn sync_resolve(session: State<'_, SyncSession>, id: String, file_id: Stri
 #[tauri::command]
 async fn sync_invite(session: State<'_, SyncSession>, id: String, invitee_name: String) -> Result<String, String> {
     session.lock().unwrap().invite(hash_arg(&id)?, &invitee_name).map(hex::encode).map_err(sync_matters::say)
+}
+
+#[tauri::command]
+async fn sync_withdraw(session: State<'_, SyncSession>, id: String, invite: String) -> Result<(), String> {
+    let invite = uuid_arg(&invite)?;
+    session.lock().unwrap().withdraw(hash_arg(&id)?, invite).map(|_| ()).map_err(sync_matters::say)
 }
 
 #[tauri::command]
@@ -1764,6 +1770,7 @@ pub fn run() {
             sync_combine,
             sync_resolve,
             sync_invite,
+            sync_withdraw,
             sync_confirm,
             sync_approve,
             sync_promote,
@@ -1774,6 +1781,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 let state = app.state::<AppState>();
                 kill_sidecar(&state);
+                if let Err(e) = app.state::<SyncSession>().lock().unwrap().close() {
+                    log::error!("[sync] {}", sync_matters::say(e));
+                }
             }
         });
 }

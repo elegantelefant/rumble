@@ -29,13 +29,15 @@ function file(overrides: Partial<FileView> = {}): FileView {
 
 function detail(overrides: Partial<MatterDetail> = {}): MatterDetail {
   return {
-    matter: { id: ID, name: "Acme NDA", folder: "/x/Acme NDA", standing: "admin", waitingFor: null },
+    matter: { id: ID, name: "Acme NDA", folder: "/x/Acme NDA", standing: "admin", waitingFor: null, unavailable: null },
     files: [file()],
     members: [{ device: "d1", name: "Ana Lim", admin: true, mine: true }],
     requests: [],
     safetyNumber: null,
     confirmed: true,
     needsSecondAdmin: false,
+    contested: [],
+    notRecorded: [],
     ...overrides,
   }
 }
@@ -109,6 +111,22 @@ describe("MatterView", () => {
     expect((wrapper.find("textarea[name=invite-link]").element as HTMLTextAreaElement).value).toBe("c0ffee")
   })
 
+  it("names the person the invite link was created for", async () => {
+    serve(detail(), { sync_invite: "c0ffee" })
+    const wrapper = await mountMatter()
+    await wrapper.find("input[name=invitee]").setValue("Ben Tan")
+    await button(wrapper, "Create invite link").trigger("click")
+    await flushPromises()
+    await wrapper.find("input[name=invitee]").setValue("Someone else")
+    expect(wrapper.text()).toContain("Send this to Ben Tan.")
+  })
+
+  it("says when a save couldn't be added as a version", async () => {
+    serve(detail({ notRecorded: ["nda.docx"] }))
+    const wrapper = await mountMatter()
+    expect(wrapper.text()).toContain("Your saved changes to nda.docx couldn't be added as a new version yet.")
+  })
+
   it("asks for a second admin before a third person is invited", async () => {
     serve(detail({ needsSecondAdmin: true, members: [
       { device: "d1", name: "Ana Lim", admin: true, mine: true },
@@ -121,7 +139,7 @@ describe("MatterView", () => {
   describe("joining", () => {
     const waiting = () =>
       detail({
-        matter: { id: ID, name: "Acme NDA", folder: "/x", standing: "waiting", waitingFor: "Ana Lim" },
+        matter: { id: ID, name: "Acme NDA", folder: "/x", standing: "waiting", waitingFor: "Ana Lim", unavailable: null },
         files: [],
         safetyNumber: "48213 90557",
         confirmed: false,
@@ -147,8 +165,7 @@ describe("MatterView", () => {
       expect(invoke).toHaveBeenCalledWith("sync_confirm", { id: ID, number: "48213 90557" })
     })
 
-    const request = (contested = false) =>
-      detail({ requests: [{ device: "d2", name: "Ben Tan", safetyNumber: "48213 90557", contested }] })
+    const request = () => detail({ requests: [{ device: "d2", name: "Ben Tan", safetyNumber: "48213 90557" }] })
 
     it("tells the admin who is waiting to join", async () => {
       serve(request())
@@ -164,10 +181,18 @@ describe("MatterView", () => {
       expect(invoke).toHaveBeenCalledWith("sync_approve", { id: ID, device: "d2", number: "48213 90557" })
     })
 
-    it("offers no approval when two people answered one invite", async () => {
-      serve(request(true))
+    it("tells the admin when two people answered one invite", async () => {
+      serve(detail({ contested: ["inv-1"] }))
       const wrapper = await mountMatter()
-      expect(wrapper.text()).toContain("Two people answered this invite")
+      expect(wrapper.text()).toContain("Two people answered this invite.")
+    })
+
+    it("withdraws a contested invite", async () => {
+      serve(detail({ contested: ["inv-1"] }), { sync_withdraw: null })
+      const wrapper = await mountMatter()
+      await button(wrapper, "Withdraw this invite").trigger("click")
+      await flushPromises()
+      expect(invoke).toHaveBeenCalledWith("sync_withdraw", { id: ID, invite: "inv-1" })
     })
   })
 
@@ -198,6 +223,17 @@ describe("MatterView", () => {
       await button(wrapper, "Use Ben Tan's").trigger("click")
       await flushPromises()
       expect(invoke).toHaveBeenCalledWith("sync_resolve", { id: ID, fileId: "f1", version: "2-BT".padEnd(64, "0") })
+    })
+
+    it("says the versions were only shown in their folder when they couldn't be opened", async () => {
+      serve(forked(), { sync_combine: false })
+      const wrapper = await mountMatter()
+      await button(wrapper, "Combine in Word").trigger("click")
+      await flushPromises()
+      expect(addToast).toHaveBeenCalledWith(
+        "Both versions are shown in their folder. Bring the changes across, then save yours.",
+        "info",
+      )
     })
 
     it("replaces Open in Word with the banner's choices", async () => {

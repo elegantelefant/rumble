@@ -1,6 +1,6 @@
 //! ABOUTME: The matter screens' host side: matters opened this session, files with numbered versions and authors.
 //! ABOUTME: Invites and safety numbers, working copies opened in Word, and fork resolution, over sync_briefcase.
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -30,6 +30,8 @@ pub enum Standing {
     Member,
     /// Asked to join; in only once an admin approves and this side confirms the number.
     Waiting,
+    /// Its folder or local store can't be read right now.
+    Unavailable,
 }
 
 #[derive(Serialize, Debug)]
@@ -42,6 +44,8 @@ pub struct MatterSummary {
     pub standing: Standing,
     /// For a waiting joiner: the admin who issued the link.
     pub waiting_for: Option<String>,
+    /// Why an unavailable matter can't be read.
+    pub unavailable: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -74,8 +78,6 @@ pub struct RequestView {
     pub device: String,
     pub name: String,
     pub safety_number: Option<String>,
-    /// Two people answered this invite: neither can be let in.
-    pub contested: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -98,6 +100,10 @@ pub struct MatterDetail {
     pub safety_number: Option<String>,
     pub confirmed: bool,
     pub needs_second_admin: bool,
+    /// Invites two people answered (by invite id): neither can be let in, so the admin withdraws them.
+    pub contested: Vec<String>,
+    /// Working copies saved in their app whose save couldn't be recorded as a version, by file name.
+    pub not_recorded: Vec<String>,
 }
 
 /// One launch's sync session: device keys held in memory until the hardware-wrapped key store lands,
@@ -124,17 +130,58 @@ impl Session {
     /// Answer an invite link: write a join request into the matter folder the link belongs to.
     pub fn join(&mut self, folder: &Path, link: &[u8], your_name: &str) -> Result<MatterSummary, RecordError> {
         let id = Link::verify(link).map_err(|_| io::Error::other("That invite link isn't valid. Ask for a fresh one."))?.briefcase_id;
-        Briefcase::open(id, &self.keys, folder, &self.root)?.request(link, your_name)?;
+        let b = Briefcase::open(id, &self.keys, folder, &self.root)?;
+        if !b.sync()?.has_genesis() {
+            return Err(io::Error::other("That folder doesn't hold this matter. Pick the folder your colleague shared with you.").into());
+        }
+        b.request(link, your_name)?;
         self.folders.insert(id, folder.into());
         self.summary(id)
     }
 
+    /// Every matter open in this launch; one that can't be read is listed as unavailable, not dropped.
     pub fn matters(&self) -> Result<Vec<MatterSummary>, RecordError> {
-        self.folders.keys().map(|id| self.summary(*id)).collect()
+        Ok(self
+            .folders
+            .keys()
+            .map(|id| {
+                self.summary(*id).unwrap_or_else(|e| {
+                    let folder = &self.folders[id];
+                    MatterSummary {
+                        id: hex::encode(id),
+                        name: folder_name(folder),
+                        folder: folder.display().to_string(),
+                        standing: Standing::Unavailable,
+                        waiting_for: None,
+                        unavailable: Some(say(e)),
+                    }
+                })
+            })
+            .collect())
+    }
+
+    /// At quit: record every saved working copy, then remove this launch's store and working copies,
+    /// which no later launch could open. Kept if any save couldn't be recorded.
+    pub fn close(&self) -> Result<(), RecordError> {
+        let mut not_recorded = vec![];
+        for id in self.folders.keys() {
+            not_recorded.extend(self.synced(*id)?.2);
+        }
+        if !not_recorded.is_empty() {
+            return Err(io::Error::other(format!("saves not recorded, working copies kept: {}", not_recorded.join(", "))).into());
+        }
+        match fs::remove_dir_all(&self.root) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e.into()),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn withdraw(&self, id: Hash, invite: Uuid) -> Result<Hash, RecordError> {
+        self.briefcase(id)?.revoke(invite)
     }
 
     pub fn detail(&self, id: Hash) -> Result<MatterDetail, RecordError> {
-        let (b, state) = self.synced(id)?;
+        let (b, state, not_recorded) = self.synced(id)?;
         let me = self.keys.signer();
         let matter = self.summarise(&b, &state)?;
         let name = |d: &PublicKey| state.devices.get(d).map_or("Someone".to_string(), |(_, f)| f.display_name.clone());
@@ -151,11 +198,10 @@ impl Session {
             true => state
                 .requests
                 .iter()
-                .map(|(d, (invite, fields))| RequestView {
+                .map(|(d, (_, fields))| RequestView {
                     device: hex::encode(d),
                     name: fields.display_name.clone(),
                     safety_number: state.safety_number(d),
-                    contested: state.contested.contains(invite),
                 })
                 .collect(),
             false => vec![],
@@ -164,6 +210,8 @@ impl Session {
             safety_number: (matter.standing == Standing::Waiting).then(|| b.safety_number().ok()).flatten(),
             confirmed: b.confirmed(),
             needs_second_admin: admin && members.len() >= 2 && members.iter().filter(|m| m.admin).count() < 2,
+            contested: if admin { state.contested.iter().map(Uuid::to_string).collect() } else { vec![] },
+            not_recorded,
             files: files(&state, &me),
             members,
             requests,
@@ -194,7 +242,7 @@ impl Session {
 
     /// The file's working copy at its one head, written there if older. Unrecorded saves are kept first.
     pub fn check_out(&self, id: Hash, file: Uuid) -> Result<PathBuf, RecordError> {
-        let (b, state) = self.synced(id)?;
+        let (b, state, _) = self.synced(id)?;
         let heads = heads(&state, file)?;
         if heads.len() != 1 {
             return Err(io::Error::other("Two versions of this file need combining first.").into());
@@ -205,7 +253,7 @@ impl Session {
     /// My head as the working copy, naming every head as the next save's parents, with each other head
     /// released beside it. Returns the working copy first.
     pub fn combine(&self, id: Hash, file: Uuid) -> Result<Vec<PathBuf>, RecordError> {
-        let (b, state) = self.synced(id)?;
+        let (b, state, _) = self.synced(id)?;
         let mut heads = heads(&state, file)?;
         let me = self.keys.signer();
         heads.sort_by_key(|h| state.versions[h].signer != me);
@@ -225,7 +273,7 @@ impl Session {
 
     /// "Use mine" or "Use Ana's": a new version with `chosen`'s content and every head as a parent.
     pub fn resolve(&self, id: Hash, file: Uuid, chosen: Hash) -> Result<Hash, RecordError> {
-        let (b, state) = self.synced(id)?;
+        let (b, state, _) = self.synced(id)?;
         let heads = heads(&state, file)?;
         if !heads.contains(&chosen) {
             return Err(io::Error::other("That version is no longer one of the two to choose from.").into());
@@ -246,14 +294,13 @@ impl Session {
     }
 
     /// The briefcase after one sync, with any working copy saved since its last version recorded first.
-    fn synced(&self, id: Hash) -> Result<(Briefcase<'_>, State), RecordError> {
+    /// A save that can't be recorded (removed, or waiting for a membership change) is named, not fatal.
+    fn synced(&self, id: Hash) -> Result<(Briefcase<'_>, State, Vec<String>), RecordError> {
         let b = self.briefcase(id)?;
         let state = b.sync()?;
-        let state = match self.sweep(&b, &state)? {
-            true => b.sync()?,
-            false => state,
-        };
-        Ok((b, state))
+        let (saved, not_recorded) = self.sweep(&b, &state)?;
+        let state = if saved { b.sync()? } else { state };
+        Ok((b, state, not_recorded))
     }
 
     fn summary(&self, id: Hash) -> Result<MatterSummary, RecordError> {
@@ -272,10 +319,11 @@ impl Session {
         };
         Ok(MatterSummary {
             id: hex::encode(b.id),
-            name: folder.file_name().map_or_else(|| folder.display().to_string(), |n| n.to_string_lossy().into_owned()),
+            name: folder_name(folder),
             folder: folder.display().to_string(),
             standing,
             waiting_for: (standing == Standing::Waiting).then(|| b.answered().map(|l| l.admin_name)).flatten(),
+            unavailable: None,
         })
     }
 
@@ -308,9 +356,10 @@ impl Session {
     }
 
     /// Record a version for every working copy whose content differs from the version last written into it.
-    fn sweep(&self, b: &Briefcase, state: &State) -> Result<bool, RecordError> {
-        let Ok(entries) = fs::read_dir(self.work(b.id)) else { return Ok(false) };
-        let mut saved = false;
+    /// Returns whether any was recorded, and the file names whose save the matter refused.
+    fn sweep(&self, b: &Briefcase, state: &State) -> Result<(bool, Vec<String>), RecordError> {
+        let Ok(entries) = fs::read_dir(self.work(b.id)) else { return Ok((false, vec![])) };
+        let (mut saved, mut refused) = (false, vec![]);
         for entry in entries {
             let marker = entry?.path();
             let Some(file) = marker.file_name().and_then(|n| n.to_str()?.strip_suffix(OPENED_SUFFIX)?.parse::<Uuid>().ok()) else {
@@ -322,11 +371,18 @@ impl Session {
             if !path.exists() || sha256_file(&path)? == fields.content_sha256 {
                 continue;
             }
-            let version = b.save_version(file, &fields.file_name, &fields.media_type, &path, parents)?;
-            fs::write(&marker, hex::encode(version))?;
-            saved = true;
+            match b.save_version(file, &fields.file_name, &fields.media_type, &path, parents) {
+                Ok(version) => {
+                    fs::write(&marker, hex::encode(version))?;
+                    saved = true;
+                }
+                Err(RecordError::NotMember | RecordError::NotConfirmed | RecordError::WaitingForMembershipUpdate) => {
+                    refused.push(fields.file_name)
+                }
+                Err(e) => return Err(e),
+            }
         }
-        Ok(saved)
+        Ok((saved, refused))
     }
 }
 
@@ -342,9 +398,9 @@ fn files(state: &State, me: &PublicKey) -> Vec<FileView> {
             for d in depth_of.values() {
                 *at_depth.entry(*d).or_default() += 1;
             }
-            let label = |v: &Hash| match at_depth[&depth_of[v]] {
-                1 => depth_of[v].to_string(),
-                _ => format!("{}-{}", depth_of[v], initials(&author(&state.versions[v]))),
+            let label = |v: &Hash, d: u64| match at_depth.get(&d).copied().unwrap_or(1) {
+                1 => d.to_string(),
+                _ => format!("{d}-{}", initials(&author(&state.versions[v]))),
             };
             let mut versions: Vec<VersionView> = history
                 .versions
@@ -353,7 +409,7 @@ fn files(state: &State, me: &PublicKey) -> Vec<FileView> {
                     let h = &state.versions[v];
                     VersionView {
                         id: hex::encode(v),
-                        label: label(v),
+                        label: label(v, depth_of[v]),
                         author: author(h),
                         mine: h.signer == *me,
                         saved_at_ms: version_fields(h).created_at_ms,
@@ -361,7 +417,7 @@ fn files(state: &State, me: &PublicKey) -> Vec<FileView> {
                     }
                 })
                 .collect();
-            versions.sort_by_key(|v| std::cmp::Reverse((depth_of[&hex_hash(&v.id)], v.saved_at_ms)));
+            versions.sort_by_key(|v| std::cmp::Reverse((v.label.split('-').next().and_then(|d| d.parse::<u64>().ok()), v.saved_at_ms)));
             let newest = history.heads.iter().map(|h| &state.versions[h]).max_by_key(|h| version_fields(h).created_at_ms);
             let name = newest.map(|h| version_fields(h).file_name).unwrap_or_default();
             FileView {
@@ -370,22 +426,58 @@ fn files(state: &State, me: &PublicKey) -> Vec<FileView> {
                 name,
                 versions,
                 forked_from: (history.heads.len() > 1)
-                    .then(|| history.forks.iter().max_by_key(|f| depth_of.get(*f).copied().unwrap_or(0)).map(label))
-                    .flatten(),
+                    .then(|| diverged_at(state, &history.heads.iter().copied().collect::<Vec<_>>()))
+                    .flatten()
+                    .map(|v| label(&v, depth(state, v, &mut HashMap::new()))),
             }
         })
         .collect()
 }
 
-/// A version's number: one past its deepest parent, so every laptop numbers it the same.
+/// A version's number: one past its deepest parent, so every laptop numbers it the same. Walked with
+/// an explicit stack: every save is a version, so a history can be thousands deep.
 fn depth(state: &State, v: Hash, memo: &mut HashMap<Hash, u64>) -> u64 {
-    if let Some(d) = memo.get(&v) {
-        return *d;
+    let parents = |h: &Hash| -> Vec<Hash> {
+        state.versions.get(h).map(|h| h.parents.iter().filter(|p| state.versions.contains_key(*p)).copied().collect()).unwrap_or_default()
+    };
+    let mut stack = vec![v];
+    while let Some(&top) = stack.last() {
+        if memo.contains_key(&top) {
+            stack.pop();
+            continue;
+        }
+        let pending: Vec<Hash> = parents(&top).into_iter().filter(|p| !memo.contains_key(p)).collect();
+        if pending.is_empty() {
+            let d = 1 + parents(&top).iter().map(|p| memo[p]).max().unwrap_or(0);
+            memo.insert(top, d);
+            stack.pop();
+        } else {
+            stack.extend(pending);
+        }
     }
-    let parents = state.versions.get(&v).map(|h| h.parents.clone()).unwrap_or_default();
-    let d = 1 + parents.iter().filter(|p| state.versions.contains_key(*p)).map(|p| depth(state, *p, memo)).max().unwrap_or(0);
-    memo.insert(v, d);
-    d
+    memo[&v]
+}
+
+fn ancestors(state: &State, v: Hash) -> HashSet<Hash> {
+    let mut seen = HashSet::new();
+    let mut stack = vec![v];
+    while let Some(h) = stack.pop() {
+        if seen.insert(h) {
+            stack.extend(state.versions.get(&h).map(|h| h.parents.clone()).unwrap_or_default());
+        }
+    }
+    seen
+}
+
+/// The deepest version every head descends from: the one two people each edited.
+fn diverged_at(state: &State, heads: &[Hash]) -> Option<Hash> {
+    let mut common = ancestors(state, *heads.first()?);
+    for h in &heads[1..] {
+        let theirs = ancestors(state, *h);
+        common.retain(|a| theirs.contains(a));
+    }
+    let mut memo = HashMap::new();
+    common.into_iter().filter(|a| state.versions.contains_key(a)).max_by_key(|a| (depth(state, *a, &mut memo), *a))
 }
 
 fn initials(name: &str) -> String {
@@ -405,8 +497,8 @@ fn version_fields(h: &Header) -> VersionFields {
     }
 }
 
-fn hex_hash(s: &str) -> Hash {
-    hex::decode(s).ok().and_then(|b| b.try_into().ok()).expect("hex of a hash")
+fn folder_name(folder: &Path) -> String {
+    folder.file_name().map_or_else(|| folder.display().to_string(), |n| n.to_string_lossy().into_owned())
 }
 
 fn read_marker(path: &Path) -> Vec<Hash> {
@@ -714,5 +806,128 @@ mod tests {
     fn only_macro_free_types_open() {
         let got: Vec<bool> = ["nda.docx", "nda.DOCX", "nda.docm", "x.lnk", "x.html", "x.exe"].iter().map(|n| openable(n)).collect();
         assert_eq!(got, vec![true, true, false, false, false, false]);
+    }
+        #[test]
+    fn two_answers_to_one_invite_show_as_contested() {
+        let (mut ana, mut ben, mut mal, folder) = (laptop(), laptop(), laptop(), tempfile::tempdir().unwrap());
+        let (id, _) = matter(&mut ana, folder.path());
+        let link = ana.session.invite(id, "Ben Tan").unwrap();
+        ben.session.join(folder.path(), &link, "Ben Tan").unwrap();
+        mal.session.join(folder.path(), &link, "Mal").unwrap();
+        assert_eq!(ana.session.detail(id).unwrap().contested.len(), 1);
+    }
+
+    #[test]
+    fn withdrawing_a_contested_invite_clears_it() {
+        let (mut ana, mut ben, mut mal, folder) = (laptop(), laptop(), laptop(), tempfile::tempdir().unwrap());
+        let (id, _) = matter(&mut ana, folder.path());
+        let link = ana.session.invite(id, "Ben Tan").unwrap();
+        ben.session.join(folder.path(), &link, "Ben Tan").unwrap();
+        mal.session.join(folder.path(), &link, "Mal").unwrap();
+        let invite = ana.session.detail(id).unwrap().contested.remove(0).parse().unwrap();
+        ana.session.withdraw(id, invite).unwrap();
+        assert!(ana.session.detail(id).unwrap().contested.is_empty());
+    }
+
+    #[test]
+    fn a_save_that_cannot_be_recorded_still_shows_the_matter() {
+        let (mut ana, mut ben, folder) = (laptop(), laptop(), tempfile::tempdir().unwrap());
+        let (id, file) = matter(&mut ana, folder.path());
+        admit(&ana, &mut ben, id, folder.path());
+        let copy = ben.session.check_out(id, file).unwrap();
+        ana.session.briefcase(id).unwrap().remove(ben.session.keys.signer()).unwrap();
+        save_in_word(&copy, b"after removal");
+        assert_eq!(ben.session.detail(id).unwrap().not_recorded, vec!["nda.docx".to_string()]);
+    }
+
+    #[test]
+    fn joining_from_a_folder_without_the_matter_is_refused() {
+        let (mut ana, mut ben, folder, elsewhere) = (laptop(), laptop(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (id, _) = matter(&mut ana, folder.path());
+        let link = ana.session.invite(id, "Ben Tan").unwrap();
+        assert!(ben.session.join(elsewhere.path(), &link, "Ben Tan").is_err());
+    }
+
+    #[test]
+    fn answering_a_second_link_needs_its_number_confirmed_again() {
+        let (mut ana, mut ben, folder) = (laptop(), laptop(), tempfile::tempdir().unwrap());
+        let (id, _) = matter(&mut ana, folder.path());
+        ben.session.join(folder.path(), &ana.session.invite(id, "Ben Tan").unwrap(), "Ben Tan").unwrap();
+        let number = ben.session.detail(id).unwrap().safety_number.unwrap();
+        ben.session.confirm(id, &number).unwrap();
+        ben.session.join(folder.path(), &ana.session.invite(id, "Ben Tan").unwrap(), "Ben Tan").unwrap();
+        assert!(!ben.session.detail(id).unwrap().confirmed);
+    }
+
+    #[test]
+    fn an_unreachable_matter_is_listed_as_unavailable() {
+        let (mut ana, folder) = (laptop(), tempfile::tempdir().unwrap());
+        matter(&mut ana, folder.path());
+        fs::remove_dir_all(ana.session.root.join("briefcases")).unwrap();
+        fs::write(ana.session.root.join("briefcases"), b"not a folder").unwrap();
+        assert!(ana.session.matters().unwrap()[0].unavailable.is_some());
+    }
+
+    #[test]
+    fn closing_records_saved_copies_then_removes_this_launchs_files() {
+        let (mut ana, mut ben, folder) = (laptop(), laptop(), tempfile::tempdir().unwrap());
+        let (id, file) = matter(&mut ana, folder.path());
+        admit(&ana, &mut ben, id, folder.path());
+        save_in_word(&ben.session.check_out(id, file).unwrap(), b"saved before quit");
+        ben.session.close().unwrap();
+        let versions = ana.session.detail(id).unwrap().files[0].versions.len();
+        assert_eq!((versions, ben.session.root.exists()), (2, false));
+    }
+
+    #[test]
+    fn a_long_history_numbers_without_overflowing_the_stack() {
+        let mut state = State::default();
+        let mut parent: Option<Hash> = None;
+        for i in 0..20_000u32 {
+            let mut hash = [0u8; 32];
+            hash[..4].copy_from_slice(&i.to_be_bytes());
+            state.versions.insert(hash, version_header(parent));
+            parent = Some(hash);
+        }
+        assert_eq!(depth(&state, parent.unwrap(), &mut HashMap::new()), 20_000);
+    }
+
+    #[test]
+    fn the_banner_names_where_the_heads_diverged_not_an_earlier_merged_fork() {
+        // v1 → a, b; a + b → m (merged); m → x, y: the heads x and y diverged at m.
+        let mut state = State::default();
+        let h = |n: u8| [n; 32];
+        state.versions.insert(h(1), version_header(None));
+        state.versions.insert(h(2), version_header(Some(h(1))));
+        state.versions.insert(h(3), version_header(Some(h(1))));
+        let mut merge = version_header(Some(h(2)));
+        merge.parents.push(h(3));
+        state.versions.insert(h(4), merge);
+        state.versions.insert(h(5), version_header(Some(h(4))));
+        state.versions.insert(h(6), version_header(Some(h(4))));
+        let heads = [h(5), h(6)];
+        assert_eq!(diverged_at(&state, &heads), Some(h(4)));
+    }
+
+    fn version_header(parent: Option<Hash>) -> Header {
+        Header {
+            briefcase_id: [0; 32],
+            uuid: Uuid::nil(),
+            signer: [0; 32],
+            seq: 1,
+            prev: None,
+            parents: parent.into_iter().collect(),
+            admin_head: None,
+            body: Body::Version(VersionFields {
+                file_id: Uuid::nil(),
+                version_id: Uuid::nil(),
+                epoch: 1,
+                file_name: "nda.docx".into(),
+                media_type: String::new(),
+                size: 0,
+                created_at_ms: 0,
+                content_sha256: [0; 32],
+            }),
+        }
     }
 }

@@ -48,8 +48,8 @@ async function open(step: () => Promise<MatterSummary | null>) {
     </header>
 
     <p class="card text-sm text-[var(--primary-600)]">
-      Team sync is a preview. Rumble forgets its sync key when it quits, so matters you start or join now won't open
-      after a restart.
+      Team sync is a preview. When Rumble quits it records your saved changes, then forgets its sync key and its
+      working copies, so matters you start or join now won't open after a restart.
     </p>
 
     <section class="card space-y-3">
@@ -62,6 +62,9 @@ async function open(step: () => Promise<MatterSummary | null>) {
             <span class="font-medium text-[var(--primary-800)]">{{ matter.name }}</span>
             <span v-if="matter.standing === 'waiting'" class="text-xs text-[var(--primary-500)]">
               Waiting for {{ matter.waitingFor ?? "an admin" }}
+            </span>
+            <span v-else-if="matter.unavailable" class="text-xs text-[var(--primary-500)]">
+              Can't be read right now: {{ matter.unavailable }}
             </span>
           </button>
         </li>

@@ -12,8 +12,9 @@ const addToast = vi.fn()
 const push = vi.fn()
 vi.mock("vue-router", () => ({ useRouter: () => ({ push }) }))
 
-const acme = { id: "aa", name: "Acme NDA", folder: "/x/Acme NDA", standing: "admin", waitingFor: null }
-const beta = { id: "bb", name: "Beta lease", folder: "/x/Beta lease", standing: "waiting", waitingFor: "Ana Lim" }
+const acme = { id: "aa", name: "Acme NDA", folder: "/x/Acme NDA", standing: "admin", waitingFor: null, unavailable: null }
+const beta = { id: "bb", name: "Beta lease", folder: "/x/Beta lease", standing: "waiting", waitingFor: "Ana Lim", unavailable: null }
+const gone = { id: "cc", name: "Gone", folder: "/x/Gone", standing: "unavailable", waitingFor: null, unavailable: "folder missing" }
 
 function serve(replies: Record<string, unknown>) {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => replies[cmd])
@@ -44,6 +45,12 @@ describe("MattersView", () => {
     serve({ sync_matters: [beta] })
     const wrapper = await mountMatters()
     expect(wrapper.text()).toContain("Waiting for Ana Lim")
+  })
+
+  it("keeps a matter that can't be read in the list, saying why", async () => {
+    serve({ sync_matters: [gone] })
+    const wrapper = await mountMatters()
+    expect(wrapper.text()).toContain("Can't be read right now: folder missing")
   })
 
   it("says what a matter is when there are none", async () => {
