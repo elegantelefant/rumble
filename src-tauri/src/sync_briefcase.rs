@@ -200,6 +200,20 @@ impl State {
                 v.void.insert(*hash);
             }
         }
+        // An approval and a revoke of one invite can both stand only on concurrent branches: the revoke wins.
+        let revoked: HashSet<Uuid> = chain
+            .iter()
+            .filter(|(hash, _)| !v.void.contains(hash))
+            .filter_map(|(_, h)| match h.body {
+                Body::Member(Member::Revoke { invite }) => Some(invite),
+                _ => None,
+            })
+            .collect();
+        for (hash, h) in &chain {
+            if matches!(h.body, Body::Member(Member::Approve { invite: Some(i), .. }) if revoked.contains(&i)) {
+                v.void.insert(*hash);
+            }
+        }
         for r in effective.values() {
             v.membership.removed.entry(r.device).and_modify(|k| k.retain(|h| r.kept.contains(h))).or_insert_with(|| r.kept.clone());
         }
@@ -1784,6 +1798,21 @@ mod tests {
         let forged = forge_body(t.path(), &ana.keys, &state, state.tips(), None, body, b"", &[&epoch]);
         let state = ana.on(id, t.path()).sync().unwrap();
         assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::InviteNotOpen)));
+    }
+
+    /// Ana approves Cam while Ben, offline, revokes Cam's invite.
+    #[test]
+    fn revoke_in_one_admin_branch_wins_over_an_approval_in_the_other() {
+        let (t, id, laptops) = team(3);
+        let (ana, ben, cam) = (&laptops[0], &laptops[1], Laptop::new());
+        let number = ask(ana, &cam, id, t.path(), "Cam");
+        let invite = ben.on(id, t.path()).sync().unwrap().requests[&cam.keys.signer()].0;
+        let before = transport_names(t.path());
+        ana.on(id, t.path()).approve(cam.keys.signer(), false, &number).unwrap();
+        let aside = withhold(t.path(), &before);
+        ben.on(id, t.path()).revoke(invite).unwrap();
+        deliver(aside, t.path());
+        assert!(!laptops[2].on(id, t.path()).sync().unwrap().is_member(&cam.keys.signer()));
     }
 
     // ---- removal rotates the epoch ----
