@@ -31,8 +31,8 @@ struct Record {
     ciphertext: Hash,
     path: PathBuf,
     header: Header,
-    /// The epoch (number, recipient) whose identity opened it; `None` if this device's own key did.
-    opened_by: Option<(u64, String)>,
+    /// For a version: the recipients of every held epoch carrying its signed number that opens it.
+    signed_epoch_opens: Vec<String>,
     /// The identity a `key` record carries.
     epoch: Option<Epoch>,
 }
@@ -71,8 +71,9 @@ pub struct State {
     /// Membership at this device's own head: every accepted approval, with removal cutoffs.
     pub roll: Membership,
     pub epochs: Vec<Epoch>,
-    pub devices: HashMap<PublicKey, DeviceFields>,
-    pub requests: HashMap<PublicKey, DeviceFields>,
+    /// Device → (seq, fields) of its newest self-description.
+    pub devices: HashMap<PublicKey, (u64, DeviceFields)>,
+    pub requests: HashMap<PublicKey, (u64, DeviceFields)>,
     pub versions: HashMap<Hash, Header>,
     pub files: BTreeMap<Uuid, FileHistory>,
     pub held: Vec<Uuid>,
@@ -83,6 +84,8 @@ pub struct State {
     pub write_block: Option<Hash>,
     own: Option<(u64, Hash)>,
     accepted: HashMap<Hash, (Uuid, Hash, PathBuf)>,
+    /// Every accepted record's header, for walking a signer's own chain.
+    signed: HashMap<Hash, Header>,
     restorable_genesis: Option<(Uuid, PathBuf)>,
 }
 
@@ -92,7 +95,7 @@ impl State {
     }
 
     pub fn current_epoch(&self) -> Option<&Epoch> {
-        self.epochs.iter().max_by_key(|e| e.number)
+        self.epochs.iter().max_by_key(|e| (e.number, e.recipient().to_string()))
     }
 
     fn tips(&self) -> Vec<Hash> {
@@ -105,9 +108,10 @@ impl State {
         tips
     }
 
-    /// The newest admin file this device has seen, as a record's `admin_head`.
-    fn admin_head(&self) -> Hash {
-        self.tips()[0]
+    /// The newest admin file this device has seen at which `signer` is a member, as its `admin_head`.
+    fn admin_head(&self, signer: &PublicKey) -> Hash {
+        let tips = self.tips();
+        tips.iter().find(|t| self.membership_at(&[**t]).members.contains(signer)).copied().unwrap_or(tips[0])
     }
 
     /// Membership as the admin chain stood at `heads`: their ancestors' approvals, plus every cutoff.
@@ -134,10 +138,20 @@ impl State {
         *h == self.id || self.admin.contains_key(h)
     }
 
-    /// The highest-seq accepted record a device signed: what a removal names as its cutoff.
+    /// The end of a device's accepted chain walked from seq 1 with no gap: what a removal names as its
+    /// cutoff. A record whose predecessor this device never accepted is not part of it.
     fn last_accepted(&self, device: &PublicKey) -> Option<Hash> {
-        let all = self.admin.iter().chain(&self.versions);
-        all.filter(|(_, h)| h.signer == *device).max_by_key(|(_, h)| h.seq).map(|(hash, _)| *hash)
+        let next: HashMap<Option<Hash>, Hash> = self
+            .signed
+            .iter()
+            .filter(|(_, h)| h.signer == *device)
+            .map(|(hash, h)| (h.prev, *hash))
+            .collect();
+        let mut tip = next.get(&None).copied();
+        while let Some(child) = tip.and_then(|t| next.get(&Some(t))) {
+            tip = Some(*child);
+        }
+        tip
     }
 }
 
@@ -183,11 +197,11 @@ impl<'k> Briefcase<'k> {
 
     pub fn approve(&self, device: PublicKey, admin: bool) -> Result<Hash, RecordError> {
         let mut state = self.writable_as_admin()?;
-        let fields = state.requests.get(&device).ok_or(RecordError::Malformed("no request from that device"))?;
+        let (_, fields) = state.requests.get(&device).ok_or(RecordError::Malformed("no request from that device"))?;
         let joiner: x25519::Recipient = fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?;
         let approval = self.admin_record(&mut state, Member::Approve { device, admin })?;
         let mut devices = vec![joiner];
-        for (signer, fields) in &state.devices {
+        for (signer, (_, fields)) in &state.devices {
             if state.is_member(signer) {
                 devices.push(fields.recipient.parse().map_err(|_| RecordError::Malformed("recipient"))?);
             }
@@ -226,7 +240,7 @@ impl<'k> Briefcase<'k> {
             created_at_ms: chrono::Utc::now().timestamp_millis(),
             content_sha256,
         });
-        let head = Some(state.admin_head());
+        let head = Some(state.admin_head(&self.keys.signer()));
         self.seal_record(&mut state, parents, head, body, |header, out| {
             sync_crypto::seal(self.keys, header, File::open(content)?, &[&epoch.recipient()], out)
         })
@@ -275,7 +289,7 @@ impl<'k> Briefcase<'k> {
     fn describe(&self, state: &mut State, epoch: &x25519::Recipient, display_name: &str) -> Result<Hash, RecordError> {
         let me = self.keys.recipient();
         let body = Body::Device(DeviceFields { display_name: display_name.into(), recipient: me.to_string() });
-        let head = Some(state.admin_head());
+        let head = Some(state.admin_head(&self.keys.signer()));
         self.seal_record(state, vec![], head, body, |header, out| {
             sync_crypto::seal(self.keys, header, io::empty(), &[epoch, &me], out)
         })
@@ -373,13 +387,25 @@ impl<'k> Briefcase<'k> {
             return Ok(Opening::Genesis(Genesis { uuid, path: path.into(), admin }));
         }
         let mut file = File::open(path)?;
-        let (header, rest, index) = sync_crypto::open(&mut file, uuid, &self.id, &self.identities(epochs))?;
+        let (header, rest, _) = sync_crypto::open(&mut file, uuid, &self.id, &self.identities(epochs))?;
         let epoch = match &header.body {
             Body::Key(fields) => Some(sync_crypto::epoch_from(fields, rest)?),
             _ => None,
         };
-        let opened_by = index.checked_sub(1).map(|i| (epochs[i].number, epochs[i].recipient().to_string()));
-        Ok(Opening::Record(Record { uuid, ciphertext, path: path.into(), header, opened_by, epoch }))
+        Ok(Opening::Record(Record { uuid, ciphertext, path: path.into(), header, signed_epoch_opens: vec![], epoch }))
+    }
+
+    /// A half-synced file can open and verify its first chunk; only the whole payload proves a version.
+    fn check_payload(&self, r: &Record, epochs: &[Epoch]) -> Result<(), RecordError> {
+        let Body::Version(fields) = &r.header.body else { return Ok(()) };
+        let mut file = File::open(&r.path)?;
+        let (_, rest, _) = sync_crypto::open(&mut file, r.uuid, &self.id, &self.identities(epochs))?;
+        let mut hasher = Sha256::new();
+        let size = io::copy(&mut rest.take(fields.size.saturating_add(1)), &mut hasher)?;
+        match size == fields.size && <[u8; 32]>::from(hasher.finalize()) == fields.content_sha256 {
+            true => Ok(()),
+            false => Err(RecordError::ContentMismatch),
+        }
     }
 
     /// Every stored copy that opens with what this device holds; repeated as `key` records yield epochs.
@@ -404,9 +430,21 @@ impl<'k> Briefcase<'k> {
             }
             pending = still;
             if pending.len() == before {
-                return Ok(opened);
+                break;
             }
         }
+        // Bind each version to its signed epoch, not to whichever held identity opened it first; only
+        // now, with every epoch in hand, so the answer can't depend on the order the store was read in.
+        for r in &mut opened.records {
+            if let Body::Version(fields) = &r.header.body {
+                for e in opened.epochs.iter().filter(|e| e.number == fields.epoch) {
+                    if opens_with(&r.path, &e.identity)? {
+                        r.signed_epoch_opens.push(e.recipient().to_string());
+                    }
+                }
+            }
+        }
+        Ok(opened)
     }
 
     /// Copy in every transport file not seen before that verifies. Returns how many were imported,
@@ -438,7 +476,9 @@ impl<'k> Briefcase<'k> {
         let temp = self.temp_path();
         let verified = fs::copy(path, &temp).map_err(RecordError::from).and_then(|_| {
             let (_, copied) = hash_file(&temp)?;
-            self.read(&temp, uuid, copied, &opened.epochs)?;
+            if let Opening::Record(r) = self.read(&temp, uuid, copied, &opened.epochs)? {
+                self.check_payload(&r, &opened.epochs)?;
+            }
             Ok(copied)
         });
         match verified {
@@ -458,8 +498,11 @@ impl<'k> Briefcase<'k> {
         let genesis = state.restorable_genesis.iter().map(|(uuid, path)| (uuid, &self.id, path));
         let records = state.accepted.values().map(|(uuid, hash, path)| (uuid, hash, path));
         for (uuid, hash, path) in genesis.chain(records) {
+            let name = format!("{uuid}-{}{RECORD_SUFFIX}", &hex::encode(hash)[..RESTORE_HASH_HEX]);
+            // Anyone can read hash8 off the original, so a file already squatting the name is replaced.
             if !present.contains(hash) {
-                self.place(path, &format!("{uuid}-{}{RECORD_SUFFIX}", &hex::encode(hash)[..RESTORE_HASH_HEX]))?;
+                let _ = fs::remove_file(self.transport.join(&name));
+                self.place(path, &name)?;
             }
         }
         Ok(())
@@ -497,8 +540,22 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
     for r in opened.records {
         records.entry(r.header.record_hash()).or_insert(r);
     }
+    // Each signer's records form one chain: seq 1 has no prev, and every prev sits exactly one seq below.
+    let broken: Vec<Hash> = records
+        .iter()
+        .filter(|(_, r)| match r.header.prev {
+            None => r.header.seq != 1,
+            Some(p) => records.get(&p).is_some_and(|q| q.header.signer != r.header.signer || q.header.seq + 1 != r.header.seq),
+        })
+        .map(|(h, _)| *h)
+        .collect();
+    for hash in broken {
+        let r = records.remove(&hash).expect("collected from records");
+        state.rejected.push((r.uuid, RecordError::Malformed("seq")));
+    }
     fn accept(state: &mut State, hash: Hash, r: &Record) {
         state.accepted.insert(hash, (r.uuid, r.ciphertext, r.path.clone()));
+        state.signed.insert(hash, r.header.clone());
     }
 
     // The admin chain: a `member` record counts once its parents do and its signer is an admin there.
@@ -589,18 +646,18 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
                     // A device describes itself before it is approved, so it is judged at this device's head.
                     Body::Device(fields) => {
                         if !state.roll.members.contains(&h.signer) && !state.roll.removed.contains_key(&h.signer) {
-                            state.requests.insert(h.signer, fields.clone());
+                            insert_newest(&mut state.requests, h, fields);
                             continue;
                         }
                         let verdict = state.roll.admit(h);
                         if verdict.is_ok() {
-                            state.devices.insert(h.signer, fields.clone());
+                            insert_newest(&mut state.devices, h, fields);
                         }
                         verdict
                     }
                     Body::Version(fields) => state.membership_at(&[head]).admit(h).and_then(|()| {
                         let epoch_held = state.epochs.iter().any(|e| {
-                            r.opened_by.as_ref() == Some(&(e.number, e.recipient().to_string())) && e.number == fields.epoch
+                            e.number == fields.epoch && r.signed_epoch_opens.contains(&e.recipient().to_string())
                         });
                         match epoch_held {
                             true => {
@@ -623,20 +680,23 @@ fn fold(id: Hash, me: PublicKey, opened: Opened, unverified: Vec<(String, Record
     state
 }
 
-/// The records of a removed device that stay accepted: its cutoff, and what the cutoff's `prev` chain
-/// reaches with `seq` falling by one each step. A record the device signs later can't join that chain,
-/// whatever `seq` it claims, because the cutoff hash already fixes every link. A missing link ends it.
+/// A device may describe itself more than once; its highest-seq record wins, whatever the read order.
+fn insert_newest(map: &mut HashMap<PublicKey, (u64, DeviceFields)>, h: &Header, fields: &DeviceFields) {
+    if map.get(&h.signer).is_none_or(|(seq, _)| *seq < h.seq) {
+        map.insert(h.signer, (h.seq, fields.clone()));
+    }
+}
+
+/// The records of a removed device that stay accepted: its cutoff and what the cutoff's `prev` chain
+/// reaches (each link one seq below the last, checked at import). A record the device signs later can't
+/// join that chain, whatever `seq` it claims, because the cutoff hash already fixes every link. The chain
+/// ends at the first link this device doesn't hold, which is not kept: what nobody saw before stays out.
 fn kept_chain(records: &HashMap<Hash, Record>, device: PublicKey, cutoff: Option<Hash>) -> HashSet<Hash> {
     let mut kept = HashSet::new();
-    let (mut next, mut want_seq) = (cutoff, None);
-    while let Some(hash) = next {
-        let record = records.get(&hash).map(|r| &r.header).filter(|h| h.signer == device);
-        if want_seq.is_some_and(|seq| record.is_some_and(|h| h.seq != seq)) {
-            break;
-        }
-        kept.insert(hash);
-        let Some(h) = record else { break };
-        (next, want_seq) = (h.prev, h.seq.checked_sub(1));
+    let mut next = cutoff;
+    while let Some(h) = next.and_then(|hash| records.get(&hash)).map(|r| &r.header).filter(|h| h.signer == device) {
+        kept.insert(next.expect("walked from a hash"));
+        next = h.prev;
     }
     kept
 }
@@ -675,6 +735,11 @@ fn histories(versions: &HashMap<Hash, Header>) -> BTreeMap<Uuid, FileHistory> {
         file.forks = file.versions.iter().filter(|v| children.get(*v).is_some_and(|c| c.len() > 1)).copied().collect();
     }
     files
+}
+
+fn opens_with(path: &Path, identity: &dyn age::Identity) -> Result<bool, RecordError> {
+    let decryptor = age::Decryptor::new(File::open(path)?).map_err(RecordError::Decrypt)?;
+    Ok(decryptor.decrypt(std::iter::once(identity)).is_ok())
 }
 
 fn genesis_admin(bytes: &[u8]) -> Option<PublicKey> {
@@ -853,7 +918,7 @@ mod tests {
 
         // Ana starts, sees the request, approves and stops.
         let state = ana.on(id, t).sync().unwrap();
-        assert_eq!(state.requests[&ben.keys.signer()].display_name, "Ben Tan");
+        assert_eq!(state.requests[&ben.keys.signer()].1.display_name, "Ben Tan");
         ana.on(id, t).approve(ben.keys.signer(), false).unwrap();
 
         // Ben starts, is in, and saves v2 on top of v1.
@@ -863,7 +928,7 @@ mod tests {
         // Ana starts and sees v2 by Ben.
         let state = ana.on(id, t).sync().unwrap();
         assert_eq!(state.files[&FILE].heads, BTreeSet::from([v2]));
-        assert_eq!(state.devices[&state.versions[&v2].signer].display_name, "Ben Tan");
+        assert_eq!(state.devices[&state.versions[&v2].signer].1.display_name, "Ben Tan");
 
         // Both edit v2 offline: neither sees the other's save until both have saved.
         let before = transport_names(t);
@@ -982,7 +1047,7 @@ mod tests {
         let state = laptops[0].on(id, t.path()).sync().unwrap();
         let outsider = DeviceKeys::generate();
         // Anyone with the link can encrypt to the epoch; only a member's signature counts.
-        let forged = forge(t.path(), &outsider, id, 1, None, state.admin_head(), state.current_epoch().unwrap());
+        let forged = forge(t.path(), &outsider, id, 1, None, state.admin_head(&outsider.signer()), state.current_epoch().unwrap());
         let state = laptops[0].on(id, t.path()).sync().unwrap();
         assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::NotMember)));
     }
@@ -1016,7 +1081,7 @@ mod tests {
         ana.on(id, t.path()).remove(ben.keys.signer()).unwrap();
         // Ben's request is his first record; the backdated one claims to follow it, at v1's seq.
         let first = before_removal.versions[&v1].prev.unwrap();
-        let forged = forge(t.path(), &ben.keys, id, before_removal.versions[&v1].seq, Some(first), before_removal.admin_head(), before_removal.current_epoch().unwrap());
+        let forged = forge(t.path(), &ben.keys, id, before_removal.versions[&v1].seq, Some(first), before_removal.admin_head(&ben.keys.signer()), before_removal.current_epoch().unwrap());
         let state = ana.on(id, t.path()).sync().unwrap();
         assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::AfterRemovalCutoff)));
     }
@@ -1047,6 +1112,198 @@ mod tests {
         laptops[0].on(id, t.path()).sync().unwrap();
         let state = laptops[1].on(id, t.path()).sync().unwrap();
         assert!(state.write_block.is_none() && state.admin.contains_key(&removal) && !state.is_member(&laptops[2].keys.signer()));
+    }
+
+    /// A hand-built record of any kind from `keys`, next in its own chain, sealed to `recipients`.
+    fn forge_body(t: &Path, keys: &DeviceKeys, state: &State, parents: Vec<Hash>, admin_head: Option<Hash>, body: Body, payload: &[u8], recipients: &[&dyn age::Recipient]) -> Header {
+        let header = Header {
+            briefcase_id: state.id,
+            uuid: Uuid::new_v4(),
+            signer: keys.signer(),
+            seq: state.own.map_or(1, |(s, _)| s + 1),
+            prev: state.own.map(|(_, h)| h),
+            parents,
+            admin_head,
+            body,
+        };
+        let mut out = File::create(file_of(t, header.uuid)).unwrap();
+        sync_crypto::seal(keys, &header, payload, recipients, &mut out).unwrap();
+        header
+    }
+
+    #[test]
+    fn removed_device_records_before_its_cutoff_stay_accepted() {
+        let (t, id, laptops) = team(2);
+        let v1 = laptops[1].save(id, t.path(), b"v1 by Ben", vec![]);
+        laptops[1].save(id, t.path(), b"v2 by Ben", vec![v1]);
+        laptops[0].on(id, t.path()).remove(laptops[1].keys.signer()).unwrap();
+        assert!(laptops[0].on(id, t.path()).sync().unwrap().versions.contains_key(&v1));
+    }
+
+    #[test]
+    fn approval_signed_by_a_non_admin_member_is_rejected() {
+        let (t, id, laptops) = team(2);
+        let ben = &laptops[1];
+        let state = ben.on(id, t.path()).sync().unwrap();
+        let epoch = state.current_epoch().unwrap().recipient();
+        let body = Body::Member(Member::Approve { device: DeviceKeys::generate().signer(), admin: true });
+        let forged = forge_body(t.path(), &ben.keys, &state, state.tips(), None, body, b"", &[&epoch]);
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::NotAdmin)));
+    }
+
+    /// Ben, a member but no admin, issues his own epoch and seals a version to it.
+    fn epoch_issued_by_a_non_admin() -> (tempfile::TempDir, Hash, Vec<Laptop>, Epoch, Header) {
+        let (t, id, laptops) = team(2);
+        let (ana, ben) = (&laptops[0], &laptops[1]);
+        let state = ben.on(id, t.path()).sync().unwrap();
+        let rogue = Epoch::generate(2);
+        let body = Body::Key(KeyFields { epoch: 2, epoch_recipient: rogue.recipient().to_string() });
+        let line = format!("{}\n", age::secrecy::ExposeSecret::expose_secret(&rogue.identity.to_string()));
+        forge_body(t.path(), &ben.keys, &state, state.tips(), None, body, line.as_bytes(), &[&ana.keys.recipient(), &ben.keys.recipient()]);
+        let state = ben.on(id, t.path()).sync().unwrap();
+        let content = b"sealed to a rogue epoch";
+        let body = Body::Version(VersionFields {
+            file_id: FILE,
+            version_id: Uuid::new_v4(),
+            epoch: 2,
+            file_name: "nda.docx".into(),
+            media_type: DOCX.into(),
+            size: content.len() as u64,
+            created_at_ms: 0,
+            content_sha256: Sha256::digest(content).into(),
+        });
+        let version = forge_body(t.path(), &ben.keys, &state, vec![], Some(state.admin_head(&ben.keys.signer())), body, content, &[&rogue.recipient()]);
+        (t, id, laptops, rogue, version)
+    }
+
+    #[test]
+    fn key_file_from_a_non_admin_member_is_not_an_epoch() {
+        let (t, id, laptops, rogue, _) = epoch_issued_by_a_non_admin();
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(state.epochs.iter().all(|e| e.recipient().to_string() != rogue.recipient().to_string()));
+    }
+
+    #[test]
+    fn version_sealed_to_an_epoch_no_admin_issued_is_rejected() {
+        let (t, id, laptops, _, version) = epoch_issued_by_a_non_admin();
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, version.uuid), Some(RecordError::WrongEpoch)));
+    }
+
+    #[test]
+    fn removing_an_admin_is_rejected() {
+        let (t, id, laptops) = team(1);
+        let (ana, bea) = (&laptops[0], Laptop::new());
+        let link = ana.on(id, t.path()).sync().unwrap().current_epoch().unwrap().recipient();
+        bea.on(id, t.path()).request(&link, "Bea").unwrap();
+        ana.on(id, t.path()).approve(bea.keys.signer(), true).unwrap();
+        ana.on(id, t.path()).remove(bea.keys.signer()).unwrap();
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(state.is_member(&bea.keys.signer()) && state.rejected.iter().any(|(_, e)| matches!(e, RecordError::RemovesAnAdmin)));
+    }
+
+    // ---- regressions from the adversarial review ----
+
+    #[test]
+    fn squatted_restore_name_does_not_stop_a_restore() {
+        let (t, id, laptops) = team(2);
+        let v1 = laptops[0].save(id, t.path(), b"v1", vec![]);
+        let (uuid, hash, _) = laptops[0].on(id, t.path()).sync().unwrap().accepted[&v1].clone();
+        fs::remove_file(file_of(t.path(), uuid)).unwrap();
+        fs::write(t.path().join(format!("{uuid}-{}.rumble", &hex::encode(hash)[..RESTORE_HASH_HEX])), b"junk").unwrap();
+        laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(laptops[1].on(id, t.path()).sync().unwrap().versions.contains_key(&v1));
+    }
+
+    #[test]
+    fn record_withheld_until_after_a_removal_is_not_kept() {
+        let (t, id, laptops) = team(2);
+        let (ana, ben) = (&laptops[0], &laptops[1]);
+        let state = ben.on(id, t.path()).sync().unwrap();
+        let (seq, prev) = state.own.unwrap();
+        let (epoch, head) = (state.current_epoch().unwrap(), state.admin_head(&ben.keys.signer()));
+        let before = transport_names(t.path());
+        let withheld = forge(t.path(), &ben.keys, id, seq + 1, Some(prev), head, epoch);
+        let aside = withhold(t.path(), &before);
+        forge(t.path(), &ben.keys, id, seq + 2, Some(withheld.record_hash()), head, epoch);
+        ana.on(id, t.path()).remove(ben.keys.signer()).unwrap();
+        deliver(aside, t.path());
+        let state = ana.on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, withheld.uuid), Some(RecordError::AfterRemovalCutoff)));
+    }
+
+    #[test]
+    fn record_that_skips_seq_is_rejected() {
+        let (t, id, laptops) = team(2);
+        let state = laptops[1].on(id, t.path()).sync().unwrap();
+        let (seq, prev) = state.own.unwrap();
+        let head = state.admin_head(&laptops[1].keys.signer());
+        let forged = forge(t.path(), &laptops[1].keys, id, seq + 1000, Some(prev), head, state.current_epoch().unwrap());
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        assert!(matches!(rejected_for(&state, forged.uuid), Some(RecordError::Malformed("seq"))));
+    }
+
+    /// Two admins approve offline at once, so the admin chain has two tips; the joiner writes next.
+    #[test]
+    fn member_approved_on_one_admin_branch_can_write() {
+        for _ in 0..6 {
+            let (t, id, laptops) = team(1);
+            let t = t.path();
+            let (ana, bea, dee) = (&laptops[0], Laptop::new(), Laptop::new());
+            let link = ana.on(id, t).sync().unwrap().current_epoch().unwrap().recipient();
+            bea.on(id, t).request(&link, "Bea").unwrap();
+            ana.on(id, t).approve(bea.keys.signer(), true).unwrap();
+            let cam = Laptop::new();
+            cam.on(id, t).request(&link, "Cam").unwrap();
+            dee.on(id, t).request(&link, "Dee").unwrap();
+            bea.on(id, t).sync().unwrap();
+            let before = transport_names(t);
+            ana.on(id, t).approve(cam.keys.signer(), false).unwrap();
+            let aside = withhold(t, &before);
+            bea.on(id, t).approve(dee.keys.signer(), false).unwrap();
+            deliver(aside, t);
+            let v = dee.save(id, t, b"by Dee", vec![]);
+            assert!(ana.on(id, t).sync().unwrap().versions.contains_key(&v));
+        }
+    }
+
+    #[test]
+    fn version_is_judged_by_its_signed_epoch_whatever_else_it_is_sealed_to() {
+        let (t, id, laptops) = team(2);
+        let (ana, ben) = (&laptops[0], &laptops[1]);
+        let a = ana.on(id, t.path());
+        let mut state = a.sync().unwrap();
+        let second = Epoch::generate(2);
+        let tips = state.tips();
+        a.write_key_file(&mut state, tips, &second, &[ana.keys.recipient(), ben.keys.recipient()]).unwrap();
+        let state = ben.on(id, t.path()).sync().unwrap();
+        let first = state.epochs.iter().find(|e| e.number == 1).unwrap().recipient();
+        let content = b"sealed to both epochs";
+        let body = Body::Version(VersionFields {
+            file_id: FILE,
+            version_id: Uuid::new_v4(),
+            epoch: 2,
+            file_name: "nda.docx".into(),
+            media_type: DOCX.into(),
+            size: content.len() as u64,
+            created_at_ms: 0,
+            content_sha256: Sha256::digest(content).into(),
+        });
+        let head = Some(state.admin_head(&ben.keys.signer()));
+        let v = forge_body(t.path(), &ben.keys, &state, vec![], head, body, content, &[&first, &second.recipient()]);
+        assert!(ana.on(id, t.path()).sync().unwrap().versions.contains_key(&v.record_hash()));
+    }
+
+    #[test]
+    fn half_synced_version_is_not_imported() {
+        let (t, id, laptops) = team(2);
+        let big = vec![7u8; 400 * 1024];
+        let v1 = laptops[0].save(id, t.path(), &big, vec![]);
+        let path = file_of(t.path(), laptops[0].on(id, t.path()).sync().unwrap().accepted[&v1].0);
+        let bytes = fs::read(&path).unwrap();
+        fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        assert!(!laptops[1].on(id, t.path()).sync().unwrap().versions.contains_key(&v1));
     }
 
     #[test]
