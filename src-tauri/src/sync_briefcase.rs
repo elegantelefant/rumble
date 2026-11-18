@@ -389,6 +389,16 @@ impl<'k> Briefcase<'k> {
         Ok(sync_crypto::safety_number(&fs::read(self.root.join(LINK_FILE))?, &self.keys.signer()))
     }
 
+    /// The link this device answered, if it joined rather than created the matter.
+    pub fn answered(&self) -> Option<Link> {
+        Link::verify(&fs::read(self.root.join(LINK_FILE)).ok()?).ok()
+    }
+
+    /// This device's user tapped "Numbers match", or created the matter.
+    pub fn confirmed(&self) -> bool {
+        self.root.join(CONFIRMED_FILE).exists()
+    }
+
     /// The joiner taps "Numbers match": only then does this device write to the matter.
     pub fn confirm(&self, number: &str) -> Result<(), RecordError> {
         if number != self.safety_number()? {

@@ -25,6 +25,7 @@ use uuid::Uuid;
 mod sync_crypto;
 #[cfg_attr(not(test), allow(dead_code))]
 mod sync_briefcase;
+mod sync_matters;
 
 // Keep one rotated file plus the active file, each about 5 MiB.
 const MAX_LOG_FILE_BYTES: u128 = 5 * 1024 * 1024;
