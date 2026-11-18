@@ -941,7 +941,6 @@ fn judge_admin_file(at: &View, h: &Header) -> Result<(), RecordError> {
             Err(RecordError::NotMember)
         }
         Body::Member(Member::Revoke { invite }) if !open(invite) => Err(RecordError::InviteNotOpen),
-        Body::Member(Member::Rotate { epoch, .. }) if *epoch != next_epoch(at) => Err(RecordError::WrongEpoch),
         Body::Member(Member::Invite { link }) => {
             let parsed = Link::verify(link)?;
             if parsed.admin != h.signer || parsed.briefcase_id != h.briefcase_id || at.invites.contains_key(&parsed.invite) {
@@ -1806,9 +1805,21 @@ mod tests {
     }
 
     #[test]
-    fn remaining_member_reads_a_version_saved_after_a_removal() {
+    fn remaining_member_saves_under_the_epoch_issued_at_a_removal() {
         let (t, id, laptops, v) = saved_after_a_removal();
-        assert!(laptops[0].on(id, t.path()).sync().unwrap().versions.contains_key(&v));
+        let state = laptops[0].on(id, t.path()).sync().unwrap();
+        let Body::Version(fields) = &state.versions[&v].body else { unreachable!() };
+        assert_eq!(fields.epoch, state.current_epoch().unwrap().number);
+    }
+
+    /// Ana's chain holds `key` files only she can open; her removal must still keep what she wrote.
+    #[test]
+    fn removed_admins_version_before_its_cutoff_stays_accepted() {
+        let (t, id, laptops) = team(3);
+        let v = laptops[0].save(id, t.path(), b"v1 by Ana", vec![]);
+        laptops[1].on(id, t.path()).remove(laptops[0].keys.signer()).unwrap();
+        let state = laptops[2].on(id, t.path()).sync().unwrap();
+        assert!(!state.is_member(&laptops[0].keys.signer()) && state.versions.contains_key(&v));
     }
 
     // ---- equivocation ----
