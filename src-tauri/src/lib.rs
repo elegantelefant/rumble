@@ -85,7 +85,7 @@ const HEALTH_POLL_INTERVAL_MS: u64 = 500;
 
 /// The vendored cloud contract (`openapi.json`) serves everything under this prefix.
 const CLOUD_API_PREFIX: &str = "/api/v1";
-const PREMIUM_REQUIRED: &str = "This feature requires Elefant Premium.";
+const PREMIUM_REQUIRED: &str = "This feature needs Elefant cloud, coming later with the Business and Enterprise plans.";
 /// BYOK is OpenAI-only for now (#35): the sidecar only constructs an OpenAI provider.
 const BYOK_KEY_PROVIDER: &str = "openai";
 const BYOK_KEY_MISSING: &str = "Add an OpenAI API key in Settings before switching to BYOK.";
@@ -2027,6 +2027,14 @@ mod tests {
             let state = make_state(mode, None);
             assert_eq!(state.resolve_url("/chats"), Err("sidecar not running".to_string()));
         }
+    }
+
+    #[test]
+    fn the_cloud_refusal_names_elefant_cloud_and_the_business_and_enterprise_plans() {
+        assert_eq!(
+            PREMIUM_REQUIRED,
+            "This feature needs Elefant cloud, coming later with the Business and Enterprise plans."
+        );
     }
 
     #[test]
