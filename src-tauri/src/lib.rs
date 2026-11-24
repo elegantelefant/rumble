@@ -1011,11 +1011,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
-<<<<<<< HEAD
-    let db_key = database_key()?;
-=======
     let db_key = database_key(&data_dir)?;
->>>>>>> origin/main
     let sidecar_cmd = sidecar_command(app)?
         .args([
             "--port",

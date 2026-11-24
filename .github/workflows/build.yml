@@ -166,11 +166,7 @@ jobs:
             hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
             app="$mount_dir/Elefant - Rumble.app"
             codesign --verify --deep --strict --verbose=2 "$app"
-<<<<<<< HEAD
             scripts/smoke-macos-app.sh "$app"
-=======
-            "$app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar" --help
->>>>>>> origin/main
             detach_mount
           done
 
