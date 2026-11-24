@@ -44,11 +44,6 @@ const ALLOWLIST: Record<string, string[]> = {
     "encrypt",
     "sqlcipher",
   ],
-  [join(SRC_ROOT, "views", "SettingsView.vue")]: [
-    // #130: the same owner-approved, mode-independent storage claim as
-    // README.md; SECURITY.md documents its scope and migration limits.
-    "encrypt",
-  ],
 };
 
 function listSourceFiles(dir: string): string[] {
