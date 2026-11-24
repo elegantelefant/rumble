@@ -277,8 +277,8 @@ describe("SettingsView", () => {
       mockCommands({ load_settings: () => saved })
       const wrapper = await mountAndLoad()
       await openTab(wrapper, "Appearance")
-      const theme = wrapper.findAll("select").find((s) => s.text().includes("Match system"))!
-      expect((theme.element as HTMLSelectElement).value).toBe("dark")
+      const navigation = wrapper.findAll("label").find((l) => l.text().includes("Navigation sidebar"))!.get("select")
+      expect((navigation.element as HTMLSelectElement).value).toBe("right")
     })
 
     it("shows no briefcase or resource controls in the Templates tab", async () => {
@@ -348,14 +348,14 @@ describe("SettingsView", () => {
       mockCommands({
         load_settings: () => ({
           workspace: { templatesPath: 3 },
-          appearance: { theme: 3 },
+          appearance: { navigationSidebar: 3 },
         }),
         save_settings: () => null,
       })
       const wrapper = await mountAndLoad()
       await submit(wrapper)
       expect(savedPayload().workspace.templatesPath).toBe("~/Documents/LegalTemplates")
-      expect(savedPayload().appearance.theme).toBe("system")
+      expect(savedPayload().appearance.navigationSidebar).toBe("left")
     })
 
     it("does not carry unknown saved keys into the form", async () => {
@@ -384,8 +384,8 @@ describe("SettingsView", () => {
         "error",
       )
       await openTab(wrapper, "Appearance")
-      const theme = wrapper.findAll("select").find((s) => s.text().includes("Match system"))!
-      expect((theme.element as HTMLSelectElement).value).toBe("system")
+      const navigation = wrapper.findAll("label").find((l) => l.text().includes("Navigation sidebar"))!.get("select")
+      expect((navigation.element as HTMLSelectElement).value).toBe("left")
     })
 
     it("unlocks the form after a failed load", async () => {
@@ -451,7 +451,11 @@ describe("SettingsView", () => {
       const settings = savedPayload()
       expect(Object.keys(settings).sort()).toEqual(["appearance", "localConfig", "workspace"])
       expect(settings.workspace).toEqual({ templatesPath: "/firm/updated-templates" })
-      expect(settings.appearance.theme).toBe("dark")
+      expect(settings.appearance).toEqual({
+        navigationSidebar: "right",
+        contextSidebar: "right",
+        showChatSidebarByDefault: true,
+      })
     })
 
     it("saves the loaded local runtime config", async () => {

@@ -360,7 +360,7 @@ test.describe("7. Focus States", () => {
   test("7c. select focus ring visible", async ({ page }) => {
     await gotoRoute(page, "/settings");
     await page.getByRole("button", { name: "Appearance" }).click();
-    const select = page.getByLabel("Theme");
+    const select = page.getByLabel("Navigation sidebar");
     await select.focus();
     await expect(select).toBeFocused();
     await page.screenshot({ path: S("07c-select-focus-ring"), fullPage: true });

@@ -45,6 +45,27 @@ jobs:
       - run: uv run pytest -q
         working-directory: src-tauri/sidecar
 
+  python-macos:
+    name: Python (pytest, macOS packaging smokes)
+    # These tests codesign synthetic bundles, so they only run on macOS; ubuntu skips them.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - run: uv sync
+        working-directory: src-tauri/sidecar
+
+      - run: uv run pytest -q tests/test_macos_app_smoke.py
+        working-directory: src-tauri/sidecar
+
   rust:
     name: Rust (cargo test)
     runs-on: ubuntu-latest

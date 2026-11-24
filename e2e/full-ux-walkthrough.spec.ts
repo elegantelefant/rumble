@@ -566,14 +566,6 @@ test.describe("8. Settings", () => {
     await page.screenshot({ path: S("08j-settings-appearance"), fullPage: true });
   });
 
-  test("8k. appearance tab — change theme", async ({ page }) => {
-    await page.getByRole("button", { name: "Appearance" }).click();
-    const theme = page.getByLabel("Theme");
-    await theme.selectOption("dark");
-    await expect(theme).toHaveValue("dark");
-    await page.screenshot({ path: S("08k-settings-theme-dark"), fullPage: true });
-  });
-
   test("8o. save settings reports the failure without a host", async ({ page }) => {
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByText("Couldn't save settings")).toBeVisible();

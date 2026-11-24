@@ -236,7 +236,6 @@ async function pickTemplatesFolder() {
 const appearanceSettings = reactive({
   navigationSidebar: "left",
   contextSidebar: "right",
-  theme: "system",
   showChatSidebarByDefault: true,
 });
 
@@ -605,14 +604,6 @@ const selectedProviderDetails = computed(() =>
             <select v-model="appearanceSettings.contextSidebar" class="input mt-1">
               <option value="left">Left</option>
               <option value="right">Right</option>
-            </select>
-          </label>
-          <label class="text-sm font-medium text-[var(--primary-700)]">
-            Theme
-            <select v-model="appearanceSettings.theme" class="input mt-1">
-              <option value="system">Match system</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
             </select>
           </label>
           <label class="flex items-center gap-2 text-sm font-medium text-[var(--primary-700)]">
