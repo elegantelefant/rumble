@@ -64,7 +64,7 @@ def _ps_rows(columns: str, fields: int) -> list[list[str]]:
 def _process_table() -> dict[int, _Process]:
     """Two `ps` calls joined by pid, each with its free-text column last and alone.
     The name comes from `comm`, not the first word of `args`: the real bundle
-    path is ".../Elefant - Rumble.app/Contents/MacOS/rumble-sidecar", which has
+    path is ".../Elefant - Rumble.app/Contents/Helpers/rumble-sidecar.app/...", which has
     spaces in it, so splitting args on whitespace would cut it apart."""
     args_by_pid = {int(pid): args for pid, args in _ps_rows("pid=,args=", 2)}
     return {
@@ -74,9 +74,10 @@ def _process_table() -> dict[int, _Process]:
 
 
 def _host_of(proc: _Process, table: dict[int, _Process]) -> _Process | None:
-    """The nearest ancestor that isn't a rumble-sidecar: a frozen sidecar is a
-    PyInstaller bootloader plus its Python child, so the child's host is its
-    grandparent. None when the chain breaks because an ancestor already exited."""
+    """The nearest ancestor that isn't a rumble-sidecar: a frozen onefile sidecar
+    (Windows, Linux) is a PyInstaller bootloader plus its Python child, so the
+    child's host is its grandparent; the macOS onedir helper is one process.
+    None when the chain breaks because an ancestor already exited."""
     parent = table.get(proc.ppid)
     while parent is not None and parent.name == SIDECAR_EXE_NAME:
         parent = table.get(parent.ppid)
