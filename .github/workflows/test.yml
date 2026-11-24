@@ -1,5 +1,5 @@
 # ABOUTME: CI workflow that runs frontend, Python, and Rust tests on every push/PR.
-# ABOUTME: Three parallel jobs on ubuntu-latest for fast feedback.
+# ABOUTME: Parallel jobs on ubuntu: Vitest, Playwright, pytest and cargo test.
 
 name: Test
 
@@ -25,6 +25,30 @@ jobs:
       - run: pnpm install
       - run: pnpm vitest run
 
+  e2e:
+    name: Frontend (Playwright)
+    # The pinned Playwright has no chromium build for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e --workers=1
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
+
   python:
     name: Python (pytest)
     runs-on: ubuntu-latest
@@ -43,6 +67,27 @@ jobs:
         working-directory: src-tauri/sidecar
 
       - run: uv run pytest -q
+        working-directory: src-tauri/sidecar
+
+  python-macos:
+    name: Python (pytest, macOS packaging smokes)
+    # These tests codesign synthetic bundles, so they only run on macOS; ubuntu skips them.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - run: uv sync
+        working-directory: src-tauri/sidecar
+
+      - run: uv run pytest -q tests/test_macos_app_smoke.py
         working-directory: src-tauri/sidecar
 
   rust:

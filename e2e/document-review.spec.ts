@@ -2,6 +2,8 @@
 // ABOUTME: Validates file upload UI, session list, chat interface, and workflow display.
 import { expect, test } from "@playwright/test";
 import { gotoRoute } from "./helpers";
+import { fakeHostCalls } from "./fake-host";
+import { EXTRACTED_TEXT, FOLLOW_UP_REPLY, installReviewHost, REVIEW_SUMMARY, REVIEWED_FILE, uploadReviewedDocument } from "./review-host";
 
 test.describe("Document Review", () => {
   test.beforeEach(async ({ page }) => {
@@ -30,29 +32,43 @@ test.describe("Document Review", () => {
     await expect(page.getByText("PDF, DOCX, TXT supported")).toBeVisible();
   });
 
-  test("shows pre-seeded document session", async ({ page }) => {
-    await expect(page.getByText("Contract_2024.pdf").first()).toBeVisible();
-    await expect(page.getByText("Summary ready")).toBeVisible();
-  });
+  test.describe("with a reviewed document", () => {
+    test.beforeEach(async ({ page }) => {
+      await installReviewHost(page);
+      // The outer beforeEach already loaded the app without a host; reload so the init script runs first.
+      await page.reload();
+      await uploadReviewedDocument(page);
+    });
 
-  test("active session displays chat messages", async ({ page }) => {
-    await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
-    await expect(page.getByText("Highlight the key renewal obligations")).toBeVisible();
-    await expect(page.getByText("Renewal clauses flagged")).toBeVisible();
-  });
+    test("lists the uploaded document with its review ready", async ({ page }) => {
+      await expect(page.getByText(REVIEWED_FILE).first()).toBeVisible();
+      await expect(page.getByText("Summary ready")).toBeVisible();
+    });
 
-  test("chat input and send button are present", async ({ page }) => {
-    const input = page.locator("#document-question");
-    await expect(input).toBeVisible();
-    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
-  });
+    test("sends the extracted document text for review", async ({ page }) => {
+      const review = (await fakeHostCalls(page)).find((call) => call.path === "/review");
+      expect(review?.body).toMatchObject({ text: EXTRACTED_TEXT });
+    });
 
-  test("can type and submit a follow-up question", async ({ page }) => {
-    const input = page.locator("#document-question");
-    await input.fill("What are the termination clauses?");
-    await page.getByRole("button", { name: "Send" }).click();
-    // User message appears in chat
-    await expect(page.getByText("What are the termination clauses?")).toBeVisible();
+    test("shows the review in the chat", async ({ page }) => {
+      await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
+      // Once in the session list, once as the assistant's first message.
+      await expect(page.getByText(REVIEW_SUMMARY)).toHaveCount(2);
+    });
+
+    test("chat input and send button are present", async ({ page }) => {
+      await expect(page.locator("#document-question")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+    });
+
+    test("can type and submit a follow-up question and see the streamed reply", async ({ page }) => {
+      await page.locator("#document-question").fill("What are the termination clauses?");
+      await page.getByRole("button", { name: "Send" }).click();
+      await expect(page.getByText("What are the termination clauses?")).toBeVisible();
+      await expect(page.getByText(FOLLOW_UP_REPLY)).toBeVisible();
+      const streamed = (await fakeHostCalls(page)).find((call) => call.cmd === "stream_message");
+      expect(streamed).toMatchObject({ chatId: "chat-1", text: "What are the termination clauses?" });
+    });
   });
 
   test("workflow steps are displayed", async ({ page }) => {

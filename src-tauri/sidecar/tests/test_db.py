@@ -1,13 +1,21 @@
 # ABOUTME: Unit tests for the aiosqlite database service.
-# ABOUTME: Verifies chat CRUD, message storage, cascade delete, and ordering.
+# ABOUTME: Verifies chat CRUD, message storage, cascade delete, ordering, and the plaintext-to-SQLCipher migration.
 
 import sqlite3
+import subprocess
+import sys
 from contextlib import closing
 
 import pytest
 import pytest_asyncio
 from services import db
 from sqlcipher3 import dbapi2 as cipher
+
+# Opens a WAL database, reads it, says so, and keeps it open until stdin closes.
+HOLD_OPEN = (
+    "import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); "
+    "c.execute('SELECT count(*) FROM sqlite_master').fetchall(); print('open', flush=True); sys.stdin.read()"
+)
 
 
 @pytest_asyncio.fixture
@@ -263,3 +271,58 @@ async def test_interrupted_migration_recovers_source(tmp_path):
         assert not backup.exists()
     finally:
         await db.close_db()
+
+
+async def test_a_plaintext_backup_left_beside_the_encrypted_database_is_erased_on_start(tmp_path):
+    # A crash after the encrypted copy took the database path, before the source was erased.
+    await db.init_db(str(tmp_path))
+    await db.close_db()
+    backup = tmp_path / "rumble.db.migrating-sqlcipher-plaintext"
+    with closing(sqlite3.connect(backup)) as plain:
+        plain.execute("CREATE TABLE legacy (content TEXT)")
+        plain.execute("INSERT INTO legacy VALUES ('erase this leftover')")
+        plain.commit()
+
+    await db.init_db(str(tmp_path))
+    await db.close_db()
+
+    assert not backup.exists()
+
+
+async def test_migration_keeps_the_schema_version(tmp_path):
+    later_version = db.SCHEMA_VERSION_COMPACTED + 6
+    with closing(sqlite3.connect(tmp_path / "rumble.db")) as plain:
+        plain.executescript(db.SCHEMA)
+        plain.execute(f"PRAGMA user_version = {later_version}")
+
+    await db.init_db(str(tmp_path))
+    try:
+        version = await (await db._get_db().execute("PRAGMA user_version")).fetchone()
+    finally:
+        await db.close_db()
+
+    assert version[0] == later_version
+
+
+
+async def test_migration_refuses_while_another_process_holds_the_plaintext_database(tmp_path):
+    path = tmp_path / "rumble.db"
+    with closing(sqlite3.connect(path)) as plain:
+        plain.execute("PRAGMA journal_mode=WAL")
+        plain.execute("CREATE TABLE legacy (content TEXT)")
+        plain.execute("INSERT INTO legacy VALUES ('keep while shared')")
+        plain.commit()
+    # A separate process, as SQLite's locks only exclude other processes: e.g. a database
+    # browser left open. Exporting under it would install a copy its WAL then corrupts.
+    holder = subprocess.Popen(
+        [sys.executable, "-c", HOLD_OPEN, str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    try:
+        assert holder.stdout.readline().strip() == "open"
+        with pytest.raises(cipher.OperationalError, match="locked"):
+            await db.init_db(str(tmp_path))
+    finally:
+        holder.stdin.close()
+        holder.wait()
+    with closing(sqlite3.connect(path)) as plain:
+        assert plain.execute("SELECT * FROM legacy").fetchall() == [("keep while shared",)]
