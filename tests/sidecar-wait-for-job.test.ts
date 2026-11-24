@@ -143,6 +143,7 @@ describe("job progress in views", () => {
         vi.mocked(invoke).mockImplementation(async (command) => {
           if (command === "get_backend_mode") return "ollama"
           if (command === "extract_document") return "Contract text."
+          if (command === "list_templates") return []
           if (status === "rejected") throw new Error("Poll unavailable")
           return {
             id: "job-1", job_id: "job-1", status,
