@@ -46,12 +46,15 @@ Runs on **macOS** (Apple Silicon only), with unsigned previews for **Windows** a
 # From the repo root:
 pnpm install                          # frontend deps
 
-# Sidecar deps, then build the sidecar binary. The binary is required before
-# the first dev run — Tauri setup() spawns it directly and will not pick up a
-# manually-run pnpm dev:sidecar process.
+# Sidecar deps, then build the sidecar. It is required before the first dev
+# run — Tauri setup() spawns it directly and will not pick up a manually-run
+# pnpm dev:sidecar process. On macOS this builds dist/rumble-sidecar.app, which
+# the app uses from there in dev and bundles as a helper (tauri.macos.conf.json);
+# elsewhere it builds a single binary, copied into binaries/.
 cd src-tauri/sidecar
 uv sync
 uv run pyinstaller sidecar.spec --noconfirm
+# Linux and Windows only:
 mkdir -p ../binaries
 cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
 cd ../..
@@ -82,9 +85,7 @@ On an Apple Silicon Mac, run from the root of a clean checkout:
 pnpm install
 cd src-tauri/sidecar
 uv sync
-uv run pyinstaller sidecar.spec --noconfirm
-mkdir -p ../binaries
-cp dist/rumble-sidecar ../binaries/rumble-sidecar-$(rustc -vV | grep host | cut -d' ' -f2)
+uv run pyinstaller sidecar.spec --noconfirm   # dist/rumble-sidecar.app, bundled as a helper
 
 cd ../..
 pnpm tauri build
