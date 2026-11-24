@@ -21,6 +21,9 @@ use percent_encoding::percent_decode_str;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
 
+#[cfg_attr(not(test), allow(dead_code))]
+mod sync_crypto;
+
 // Keep one rotated file plus the active file, each about 5 MiB.
 const MAX_LOG_FILE_BYTES: u128 = 5 * 1024 * 1024;
 
@@ -697,21 +700,50 @@ fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE_NAME, key).map_err(|e| e.to_string())
 }
 
-fn database_key() -> Result<String, String> {
+fn database_key(data_dir: &Path) -> Result<String, String> {
     let entry = keyring_entry("db_key")?;
-    match entry.get_password() {
+    resolve_database_key(entry.get_password(), data_dir, |key| {
+        entry.set_password(key).map_err(|e| e.to_string())
+    })
+}
+
+/// The database key from the keychain lookup `stored`, minting and `store`-ing one
+/// when the keychain has none, unless `data_dir` already holds an encrypted
+/// database: a new key could never open it and would take the slot the original
+/// key could be restored into.
+fn resolve_database_key(
+    stored: keyring::Result<String>,
+    data_dir: &Path,
+    store: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<String, String> {
+    match stored {
         Ok(key) if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) => Ok(key),
         Ok(_) => Err("Invalid database key in system keychain".into()),
+        Err(keyring::Error::NoEntry) if holds_encrypted_database(data_dir) => Err(DB_KEY_MISSING_MESSAGE.into()),
         Err(keyring::Error::NoEntry) => {
             // Each first byte is unmasked OS randomness from UUID v4; version/variant
             // bits occur elsewhere. Collect 32 independent random bytes, encoded as hex.
             let key: String = (0..32)
                 .map(|_| format!("{:02x}", Uuid::new_v4().as_bytes()[0]))
                 .collect();
-            entry.set_password(&key).map_err(|e| e.to_string())?;
+            store(&key)?;
             Ok(key)
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Whether `dir`'s rumble.db has content that is not plaintext SQLite (which the
+/// sidecar encrypts with whatever key it is given). Unreadable counts as encrypted.
+fn holds_encrypted_database(dir: &Path) -> bool {
+    use std::io::Read;
+    let mut header = Vec::new();
+    let read = std::fs::File::open(dir.join(DB_MAIN_FILE))
+        .and_then(|file| file.take(PLAINTEXT_SQLITE_HEADER.len() as u64).read_to_end(&mut header));
+    match read {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+        Ok(_) => !header.is_empty() && header != PLAINTEXT_SQLITE_HEADER,
     }
 }
 
@@ -981,7 +1013,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
-    let db_key = database_key()?;
+    let db_key = database_key(&data_dir)?;
     let sidecar_cmd = sidecar_command(app)?
         .args([
             "--port",
@@ -1098,6 +1130,11 @@ const SIDECAR_STOP_TIMEOUT_MESSAGE: &str =
 const SIDECAR_STARTING_MESSAGE: &str = "Rumble's local service is still starting. Try again in a moment.";
 const SIDECAR_PIDFILE_MISSING_MESSAGE: &str = "Another Rumble instance may be using your local data. \
      Close it, restart Rumble, then try again.";
+const DB_KEY_MISSING_MESSAGE: &str = "Rumble can't open your saved chats and reviews: their encryption key \
+     is missing from the system keychain. Restore the keychain from a backup, or delete your local data \
+     in Settings to start again.";
+/// The first bytes of an unencrypted SQLite database (an encrypted one's are random).
+const PLAINTEXT_SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
 const SIDECAR_RESTART_FAILED_MESSAGE: &str =
     "Your local data was deleted, but Rumble's local service didn't restart. Quit and reopen Rumble.";
 
@@ -1267,8 +1304,13 @@ async fn wait_for_sidecar_exit(pidfile: &Path, timeout: Duration) -> bool {
 /// host records the port after PORT:, which follows the pidfile write) and its pidfile
 /// is there to wait on. A missing pidfile beside a running sidecar means another
 /// instance on this data dir overwrote it and then removed it on exit, so its absence
-/// would no longer mean "database closed".
-fn check_ready_to_delete(port_known: bool, pidfile: &Path) -> Result<(), String> {
+/// would no longer mean "database closed". With no sidecar spawned (it refused to start,
+/// e.g. a missing database key) there is nothing to stop: the delete still waits for a
+/// pidfile a just-stopped sidecar may not have removed yet.
+fn check_ready_to_delete(sidecar_spawned: bool, port_known: bool, pidfile: &Path) -> Result<(), String> {
+    if !sidecar_spawned {
+        return Ok(());
+    }
     if !port_known {
         return Err(SIDECAR_STARTING_MESSAGE.to_string());
     }
@@ -1322,7 +1364,8 @@ async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
     let (old, new) = data_dirs(&app)?;
     let active = active_data_dir(&old, &new);
     let port_known = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_some();
-    check_ready_to_delete(port_known, &active.join(SIDECAR_PIDFILE))?;
+    let sidecar_spawned = state.sidecar_child.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+    check_ready_to_delete(sidecar_spawned, port_known, &active.join(SIDECAR_PIDFILE))?;
     kill_sidecar(&state);
     // The old dir too, so a database left there can't be migrated back in.
     let deleted = delete_after_sidecar_exit(&active.join(SIDECAR_PIDFILE), &[&new, &old], SIDECAR_STOP_TIMEOUT).await;
@@ -3137,14 +3180,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
         std::fs::write(&pidfile, "123").unwrap();
-        assert_eq!(check_ready_to_delete(false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
+        assert_eq!(check_ready_to_delete(true, false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
     }
 
     #[test]
     fn delete_is_refused_when_the_running_sidecar_has_no_pidfile() {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
-        assert_eq!(check_ready_to_delete(true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
+        assert_eq!(check_ready_to_delete(true, true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
     }
 
     #[test]
@@ -3152,7 +3195,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
         std::fs::write(&pidfile, "123").unwrap();
-        assert!(check_ready_to_delete(true, &pidfile).is_ok());
+        assert!(check_ready_to_delete(true, true, &pidfile).is_ok());
     }
 
     #[tokio::test]
@@ -3186,6 +3229,76 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), SIDECAR_STOP_TIMEOUT_MESSAGE);
         assert_eq!(names_in(dir.path()).len(), 4);
+    }
+
+    // --- resolve_database_key ---
+
+    const STORED_KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// Resolves with no keychain entry for a data dir whose rumble.db holds `db`
+    /// (None: no rumble.db), returning the result and every key stored.
+    fn resolve_with_no_entry(db: Option<&[u8]>) -> (Result<String, String>, Vec<String>) {
+        let dir = tempfile::tempdir().unwrap();
+        if let Some(bytes) = db {
+            std::fs::write(dir.path().join(DB_MAIN_FILE), bytes).unwrap();
+        }
+        let mut stored = Vec::new();
+        let result = resolve_database_key(Err(keyring::Error::NoEntry), dir.path(), |key| {
+            stored.push(key.to_string());
+            Ok(())
+        });
+        (result, stored)
+    }
+
+    #[test]
+    fn a_missing_key_is_never_minted_over_an_encrypted_database() {
+        let (result, stored) = resolve_with_no_entry(Some(&[0x5a; 4096]));
+        assert_eq!((result, stored), (Err(DB_KEY_MISSING_MESSAGE.to_string()), vec![]));
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_and_stored_when_there_is_no_database() {
+        let (result, stored) = resolve_with_no_entry(None);
+        let key = result.unwrap();
+        assert_eq!((key.len(), stored), (64, vec![key]));
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_for_a_plaintext_database_awaiting_encryption() {
+        let mut plaintext = PLAINTEXT_SQLITE_HEADER.to_vec();
+        plaintext.extend_from_slice(&[0; 4080]);
+        let (result, stored) = resolve_with_no_entry(Some(&plaintext));
+        assert_eq!(stored, vec![result.unwrap()]);
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_for_an_empty_database_file() {
+        let (result, stored) = resolve_with_no_entry(Some(b""));
+        assert_eq!(stored, vec![result.unwrap()]);
+    }
+
+    #[test]
+    fn a_missing_key_is_never_minted_when_the_database_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        // A directory where the database belongs: present, but reading it fails.
+        std::fs::create_dir(dir.path().join(DB_MAIN_FILE)).unwrap();
+        let result = resolve_database_key(Err(keyring::Error::NoEntry), dir.path(), |_| panic!("stored a key"));
+        assert_eq!(result.unwrap_err(), DB_KEY_MISSING_MESSAGE);
+    }
+
+    #[test]
+    fn a_stored_key_is_used_as_is_and_nothing_is_stored() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(DB_MAIN_FILE), [0x5a; 4096]).unwrap();
+        let result = resolve_database_key(Ok(STORED_KEY.to_string()), dir.path(), |_| panic!("stored a key"));
+        assert_eq!(result.unwrap(), STORED_KEY);
+    }
+
+    #[tokio::test]
+    async fn delete_may_proceed_when_no_sidecar_was_spawned() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        assert!(check_ready_to_delete(false, false, &pidfile).is_ok());
     }
 
     // --- SseLines ---
