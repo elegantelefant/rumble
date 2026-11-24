@@ -77,6 +77,8 @@ fn open_logs_folder(app: AppHandle) -> Result<(), String> {
 }
 
 const SERVICE_NAME: &str = "elefant-rumble";
+/// The label Tauri gives the window tauri.conf.json declares without one.
+const MAIN_WINDOW_LABEL: &str = "main";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
@@ -1423,6 +1425,15 @@ async fn sidecar_status_value(http: &Client, port: Option<u16>, secret: &str) ->
     result
 }
 
+/// Brings the running instance forward when the user launches Rumble again.
+fn focus_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 // --- Tray icon ---
 
 fn resolve_tray_icon(app: &AppHandle) -> Option<Image<'static>> {
@@ -1647,6 +1658,9 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<Option<String>, S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second launch exits before any other plugin or setup runs: two
+        // instances would share one data dir and could each mint a database key (#169).
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| focus_main_window(app)))
         .plugin(logging_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())

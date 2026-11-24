@@ -167,6 +167,7 @@ jobs:
             app="$mount_dir/Elefant - Rumble.app"
             codesign --verify --deep --strict --verbose=2 "$app"
             scripts/smoke-macos-app.sh "$app"
+            scripts/smoke-macos-single-instance.sh "$app"
             detach_mount
           done
 
