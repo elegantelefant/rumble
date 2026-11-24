@@ -631,7 +631,21 @@ describe("SettingsView processing mode", () => {
     hostInMode("ollama")
     const wrapper = mountSettings()
     await vi.advanceTimersByTimeAsync(0)
-    expect(radio(wrapper, "premium").element.closest("label")!.textContent).toContain("Coming later.")
+    expect(radio(wrapper, "premium").element.closest("label")!.textContent).toContain("Coming later")
+  })
+
+  it("names the cloud option by the Business and Enterprise plans", async () => {
+    hostInMode("ollama")
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio(wrapper, "premium").element.closest("label")!.textContent).toContain("Business and Enterprise plans")
+  })
+
+  it("never says Premium in the processing modes", async () => {
+    hostInMode("ollama")
+    const wrapper = mountSettings()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio(wrapper, "premium").element.closest("fieldset")!.textContent).not.toMatch(/premium/i)
   })
 
   it("opens the plans page from Premium's quiet link", async () => {

@@ -120,7 +120,7 @@ const secrets = ref<SecretRecord[]>([]);
 const BYOK_SELECTABLE = import.meta.env.DEV;
 const UNAVAILABLE = "Not available in this version.";
 // Premium waits on its cloud endpoint (#60); until then one quiet line and a link, never a selectable mode.
-const PREMIUM_LATER = "Coming later.";
+const PREMIUM_LATER = "Coming later with the Business and Enterprise plans.";
 const PRICING_URL = "https://elefant.legal/pricing";
 
 type ModeOption = {
@@ -147,7 +147,7 @@ const modeOptions: ModeOption[] = [
   },
   {
     id: "premium",
-    label: "Elefant Premium",
+    label: "Elefant cloud",
     description: CONFIDENTIALITY[MODE_TO_STATE.premium].message,
     available: false,
     unavailableNote: PREMIUM_LATER,
