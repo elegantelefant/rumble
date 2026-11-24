@@ -1,7 +1,9 @@
 // ABOUTME: Full interactive UX walkthrough — acts as a new user.
 // ABOUTME: Screenshots every page and exercises every clickable/typable interaction.
 import { expect, test } from "@playwright/test";
+import { installResearchHost, LOCAL_MODEL, RESEARCH_ANSWER } from "./fake-host";
 import { gotoRoute } from "./helpers";
+import { FOLLOW_UP_REPLY, installReviewHost, REVIEW_SUMMARY, REVIEWED_FILE, uploadReviewedDocument } from "./review-host";
 
 const S = (name: string) => `screenshots/${name}.png`;
 
@@ -194,26 +196,39 @@ test.describe("4. Document Review", () => {
     await page.screenshot({ path: S("04c-review-custom-prompt"), fullPage: true });
   });
 
-  test("4d. pre-seeded session visible in sidebar", async ({ page }) => {
-    await expect(page.getByText("Contract_2024.pdf").first()).toBeVisible();
-    await expect(page.getByText("Summary ready")).toBeVisible();
-    await page.screenshot({ path: S("04d-review-session-list"), fullPage: true });
-  });
+  test.describe("with a reviewed document", () => {
+    test.beforeEach(async ({ page }) => {
+      await installReviewHost(page);
+      // The outer beforeEach already loaded the app without a host; reload so the init script runs first.
+      await page.reload();
+      await uploadReviewedDocument(page);
+    });
 
-  test("4e. active session shows chat", async ({ page }) => {
-    await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
-    await expect(page.getByText("Highlight the key renewal obligations")).toBeVisible();
-    await expect(page.getByText("Renewal clauses flagged")).toBeVisible();
-    await page.screenshot({ path: S("04e-review-chat-citations"), fullPage: true });
-  });
+    test("4d. uploaded session visible in sidebar", async ({ page }) => {
+      await expect(page.getByText(REVIEWED_FILE).first()).toBeVisible();
+      await expect(page.getByText("Summary ready")).toBeVisible();
+      await page.screenshot({ path: S("04d-review-session-list"), fullPage: true });
+    });
 
-  test("4f. type and send a follow-up question", async ({ page }) => {
-    const input = page.locator("#document-question");
-    await input.fill("What are the termination clauses?");
-    await page.screenshot({ path: S("04f-review-typing-question"), fullPage: true });
-    await page.getByRole("button", { name: "Send" }).click();
-    await expect(page.getByText("What are the termination clauses?")).toBeVisible();
-    await page.screenshot({ path: S("04g-review-question-sent"), fullPage: true });
+    test("4e. active session shows the review in the chat", async ({ page }) => {
+      await expect(page.getByText("Elefant Assistant").first()).toBeVisible();
+      await expect(page.getByText(REVIEW_SUMMARY)).toHaveCount(2);
+      await page.screenshot({ path: S("04e-review-chat"), fullPage: true });
+    });
+
+    test("4f. type and send a follow-up question", async ({ page }) => {
+      const input = page.locator("#document-question");
+      await input.fill("What are the termination clauses?");
+      await page.screenshot({ path: S("04f-review-typing-question"), fullPage: true });
+      await page.getByRole("button", { name: "Send" }).click();
+      await expect(page.getByText("What are the termination clauses?")).toBeVisible();
+      await expect(page.getByText(FOLLOW_UP_REPLY)).toBeVisible();
+      await page.screenshot({ path: S("04g-review-question-sent"), fullPage: true });
+    });
+
+    test("4j. export session button present", async ({ page }) => {
+      await expect(page.getByRole("button", { name: "Export Session" })).toBeVisible();
+    });
   });
 
   test("4h. workflow steps visible", async ({ page }) => {
@@ -231,10 +246,6 @@ test.describe("4. Document Review", () => {
     // Close it
     await page.getByRole("button", { name: "Hide" }).click();
     await expect(page.getByText("Backend expectations")).not.toBeVisible();
-  });
-
-  test("4j. export session button present", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Export Session" })).toBeVisible();
   });
 });
 
@@ -365,9 +376,11 @@ test.describe("6. Research Assistant", () => {
     await page.screenshot({ path: S("06b-research-badges"), fullPage: true });
   });
 
-  test("6c. model selector defaults to local", async ({ page }) => {
+  test("6c. model selector defaults to the local model the sidecar lists", async ({ page }) => {
+    await installResearchHost(page);
+    await page.reload();
     const select = page.locator("select").first();
-    await expect(select).toHaveValue("elefant-local");
+    await expect(select).toHaveValue(LOCAL_MODEL.id);
     await page.screenshot({ path: S("06c-research-model-select"), fullPage: true });
   });
 
@@ -378,11 +391,16 @@ test.describe("6. Research Assistant", () => {
   });
 
   test("6e. type and submit research prompt", async ({ page }) => {
+    await installResearchHost(page);
+    await page.reload();
+    await expect(page.locator("select").first()).toHaveValue(LOCAL_MODEL.id);
     const textarea = page.locator("#research-question");
     await textarea.fill("What are the key requirements for PDPA compliance in Singapore for SaaS companies?");
     await page.screenshot({ path: S("06e-research-typing-prompt"), fullPage: true });
     await page.getByRole("button", { name: "Start Research" }).click();
     await expect(page.getByText("PDPA compliance")).toBeVisible();
+    // Once as the thread's summary, once as the assistant's message.
+    await expect(page.getByText(RESEARCH_ANSWER)).toHaveCount(2);
     await page.screenshot({ path: S("06f-research-prompt-submitted"), fullPage: true });
   });
 

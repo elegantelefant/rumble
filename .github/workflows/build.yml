@@ -106,8 +106,14 @@ jobs:
         run: uv sync
         working-directory: src-tauri/sidecar
 
-      - name: Build sidecar (Unix)
-        if: runner.os != 'Windows'
+      # macOS: an onedir helper app in sidecar/dist, which tauri.macos.conf.json places in Contents/Helpers.
+      - name: Build sidecar (macOS)
+        if: runner.os == 'macOS'
+        run: uv run pyinstaller sidecar.spec --noconfirm
+        working-directory: src-tauri/sidecar
+
+      - name: Build sidecar (Linux)
+        if: runner.os == 'Linux'
         run: |
           uv run pyinstaller sidecar.spec --noconfirm
           mkdir -p ../binaries
@@ -132,6 +138,7 @@ jobs:
 
       - name: Verify macOS app and launch bundled sidecar
         if: runner.os == 'macOS'
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail
@@ -159,9 +166,18 @@ jobs:
             hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
             app="$mount_dir/Elefant - Rumble.app"
             codesign --verify --deep --strict --verbose=2 "$app"
-            "$app/Contents/MacOS/rumble-sidecar" --help
+            scripts/smoke-macos-app.sh "$app"
+            scripts/smoke-macos-single-instance.sh "$app"
             detach_mount
           done
+
+      - name: Install the Windows bundles and launch the installed sidecar
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = Get-ChildItem src-tauri/target/release/bundle/msi/*.msi, src-tauri/target/release/bundle/nsis/*-setup.exe
+          if ($installers.Count -ne 2) { throw "expected one .msi and one -setup.exe, found $($installers.Count)" }
+          foreach ($installer in $installers) { ./scripts/smoke-windows-install.ps1 -Installer $installer.FullName }
 
       - name: Upload macOS artifact
         if: runner.os == 'macOS'
