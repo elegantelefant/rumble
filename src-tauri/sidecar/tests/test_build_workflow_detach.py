@@ -62,5 +62,9 @@ def test_verify_loop_and_exit_trap_use_safe_cleanup():
     loop = script.split('for dmg in "${dmgs[@]}"; do\n', 1)[1]
     assert loop.splitlines()[-2:] == ["  detach_mount", "done"]
     assert '  codesign --verify --deep --strict --verbose=2 "$app"\n' in loop
+<<<<<<< HEAD
     assert '  scripts/smoke-macos-app.sh "$app"\n' in loop
+=======
+    assert '  "$app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar" --help\n' in loop
+>>>>>>> origin/main
     assert script.startswith("set -euo pipefail\n")
