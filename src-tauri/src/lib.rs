@@ -21,6 +21,9 @@ use percent_encoding::percent_decode_str;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
 
+#[cfg_attr(not(test), allow(dead_code))]
+mod sync_crypto;
+
 // Keep one rotated file plus the active file, each about 5 MiB.
 const MAX_LOG_FILE_BYTES: u128 = 5 * 1024 * 1024;
 
@@ -74,6 +77,8 @@ fn open_logs_folder(app: AppHandle) -> Result<(), String> {
 }
 
 const SERVICE_NAME: &str = "elefant-rumble";
+/// The label Tauri gives the window tauri.conf.json declares without one.
+const MAIN_WINDOW_LABEL: &str = "main";
 const SECRET_HEADER: &str = "X-Rumble-Secret";
 const HEALTH_POLL_ATTEMPTS: u32 = 10;
 const HEALTH_POLL_INTERVAL_MS: u64 = 500;
@@ -103,6 +108,9 @@ struct AppState {
     /// Bumped on every spawn; a sidecar's reader task may touch the port only
     /// while its own generation is current.
     sidecar_generation: Mutex<u64>,
+    /// Why no sidecar is serving, once that is known: it refused to start or it exited.
+    /// Cleared when a sidecar is spawned. Without it and without a port, one is starting.
+    sidecar_failure: Mutex<Option<String>>,
     secret: String,
 }
 
@@ -181,6 +189,8 @@ impl AppState {
     fn next_sidecar_generation(&self) -> u64 {
         let mut generation = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
         *generation += 1;
+        // The new sidecar has not failed; an earlier one's reason no longer applies.
+        self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).take();
         *generation
     }
 
@@ -194,6 +204,52 @@ impl AppState {
         }
         *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = port;
         true
+    }
+
+    /// Records that `generation`'s sidecar has exited, if it is still current: no port,
+    /// and a failure unless one is already recorded.
+    fn mark_terminated_if_current(&self, generation: u64, code: Option<i32>) {
+        let current = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        if *current == generation {
+            *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            self.record_sidecar_failure(sidecar_exited_message(code));
+        }
+    }
+
+    /// Keeps the first recorded failure: a refused respawn stops the running sidecar,
+    /// whose exit is a consequence, not the reason.
+    fn record_sidecar_failure(&self, message: String) {
+        self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(message);
+    }
+
+    /// Records `generation`'s sidecar as failed, if it is still current, and hands back
+    /// its child for the caller to stop: a sidecar that never answered must not keep
+    /// the database open while the screen says it failed.
+    fn fail_if_current(&self, generation: u64, message: String) -> Option<CommandChild> {
+        let current = self.sidecar_generation.lock().unwrap_or_else(|e| e.into_inner());
+        if *current != generation {
+            return None;
+        }
+        *self.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.record_sidecar_failure(message);
+        self.sidecar_child.lock().unwrap_or_else(|e| e.into_inner()).take()
+    }
+
+    /// Whether a sidecar may have the database open: anything but "failed", which is
+    /// recorded only once no sidecar of ours runs (refused, exited, or stopped unhealthy).
+    fn may_hold_database(&self) -> bool {
+        self.sidecar_phase().0 != "failed"
+    }
+
+    /// "running" with a port, else "failed" with a recorded failure, else "starting".
+    fn sidecar_phase(&self) -> (&'static str, Option<String>) {
+        if self.sidecar_port().is_some() {
+            return ("running", None);
+        }
+        match self.sidecar_failure.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            Some(error) => ("failed", Some(error)),
+            None => ("starting", None),
+        }
     }
 
     /// Build a URL against the local sidecar only, ignoring backend mode —
@@ -695,21 +751,50 @@ fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE_NAME, key).map_err(|e| e.to_string())
 }
 
-fn database_key() -> Result<String, String> {
+fn database_key(data_dir: &Path) -> Result<String, String> {
     let entry = keyring_entry("db_key")?;
-    match entry.get_password() {
+    resolve_database_key(entry.get_password(), data_dir, |key| {
+        entry.set_password(key).map_err(|e| e.to_string())
+    })
+}
+
+/// The database key from the keychain lookup `stored`, minting and `store`-ing one
+/// when the keychain has none, unless `data_dir` already holds an encrypted
+/// database: a new key could never open it and would take the slot the original
+/// key could be restored into.
+fn resolve_database_key(
+    stored: keyring::Result<String>,
+    data_dir: &Path,
+    store: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<String, String> {
+    match stored {
         Ok(key) if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) => Ok(key),
         Ok(_) => Err("Invalid database key in system keychain".into()),
+        Err(keyring::Error::NoEntry) if holds_encrypted_database(data_dir) => Err(DB_KEY_MISSING_MESSAGE.into()),
         Err(keyring::Error::NoEntry) => {
             // Each first byte is unmasked OS randomness from UUID v4; version/variant
             // bits occur elsewhere. Collect 32 independent random bytes, encoded as hex.
             let key: String = (0..32)
                 .map(|_| format!("{:02x}", Uuid::new_v4().as_bytes()[0]))
                 .collect();
-            entry.set_password(&key).map_err(|e| e.to_string())?;
+            store(&key)?;
             Ok(key)
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Whether `dir`'s rumble.db has content that is not plaintext SQLite (which the
+/// sidecar encrypts with whatever key it is given). Unreadable counts as encrypted.
+fn holds_encrypted_database(dir: &Path) -> bool {
+    use std::io::Read;
+    let mut header = Vec::new();
+    let read = std::fs::File::open(dir.join(DB_MAIN_FILE))
+        .and_then(|file| file.take(PLAINTEXT_SQLITE_HEADER.len() as u64).read_to_end(&mut header));
+    match read {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+        Ok(_) => !header.is_empty() && header != PLAINTEXT_SQLITE_HEADER,
     }
 }
 
@@ -935,7 +1020,39 @@ async fn poll_health(http: &Client, port: u16, secret: &str) -> Result<(), Strin
     unreachable!()
 }
 
+/// Where the macOS sidecar lives, relative to the app bundle's Contents: a PyInstaller onedir
+/// helper app sealed by the app's signature, so no library is unpacked to a temp folder (#157).
+const MACOS_HELPER: &str = "Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar";
+
+/// The helper beside the app executable `exe` (Contents/MacOS/<exe>).
+fn bundled_helper(exe: &Path) -> Option<PathBuf> {
+    Some(exe.parent()?.parent()?.join(MACOS_HELPER))
+}
+
+/// The sidecar command: the bundled helper on macOS, the externalBin elsewhere. A debug build
+/// run outside a bundle (`pnpm tauri dev`) uses the onedir build in src-tauri/sidecar/dist.
+fn sidecar_command(app: &AppHandle) -> Result<tauri_plugin_shell::process::Command, String> {
+    if cfg!(target_os = "macos") {
+        let exe = std::env::current_exe().map_err(|e| format!("failed to find the app executable: {}", e))?;
+        let helper = bundled_helper(&exe).filter(|path| path.is_file());
+        #[cfg(debug_assertions)]
+        let helper = helper.or_else(|| {
+            Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("sidecar/dist").join(MACOS_HELPER.trim_start_matches("Helpers/")))
+        });
+        let helper = helper.ok_or("the app bundle has no sidecar helper")?;
+        return Ok(app.shell().command(helper));
+    }
+    app.shell()
+        .sidecar("rumble-sidecar")
+        .map_err(|e| format!("failed to create sidecar command: {}", e))
+}
+
+/// Spawns the sidecar, recording why when it can't.
 fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
+    start_sidecar(app).inspect_err(|e| app.state::<AppState>().record_sidecar_failure(e.clone()))
+}
+
+fn start_sidecar(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
 
     let mode = state.mode.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -952,11 +1069,8 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("failed to create app data dir: {}", e))?;
 
-    let db_key = database_key()?;
-    let sidecar_cmd = app
-        .shell()
-        .sidecar("rumble-sidecar")
-        .map_err(|e| format!("failed to create sidecar command: {}", e))?
+    let db_key = database_key(&data_dir)?;
+    let sidecar_cmd = sidecar_command(app)?
         .args([
             "--port",
             &port.to_string(),
@@ -1017,6 +1131,10 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                                     }
                                     Err(e) => {
                                         log::error!("[sidecar] health check failed: {}", e);
+                                        let st = state_handle.state::<AppState>();
+                                        if let Some(child) = st.fail_if_current(generation, SIDECAR_UNHEALTHY_MESSAGE.to_string()) {
+                                            let _ = child.kill();
+                                        }
                                     }
                                 }
                             }
@@ -1031,7 +1149,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                         "[sidecar] terminated with code {:?}",
                         payload.code
                     );
-                    state_handle.state::<AppState>().set_port_if_current(generation, None);
+                    state_handle.state::<AppState>().mark_terminated_if_current(generation, payload.code);
                     break;
                 }
                 _ => {}
@@ -1041,6 +1159,13 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
 
     log::info!("[sidecar] spawned, waiting for port {} to become healthy", port_clone);
     Ok(())
+}
+
+fn sidecar_exited_message(code: Option<i32>) -> String {
+    match code {
+        Some(code) => format!("{} (exit code {}). {}", SIDECAR_EXITED_MESSAGE, code, SIDECAR_EXITED_DETAILS),
+        None => format!("{}. {}", SIDECAR_EXITED_MESSAGE, SIDECAR_EXITED_DETAILS),
+    }
 }
 
 fn kill_sidecar(state: &AppState) {
@@ -1072,6 +1197,15 @@ const SIDECAR_STOP_TIMEOUT_MESSAGE: &str =
 const SIDECAR_STARTING_MESSAGE: &str = "Rumble's local service is still starting. Try again in a moment.";
 const SIDECAR_PIDFILE_MISSING_MESSAGE: &str = "Another Rumble instance may be using your local data. \
      Close it, restart Rumble, then try again.";
+const DB_KEY_MISSING_MESSAGE: &str = "Rumble can't open your saved chats and reviews: their encryption key \
+     is missing from the system keychain. Restore the keychain from a backup, or delete your local data \
+     in Settings to start again.";
+/// The first bytes of an unencrypted SQLite database (an encrypted one's are random).
+const PLAINTEXT_SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+const SIDECAR_UNHEALTHY_MESSAGE: &str =
+    "Rumble's local service started but didn't answer. Settings → Open logs folder has the details.";
+const SIDECAR_EXITED_MESSAGE: &str = "Rumble's local service stopped";
+const SIDECAR_EXITED_DETAILS: &str = "Settings → Open logs folder has the details.";
 const SIDECAR_RESTART_FAILED_MESSAGE: &str =
     "Your local data was deleted, but Rumble's local service didn't restart. Quit and reopen Rumble.";
 
@@ -1241,8 +1375,14 @@ async fn wait_for_sidecar_exit(pidfile: &Path, timeout: Duration) -> bool {
 /// host records the port after PORT:, which follows the pidfile write) and its pidfile
 /// is there to wait on. A missing pidfile beside a running sidecar means another
 /// instance on this data dir overwrote it and then removed it on exit, so its absence
-/// would no longer mean "database closed".
-fn check_ready_to_delete(port_known: bool, pidfile: &Path) -> Result<(), String> {
+/// would no longer mean "database closed". When no sidecar may hold the database (it
+/// refused to start, e.g. a missing database key, exited, or was stopped unhealthy) there
+/// is nothing to stop: the delete still waits for a pidfile a just-stopped sidecar may
+/// not have removed yet.
+fn check_ready_to_delete(sidecar_may_hold_db: bool, port_known: bool, pidfile: &Path) -> Result<(), String> {
+    if !sidecar_may_hold_db {
+        return Ok(());
+    }
     if !port_known {
         return Err(SIDECAR_STARTING_MESSAGE.to_string());
     }
@@ -1296,7 +1436,7 @@ async fn delete_all_local_data(app: AppHandle) -> Result<bool, String> {
     let (old, new) = data_dirs(&app)?;
     let active = active_data_dir(&old, &new);
     let port_known = state.sidecar_port.lock().unwrap_or_else(|e| e.into_inner()).is_some();
-    check_ready_to_delete(port_known, &active.join(SIDECAR_PIDFILE))?;
+    check_ready_to_delete(state.may_hold_database(), port_known, &active.join(SIDECAR_PIDFILE))?;
     kill_sidecar(&state);
     // The old dir too, so a database left there can't be migrated back in.
     let deleted = delete_after_sidecar_exit(&active.join(SIDECAR_PIDFILE), &[&new, &old], SIDECAR_STOP_TIMEOUT).await;
@@ -1329,7 +1469,11 @@ fn sidecar_secret(state: State<'_, AppState>) -> String {
 
 #[tauri::command]
 async fn sidecar_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    Ok(sidecar_status_value(&state.http, state.sidecar_port(), &state.secret).await)
+    let mut status = sidecar_status_value(&state.http, state.sidecar_port(), &state.secret).await;
+    let (phase, error) = state.sidecar_phase();
+    status["state"] = phase.into();
+    status["error"] = error.into();
+    Ok(status)
 }
 
 /// The status payload: whether a sidecar port is published and, if so, its
@@ -1354,6 +1498,15 @@ async fn sidecar_status_value(http: &Client, port: Option<u16>, secret: &str) ->
         }
     }
     result
+}
+
+/// Brings the running instance forward when the user launches Rumble again.
+fn focus_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }
 
 // --- Tray icon ---
@@ -1698,6 +1851,9 @@ async fn extract_template(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second launch exits before any other plugin or setup runs: two
+        // instances would share one data dir and could each mint a database key (#169).
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| focus_main_window(app)))
         .plugin(logging_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -1709,6 +1865,7 @@ pub fn run() {
             sidecar_port: Mutex::new(None),
             sidecar_child: Mutex::new(None),
             sidecar_generation: Mutex::new(0),
+            sidecar_failure: Mutex::new(None),
             secret: uuid::Uuid::new_v4().to_string(),
         })
         .setup(|app| {
@@ -1842,8 +1999,108 @@ mod tests {
             sidecar_port: Mutex::new(port),
             sidecar_child: Mutex::new(None),
             sidecar_generation: Mutex::new(0),
+            sidecar_failure: Mutex::new(None),
             secret: "test-secret".to_string(),
         }
+    }
+
+    // --- sidecar_phase: what the setup screen is told ---
+
+    #[test]
+    fn a_sidecar_with_no_port_and_no_failure_is_starting() {
+        assert_eq!(make_state(BackendMode::Ollama, None).sidecar_phase(), ("starting", None));
+    }
+
+    #[test]
+    fn a_sidecar_that_refused_to_start_is_failed_with_its_reason() {
+        let state = make_state(BackendMode::Ollama, None);
+        state.record_sidecar_failure(DB_KEY_MISSING_MESSAGE.to_string());
+        assert_eq!(state.sidecar_phase(), ("failed", Some(DB_KEY_MISSING_MESSAGE.to_string())));
+    }
+
+    #[test]
+    fn a_sidecar_with_a_port_is_running_even_after_a_refused_respawn() {
+        let state = make_state(BackendMode::Ollama, Some(4242));
+        state.record_sidecar_failure(BYOK_KEY_MISSING.to_string());
+        assert_eq!(state.sidecar_phase(), ("running", None));
+    }
+
+    #[test]
+    fn a_current_sidecar_that_exits_is_failed_with_its_exit_code() {
+        let state = make_state(BackendMode::Ollama, None);
+        state.mark_terminated_if_current(0, Some(255));
+        assert_eq!(state.sidecar_phase(), ("failed", Some(sidecar_exited_message(Some(255)))));
+    }
+
+    #[test]
+    fn the_exit_message_names_the_code_and_where_the_details_are() {
+        assert_eq!(
+            sidecar_exited_message(Some(255)),
+            "Rumble's local service stopped (exit code 255). Settings → Open logs folder has the details."
+        );
+    }
+
+    #[test]
+    fn a_running_sidecar_that_exits_loses_its_port() {
+        let state = make_state(BackendMode::Ollama, Some(4242));
+        state.mark_terminated_if_current(0, None);
+        assert_eq!(state.sidecar_phase().0, "failed");
+    }
+
+    #[test]
+    fn a_replaced_sidecars_exit_leaves_the_current_one_running() {
+        let state = make_state(BackendMode::Ollama, Some(4242));
+        let replaced = 0;
+        state.next_sidecar_generation();
+        state.mark_terminated_if_current(replaced, Some(1));
+        assert_eq!(state.sidecar_phase(), ("running", None));
+    }
+
+    #[test]
+    fn a_new_generation_starts_without_the_previous_failure() {
+        let state = make_state(BackendMode::Ollama, None);
+        state.record_sidecar_failure(DB_KEY_MISSING_MESSAGE.to_string());
+        state.next_sidecar_generation();
+        assert_eq!(state.sidecar_phase(), ("starting", None));
+    }
+
+    #[test]
+    fn a_sidecar_that_fails_its_health_check_is_failed_with_that_reason() {
+        let state = make_state(BackendMode::Ollama, None);
+        assert!(state.fail_if_current(0, SIDECAR_UNHEALTHY_MESSAGE.to_string()).is_none());
+        assert_eq!(state.sidecar_phase(), ("failed", Some(SIDECAR_UNHEALTHY_MESSAGE.to_string())));
+    }
+
+    #[test]
+    fn a_replaced_sidecars_failed_health_check_leaves_the_current_one_starting() {
+        let state = make_state(BackendMode::Ollama, None);
+        let replaced = 0;
+        state.next_sidecar_generation();
+        state.fail_if_current(replaced, SIDECAR_UNHEALTHY_MESSAGE.to_string());
+        assert_eq!(state.sidecar_phase(), ("starting", None));
+    }
+
+    #[test]
+    fn a_starting_or_running_sidecar_may_hold_the_database() {
+        assert_eq!(
+            [make_state(BackendMode::Ollama, None).may_hold_database(), make_state(BackendMode::Ollama, Some(4242)).may_hold_database()],
+            [true, true]
+        );
+    }
+
+    #[test]
+    fn an_exited_sidecar_no_longer_holds_the_database() {
+        let state = make_state(BackendMode::Ollama, Some(4242));
+        state.mark_terminated_if_current(0, Some(1));
+        assert!(!state.may_hold_database());
+    }
+
+    #[test]
+    fn a_refusal_is_not_overwritten_by_the_stopped_sidecars_exit() {
+        let state = make_state(BackendMode::Byok, None);
+        state.record_sidecar_failure(BYOK_KEY_MISSING.to_string());
+        state.mark_terminated_if_current(0, Some(0));
+        assert_eq!(state.sidecar_phase().1, Some(BYOK_KEY_MISSING.to_string()));
     }
 
     // --- resolve_url: the per-mode routing table ---
@@ -3182,6 +3439,19 @@ mod tests {
         assert_eq!(active_data_dir(&old, &new), new);
     }
 
+    // --- bundled_helper ---
+
+    #[test]
+    fn the_macos_sidecar_is_the_helper_sealed_in_the_app_bundle() {
+        let exe = Path::new("/Applications/Elefant - Rumble.app/Contents/MacOS/elefant_rumble");
+        assert_eq!(
+            bundled_helper(exe),
+            Some(PathBuf::from(
+                "/Applications/Elefant - Rumble.app/Contents/Helpers/rumble-sidecar.app/Contents/MacOS/rumble-sidecar"
+            ))
+        );
+    }
+
     // --- delete_local_data_files / delete_after_sidecar_exit ---
 
     #[test]
@@ -3206,14 +3476,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
         std::fs::write(&pidfile, "123").unwrap();
-        assert_eq!(check_ready_to_delete(false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
+        assert_eq!(check_ready_to_delete(true, false, &pidfile).unwrap_err(), SIDECAR_STARTING_MESSAGE);
     }
 
     #[test]
     fn delete_is_refused_when_the_running_sidecar_has_no_pidfile() {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
-        assert_eq!(check_ready_to_delete(true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
+        assert_eq!(check_ready_to_delete(true, true, &pidfile).unwrap_err(), SIDECAR_PIDFILE_MISSING_MESSAGE);
     }
 
     #[test]
@@ -3221,7 +3491,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join(SIDECAR_PIDFILE);
         std::fs::write(&pidfile, "123").unwrap();
-        assert!(check_ready_to_delete(true, &pidfile).is_ok());
+        assert!(check_ready_to_delete(true, true, &pidfile).is_ok());
     }
 
     #[tokio::test]
@@ -3255,6 +3525,76 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), SIDECAR_STOP_TIMEOUT_MESSAGE);
         assert_eq!(names_in(dir.path()).len(), 4);
+    }
+
+    // --- resolve_database_key ---
+
+    const STORED_KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// Resolves with no keychain entry for a data dir whose rumble.db holds `db`
+    /// (None: no rumble.db), returning the result and every key stored.
+    fn resolve_with_no_entry(db: Option<&[u8]>) -> (Result<String, String>, Vec<String>) {
+        let dir = tempfile::tempdir().unwrap();
+        if let Some(bytes) = db {
+            std::fs::write(dir.path().join(DB_MAIN_FILE), bytes).unwrap();
+        }
+        let mut stored = Vec::new();
+        let result = resolve_database_key(Err(keyring::Error::NoEntry), dir.path(), |key| {
+            stored.push(key.to_string());
+            Ok(())
+        });
+        (result, stored)
+    }
+
+    #[test]
+    fn a_missing_key_is_never_minted_over_an_encrypted_database() {
+        let (result, stored) = resolve_with_no_entry(Some(&[0x5a; 4096]));
+        assert_eq!((result, stored), (Err(DB_KEY_MISSING_MESSAGE.to_string()), vec![]));
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_and_stored_when_there_is_no_database() {
+        let (result, stored) = resolve_with_no_entry(None);
+        let key = result.unwrap();
+        assert_eq!((key.len(), stored), (64, vec![key]));
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_for_a_plaintext_database_awaiting_encryption() {
+        let mut plaintext = PLAINTEXT_SQLITE_HEADER.to_vec();
+        plaintext.extend_from_slice(&[0; 4080]);
+        let (result, stored) = resolve_with_no_entry(Some(&plaintext));
+        assert_eq!(stored, vec![result.unwrap()]);
+    }
+
+    #[test]
+    fn a_missing_key_is_minted_for_an_empty_database_file() {
+        let (result, stored) = resolve_with_no_entry(Some(b""));
+        assert_eq!(stored, vec![result.unwrap()]);
+    }
+
+    #[test]
+    fn a_missing_key_is_never_minted_when_the_database_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        // A directory where the database belongs: present, but reading it fails.
+        std::fs::create_dir(dir.path().join(DB_MAIN_FILE)).unwrap();
+        let result = resolve_database_key(Err(keyring::Error::NoEntry), dir.path(), |_| panic!("stored a key"));
+        assert_eq!(result.unwrap_err(), DB_KEY_MISSING_MESSAGE);
+    }
+
+    #[test]
+    fn a_stored_key_is_used_as_is_and_nothing_is_stored() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(DB_MAIN_FILE), [0x5a; 4096]).unwrap();
+        let result = resolve_database_key(Ok(STORED_KEY.to_string()), dir.path(), |_| panic!("stored a key"));
+        assert_eq!(result.unwrap(), STORED_KEY);
+    }
+
+    #[tokio::test]
+    async fn delete_may_proceed_when_no_sidecar_was_spawned() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join(SIDECAR_PIDFILE);
+        assert!(check_ready_to_delete(false, false, &pidfile).is_ok());
     }
 
     // --- SseLines ---

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": [],
+    "macOS": {
+      "files": {
+        "Helpers/rumble-sidecar.app": "sidecar/dist/rumble-sidecar.app"
+      }
+    }
+  }
+}

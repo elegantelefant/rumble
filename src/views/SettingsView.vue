@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { Channel, Resource, invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useToast } from "../composables/toast";
 import { generateId } from "../utils/ids";
 import {
@@ -118,8 +119,18 @@ const secrets = ref<SecretRecord[]>([]);
 // packaged ones. Flip this to offer BYOK in the packaged app.
 const BYOK_SELECTABLE = import.meta.env.DEV;
 const UNAVAILABLE = "Not available in this version.";
+// Premium waits on its cloud endpoint (#60); until then one quiet line and a link, never a selectable mode.
+const PREMIUM_LATER = "Coming later with the Business and Enterprise plans.";
+const PRICING_URL = "https://elefant.legal/pricing";
 
-type ModeOption = { id: BackendMode; label: string; description: string; available: boolean };
+type ModeOption = {
+  id: BackendMode;
+  label: string;
+  description: string;
+  available: boolean;
+  unavailableNote?: string;
+  link?: { label: string; url: string };
+};
 
 const modeOptions: ModeOption[] = [
   {
@@ -136,9 +147,11 @@ const modeOptions: ModeOption[] = [
   },
   {
     id: "premium",
-    label: "Elefant Premium",
+    label: "Elefant cloud",
     description: CONFIDENTIALITY[MODE_TO_STATE.premium].message,
     available: false,
+    unavailableNote: PREMIUM_LATER,
+    link: { label: "See plans", url: PRICING_URL },
   },
 ];
 
@@ -166,6 +179,14 @@ async function chooseMode(mode: BackendMode) {
     selectedMode.value = backendMode.value;
   } finally {
     switchingMode.value = false;
+  }
+}
+
+async function openPlans(url: string) {
+  try {
+    await openUrl(url);
+  } catch (error) {
+    toast.addToast(`Could not open the link: ${typeof error === "string" ? error : String(error)}`, "error");
   }
 }
 
@@ -460,7 +481,15 @@ const selectedProviderDetails = computed(() =>
             />
             <span>
               <span class="font-semibold">{{ option.label }}</span>
-              <span class="block text-xs">{{ option.available ? option.description : UNAVAILABLE }}</span>
+              <span class="block text-xs">
+                {{ option.available ? option.description : option.unavailableNote ?? UNAVAILABLE }}
+                <a
+                  v-if="option.link"
+                  :href="option.link.url"
+                  class="underline"
+                  @click.prevent="openPlans(option.link.url)"
+                >{{ option.link.label }}</a>
+              </span>
             </span>
           </label>
         </fieldset>
@@ -563,7 +592,7 @@ const selectedProviderDetails = computed(() =>
         <div>
           <h3 class="text-base font-semibold text-[var(--primary-800)]">Workspace data</h3>
           <p class="text-xs text-[var(--primary-500)]">
-            Your chats and documents are encrypted on your computer; the key lives in your keychain.
+            {{ STORAGE_NOTICES.atRest }}
             {{ STORAGE_NOTICES.workspaceData }}
           </p>
         </div>

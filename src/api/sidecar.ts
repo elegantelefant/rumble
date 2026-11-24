@@ -293,6 +293,16 @@ export async function ready(): Promise<ReadyResponse> {
   return apiClient<ReadyResponse>("/ready", { method: "GET" });
 }
 
+/** The host's view of its sidecar: "failed" carries why it refused to start or exited. */
+export type SidecarStatus = {
+  state: "starting" | "running" | "failed";
+  error: string | null;
+};
+
+export async function sidecarStatus(): Promise<SidecarStatus> {
+  return invoke<SidecarStatus>("sidecar_status");
+}
+
 export async function listModels(): Promise<ModelsResponse> {
   return apiClient<ModelsResponse>("/models", { method: "GET" });
 }
